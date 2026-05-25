@@ -1,4 +1,6 @@
 import { buildRackProductsFromAssets } from './productAssets.js';
+import { getRackAlignment } from './shelfAlignment.js';
+import { getShelfRowCount, getShelfRowsForRack } from './shelfLayouts.js';
 
 /** game-bg.png is 3840×1080 — nine bays left → right */
 const BAY_COUNT = 9;
@@ -12,15 +14,15 @@ export const MARKET_LAYOUT = {
     rackWidth: SECTION_WIDTH,
     sectionWidth: SECTION_WIDTH,
     rackHeight: 500,
-    contentOffsetY: 80,
+    /** Distance from ceiling art to top of product area (matches game-bg planks) */
+    contentOffsetY: 72,
     ceilingHeight: 175,
     labelHeight: 60,
     labelTopPadding: 12,
     labelRackGap: 10,
     rowGap: 0,
     rowBottomSpace: 0,
-    productIconScale: 1.35,
-    /** Reference art has no category banners — products sit on shelves only */
+    productIconScale: 1.16,
     showCategoryLabel: false,
 };
 
@@ -34,18 +36,11 @@ export const DEFAULT_RACK_LAYOUT = {
 };
 
 /**
- * Per-shelf row display: same product repeated across the row.
- * @example
- * rows: [
- *   { product: 'lollipop', count: 7 },
- *   { product: 'candy', count: 6 },
- * ]
- */
-
-/**
  * Store bay order (left → right) matching game-bg.png:
  * 1 Candy → 2 Produce → 3 Beverages → 4 Toys → 5 Chips → 6 Bakery →
  * 7 Toiletries → 8 Electronics → 9 Ration
+ *
+ * Shelf assignments live in config/shelfLayouts.js
  */
 export const MARKET_RACK_ORDER = [
     'candy',
@@ -59,92 +54,94 @@ export const MARKET_RACK_ORDER = [
     'ration',
 ];
 
+function rackLayout (rackId, extra = {}) {
+    const rows = getShelfRowsForRack(rackId);
+    const align = getRackAlignment(rackId);
+    return {
+        ...DEFAULT_RACK_LAYOUT,
+        shelfRows: getShelfRowCount(rackId),
+        rows,
+        gridXOffset: align.gridXOffset,
+        gridYOffset: align.gridYOffset,
+        insetLeft: align.insetLeft,
+        insetRight: align.insetRight,
+        shelfSurfaceInset: align.shelfSurfaceInset,
+        rowYAdjust: align.rowYAdjust,
+        rowXAdjust: align.rowXAdjust,
+        iconScale: align.iconScale,
+        shelfHeightFactor: align.shelfHeightFactor,
+        iconAspect: align.iconAspect,
+        iconSlotFill: align.iconSlotFill,
+        spreadFullBay: align.spreadFullBay,
+        rowSidePad: align.rowSidePad,
+        shelfPlankOffset: align.shelfPlankOffset,
+        ...extra,
+    };
+}
+
 export const MARKET_RACKS = {
-    /** 1 — Confectionery */
     candy: {
         category: 'Candy',
         headerColor: 0xE91E63,
         ceilingHeight: 175,
-        layout: {
-            ...DEFAULT_RACK_LAYOUT,
-            shelfRows: 4,
-            rows: [
-                { product: 'lollipop', count: 7 },
-                { product: 'candy', count: 6 },
-                { product: 'jelly', count: 6 },
-                { product: 'giftCandy', count: 5 },
-            ],
-        },
+        layout: rackLayout('candy'),
         products: buildRackProductsFromAssets('candy', 0),
     },
-    /** 2 — Produce stand (green awning) */
     fruits: {
         category: 'Produce',
         headerColor: 0x27AE60,
         ceilingHeight: 255,
-        layout: {
-            ...DEFAULT_RACK_LAYOUT,
-            productsPerRow: 3,
-            shelfRows: 3,
-            gridYOffset: 10,
-        },
-        rowBottomSpace: { 0: 8, 1: 14, 2: 48 },
+        layout: rackLayout('fruits', { shelfRows: 4 }),
+        rowBottomSpace: { 0: 85, 1: 8, 2: 20, 3: 40 },
         products: buildRackProductsFromAssets('fruits', 4),
     },
-    /** 3 — Beverages */
     beverages: {
         category: 'Beverages',
         headerColor: 0x2980B9,
         ceilingHeight: 175,
-        layout: { ...DEFAULT_RACK_LAYOUT, productsPerRow: 4, shelfRows: 4 },
+        layout: rackLayout('beverages'),
         products: buildRackProductsFromAssets('beverages', 10),
     },
-    /** 4 — Toys */
     toys: {
         category: 'Toys',
         headerColor: 0x9B59B6,
         ceilingHeight: 175,
-        layout: { ...DEFAULT_RACK_LAYOUT, productsPerRow: 4, shelfRows: 4 },
+        layout: rackLayout('toys'),
         products: buildRackProductsFromAssets('toys', 14),
     },
-    /** 5 — Snacks / chips */
     chips: {
         category: 'Snacks',
         headerColor: 0xE67E22,
         ceilingHeight: 175,
-        layout: { ...DEFAULT_RACK_LAYOUT, productsPerRow: 4, shelfRows: 4 },
+        layout: rackLayout('chips'),
         products: buildRackProductsFromAssets('chips', 18),
     },
-    /** 6 — Bakery */
     cakes: {
         category: 'Bakery',
         headerColor: 0xD35400,
         ceilingHeight: 175,
-        layout: { ...DEFAULT_RACK_LAYOUT, productsPerRow: 4, shelfRows: 4 },
+        layout: rackLayout('cakes'),
         products: buildRackProductsFromAssets('cakes', 22),
     },
-    /** 7 — Household / cleaning */
     toiletaries: {
         category: 'Household',
         headerColor: 0x1ABC9C,
         ceilingHeight: 175,
-        layout: { ...DEFAULT_RACK_LAYOUT, productsPerRow: 4, shelfRows: 4 },
+        layout: rackLayout('toiletaries'),
         products: buildRackProductsFromAssets('toiletaries', 26),
     },
-    /** 8 — Electronics */
     electronics: {
         category: 'Electronics',
         headerColor: 0x34495E,
         ceilingHeight: 175,
-        layout: { ...DEFAULT_RACK_LAYOUT, productsPerRow: 4, shelfRows: 4 },
+        layout: rackLayout('electronics'),
         products: buildRackProductsFromAssets('electronics', 30),
     },
-    /** 9 — Misc / ration */
     ration: {
         category: 'Grocery',
         headerColor: 0xC0392B,
         ceilingHeight: 175,
-        layout: { ...DEFAULT_RACK_LAYOUT, productsPerRow: 4, shelfRows: 4 },
+        layout: rackLayout('ration'),
         products: buildRackProductsFromAssets('ration', 34),
     },
 };

@@ -300,12 +300,12 @@ export const productAssets = Object.freeze(
 );
 
 /** @param {string} category — folder name (e.g. 'fruits', 'chips') */
-export function getProductCatalogCategory(category) {
+export function getProductCatalogCategory (category) {
     return PRODUCT_CATALOG[category] ?? null;
 }
 
 /** @param {string} category @param {string} productKey */
-export function getProductAsset(category, productKey) {
+export function getProductAsset (category, productKey) {
     return PRODUCT_CATALOG[category]?.[productKey] ?? null;
 }
 
@@ -314,7 +314,7 @@ export function getProductAsset(category, productKey) {
  * @param {string} assetCategory — folder under products/
  * @param {number} [startId=0]
  */
-export function buildProductsFromCatalog(assetCategory, startId = 0) {
+export function buildProductsFromCatalog (assetCategory, startId = 0) {
     const catalog = getProductCatalogCategory(assetCategory);
     if (!catalog) return {};
     return Object.fromEntries(
@@ -322,6 +322,7 @@ export function buildProductsFromCatalog(assetCategory, startId = 0) {
             key,
             {
                 id: startId + index,
+                key,
                 label: asset.label,
                 textureKey: asset.textureKey,
                 price: 1.0,
@@ -332,7 +333,7 @@ export function buildProductsFromCatalog(assetCategory, startId = 0) {
 }
 
 /** @param {string} rackId — market rack id (e.g. 'fruits') */
-export function buildRackProductsFromAssets(rackId, startId = 0) {
+export function buildRackProductsFromAssets (rackId, startId = 0) {
     const assetCategory = RACK_ASSET_CATEGORIES[rackId];
     return assetCategory ? buildProductsFromCatalog(assetCategory, startId) : {};
 }

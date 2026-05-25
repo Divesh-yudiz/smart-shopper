@@ -58,6 +58,7 @@ export default class MarketView extends Phaser.GameObjects.Container {
                 this._buildCategoryLabel(rx, rackCfg.labelCenterY, rackCfg.category, rackCfg.headerColor);
             }
             const rack = new ProductRack(scene, rx, rackCfg.rackCenterY, {
+                rackId: rackCfg.id,
                 category: rackCfg.category,
                 headerColor: rackCfg.headerColor,
                 layout: rackCfg.layout,

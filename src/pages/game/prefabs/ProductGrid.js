@@ -23,7 +23,7 @@ export default class ProductGrid extends Phaser.GameObjects.Container {
      * @param {Array}  products  - array of { id, label, color, textureKey? }
      * @param {Function} onProductClick - called with (product, index) on tap
      */
-    constructor(scene, x = config.centerX, y = config.centerY, products = DEFAULT_PRODUCTS, onProductClick = () => {}) {
+    constructor(scene, x = config.centerX, y = config.centerY, products = DEFAULT_PRODUCTS, onProductClick = () => { }) {
         super(scene, x, y);
         scene.add.existing(this);
 
@@ -34,7 +34,7 @@ export default class ProductGrid extends Phaser.GameObjects.Container {
         this._buildGrid();
     }
 
-    _buildGrid() {
+    _buildGrid () {
         const startX = -GRID_WIDTH / 2 + CELL_SIZE / 2;
         const startY = -GRID_HEIGHT / 2 + CELL_SIZE / 2;
 
@@ -51,7 +51,7 @@ export default class ProductGrid extends Phaser.GameObjects.Container {
         });
     }
 
-    _createCell(product, cx, cy, index) {
+    _createCell (product, cx, cy, index) {
         const container = this.scene.add.container(cx, cy);
 
         // Card background
@@ -136,7 +136,7 @@ export default class ProductGrid extends Phaser.GameObjects.Container {
         return container;
     }
 
-    _drawCardBg(graphics, color, hovered) {
+    _drawCardBg (graphics, color, hovered) {
         graphics.clear();
         // Drop shadow
         graphics.fillStyle(0x000000, 0.25);
@@ -155,7 +155,7 @@ export default class ProductGrid extends Phaser.GameObjects.Container {
      * Update the product list and re-render the grid.
      * @param {Array} products
      */
-    updateProducts(products) {
+    updateProducts (products) {
         this._cells.forEach(c => c.destroy());
         this._cells = [];
         this.removeAll(false);
@@ -167,7 +167,7 @@ export default class ProductGrid extends Phaser.GameObjects.Container {
      * Highlight (pulse) a specific cell by index.
      * @param {number} index
      */
-    highlightCell(index) {
+    highlightCell (index) {
         const cell = this._cells[index];
         if (!cell) return;
         this.scene.tweens.add({
