@@ -24,6 +24,15 @@ export const MARKET_LAYOUT = {
     rowBottomSpace: 0,
     productIconScale: 1.16,
     showCategoryLabel: false,
+    /**
+     * Category banners (plate + icon). Y uses ceilingHeight above (175), not per-rack ceiling.
+     * Per-bay nudge: bannerAlignment.js (offsetX / offsetY).
+     */
+    showBanners: true,
+    bannerAnimate: true,
+    bannerOffsetY: 108,
+    bannerWidthRatio: 0.68,
+    bannerIconScale: 0.22,
 };
 
 export const DEFAULT_RACK_LAYOUT = {

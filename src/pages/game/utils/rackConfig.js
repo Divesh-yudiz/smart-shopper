@@ -2,6 +2,7 @@
  * Rack config accessors — data lives in config/marketConfig.js
  */
 import { MARKET_LAYOUT, MARKET_RACKS, MARKET_RACK_ORDER } from '../config/marketConfig.js';
+import { getBannerAlignment } from '../config/bannerAlignment.js';
 import { getRackAlignment } from '../config/shelfAlignment.js';
 
 const GRID_LAYOUT_KEYS = [
@@ -180,9 +181,11 @@ export function getRacksForView (rackIds = getRackOrder()) {
 export function getRackVerticalLayout (ceilingHeight, layout = getMarketLayout()) {
     const rackTopY =
         ceilingHeight + layout.labelTopPadding + layout.labelHeight + layout.labelRackGap + layout.contentOffsetY;
+    const bannerOffsetY = layout.bannerOffsetY ?? 108;
     return {
         ceilingHeight,
         labelCenterY: ceilingHeight + layout.labelTopPadding + layout.labelHeight / 2 + layout.contentOffsetY,
+        bannerCenterY: ceilingHeight + bannerOffsetY,
         rackCenterY: rackTopY + layout.rackHeight / 2,
     };
 }
@@ -198,6 +201,9 @@ export function getRackPlacements (rackIds = getRackOrder()) {
     let x = layout.margin;
     const placements = [];
 
+    /** Banners share one row — not tied to per-rack ceilingHeight (e.g. fruits awning uses 255). */
+    const bannerVertical = getRackVerticalLayout(layout.ceilingHeight, layout);
+
     racks.forEach((rack, i) => {
         const sectionWidth = rack.sectionWidth ?? layout.sectionWidth;
         const ceilingHeight = rack.ceilingHeight;
@@ -205,12 +211,16 @@ export function getRackPlacements (rackIds = getRackOrder()) {
         const align = getRackAlignment(rack.id);
         const baseRackX = x + sectionWidth / 2;
         const rackX = baseRackX - (align.rackOffsetX || 0);
+        const bannerAlign = getBannerAlignment(rack.id);
         placements.push({
             ...rack,
+            ...vertical,
             centerX: rackX,
             sectionWidth,
             gapAfter: rack.gapAfter ?? layout.rackGap,
-            ...vertical,
+            /** Bay center on game-bg + per-rack nudge — see bannerAlignment.js */
+            bannerCenterX: baseRackX + bannerAlign.offsetX,
+            bannerCenterY: bannerVertical.bannerCenterY + bannerAlign.offsetY,
         });
         x += sectionWidth;
         if (i < racks.length - 1) {

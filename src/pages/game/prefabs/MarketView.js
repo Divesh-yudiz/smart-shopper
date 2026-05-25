@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getRackBannerAsset } from '../config/bannerAssets.js';
 import config from '../utils/config.js';
 import { getMarketLayout, getRackPlacements, getRackVerticalLayout, getRacksForView } from '../utils/rackConfig.js';
 import ProductRack from './ProductRack.js';
@@ -18,7 +19,7 @@ const DRAG_THRESHOLD = 10;
  * @param {Function} onProductClick  - (product, rackId, rackIndex) callback
  */
 export default class MarketView extends Phaser.GameObjects.Container {
-    constructor(scene, racksData = getRacksForView(), onProductClick = () => {}) {
+    constructor(scene, racksData = getRacksForView(), onProductClick = () => { }) {
         super(scene, 0, 0);
         scene.add.existing(this);
 
@@ -49,11 +50,15 @@ export default class MarketView extends Phaser.GameObjects.Container {
         // 2. Background image (scrolls with racks)
         this._buildBackground(scrollWidth);
 
-        // 3. Category label badges + racks inside inner
-        const { showCategoryLabel } = getMarketLayout();
+        // 3. Bay banners + product racks
+        const { showCategoryLabel, showBanners } = getMarketLayout();
 
         placements.forEach((rackCfg, i) => {
             const rx = rackCfg.centerX;
+            if (showBanners) {
+                const bannerX = rackCfg.bannerCenterX ?? rx;
+                this._buildRackBanner(bannerX, rackCfg.bannerCenterY, rackCfg.id, rackCfg.sectionWidth, i);
+            }
             if (showCategoryLabel) {
                 this._buildCategoryLabel(rx, rackCfg.labelCenterY, rackCfg.category, rackCfg.headerColor);
             }
@@ -75,8 +80,146 @@ export default class MarketView extends Phaser.GameObjects.Container {
         this._setupInput();
     }
 
+    // ── Category banner (colored plate + icon) ────────────────────────────────
+    _buildRackBanner (cx, cy, rackId, sectionWidth, bayIndex = 0) {
+        const banner = getRackBannerAsset(rackId);
+        if (!banner) return;
+
+        const layout = getMarketLayout();
+        const { bannerWidthRatio, bannerIconScale, bannerAnimate = true } = layout;
+        const plateKey = banner.plateKey;
+        const iconKey = banner.iconKey;
+
+        if (!this.scene.textures.exists(plateKey) || !this.scene.textures.exists(iconKey)) {
+            console.warn(`[MarketView] Banner textures missing for rack "${rackId}"`);
+            return;
+        }
+
+        const container = this.scene.add.container(cx, cy);
+        const plate = this.scene.add.image(0, 0, plateKey);
+        plate.setOrigin(0.5, 0.5);
+
+        const targetW = sectionWidth * bannerWidthRatio;
+        const plateScale = targetW / plate.width;
+        plate.setScale(plateScale);
+
+        const icon = this.scene.add.image(0, -6, iconKey);
+        icon.setOrigin(0.5, 0.5);
+        const iconMul = (banner.iconScale ?? 1) * bannerIconScale;
+        const iconScale = plateScale * iconMul;
+        icon.setScale(iconScale);
+
+        container.add(plate);
+        if (bannerAnimate) {
+            this._addBannerSparkles(container, plateScale, bayIndex);
+        }
+        container.add(icon);
+        container.setDepth(2);
+        this._inner.add(container);
+
+        if (bannerAnimate) {
+            this._animateRackBanner(container, icon, cy, bayIndex, iconScale);
+        }
+    }
+
+    /** Small twinkles around the plate (like reference banner stars) */
+    _addBannerSparkles (container, plateScale, bayIndex) {
+        const halfW = plateScale * 95;
+        const halfH = plateScale * 38;
+        const spots = [
+            { x: -halfW * 0.92, y: -halfH * 0.55, size: 5, phase: 0 },
+            { x: halfW * 0.88, y: -halfH * 0.45, size: 4, phase: 180 },
+            { x: -halfW * 0.55, y: halfH * 0.35, size: 4, phase: 90 },
+            { x: halfW * 0.62, y: halfH * 0.4, size: 5, phase: 270 },
+            { x: -halfW * 0.2, y: -halfH * 0.75, size: 3, phase: 45 },
+            { x: halfW * 0.25, y: -halfH * 0.7, size: 3, phase: 120 },
+        ];
+
+        const baseDelay = bayIndex * 65;
+
+        spots.forEach((spot, i) => {
+            const sparkle = this.scene.add.graphics();
+            this._drawSparkleShape(sparkle, spot.size);
+            sparkle.setPosition(spot.x, spot.y);
+            sparkle.setAlpha(0);
+            sparkle.setScale(0.2);
+            container.add(sparkle);
+
+            const cycle = 700 + i * 140;
+            this.scene.tweens.add({
+                targets: sparkle,
+                alpha: 0.95,
+                scale: 1.15,
+                angle: spot.phase + 90,
+                duration: cycle,
+                delay: baseDelay + i * 110,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut',
+            });
+        });
+    }
+
+    _drawSparkleShape (graphics, size) {
+        graphics.clear();
+        graphics.fillStyle(0xffffff, 1);
+        graphics.fillCircle(0, 0, size * 0.35);
+        graphics.lineStyle(Math.max(1, size * 0.2), 0xfffde8, 0.95);
+        graphics.beginPath();
+        graphics.moveTo(0, -size);
+        graphics.lineTo(0, size);
+        graphics.moveTo(-size, 0);
+        graphics.lineTo(size, 0);
+        graphics.strokePath();
+        graphics.lineStyle(Math.max(1, size * 0.15), 0xffffff, 0.7);
+        graphics.beginPath();
+        graphics.moveTo(-size * 0.7, -size * 0.7);
+        graphics.lineTo(size * 0.7, size * 0.7);
+        graphics.moveTo(size * 0.7, -size * 0.7);
+        graphics.lineTo(-size * 0.7, size * 0.7);
+        graphics.strokePath();
+    }
+
+    /** Pop-in on banner + gentle icon sway (no plate movement) */
+    _animateRackBanner (container, icon, _baseY, bayIndex, iconScale) {
+        const stagger = bayIndex * 65;
+        container.setScale(0.72);
+        container.setAlpha(0);
+
+        this.scene.tweens.add({
+            targets: container,
+            scale: 1,
+            alpha: 1,
+            duration: 420,
+            delay: stagger,
+            ease: 'Back.easeOut',
+        });
+
+        icon.setAngle(-15);
+        this.scene.tweens.add({
+            targets: icon,
+            angle: 15,
+            duration: 1800,
+            delay: stagger + 380,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+        });
+
+        this.scene.tweens.add({
+            targets: icon,
+            scaleX: iconScale * 1.05,
+            scaleY: iconScale * 1.05,
+            duration: 1800,
+            delay: stagger + 520,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+        });
+    }
+
     // ── Category label badge ──────────────────────────────────────────────────
-    _buildCategoryLabel(cx, cy, category, color) {
+    _buildCategoryLabel (cx, cy, category, color) {
         const W = RACK_W;
         const H = LABEL_H;
         const R = 14;
@@ -109,14 +252,14 @@ export default class MarketView extends Phaser.GameObjects.Container {
     }
 
     // ── Background image (scrolls with inner, covers full content area) ───────
-    _buildBackground(totalW) {
+    _buildBackground (totalW) {
         const bg = this.scene.add.image(totalW / 2, config.height / 2, 'game_bg');
         bg.setDisplaySize(totalW, config.height);
         this._inner.addAt(bg, 0);
     }
 
     // ── Left / right scroll arrows ────────────────────────────────────────────
-    _buildArrows() {
+    _buildArrows () {
         const arrowY = DEFAULT_RACK_CENTER_Y;
         const style = { fontFamily: 'Arial', fontSize: '72px', color: '#ffffff', alpha: 0.55 };
 
@@ -136,12 +279,12 @@ export default class MarketView extends Phaser.GameObjects.Container {
         this._updateArrows();
     }
 
-    _updateArrows() {
+    _updateArrows () {
         this._arrowLeft?.setVisible(this._inner.x < this._maxX);
         this._arrowRight?.setVisible(this._inner.x > this._minX);
     }
 
-    _scrollBy(dx) {
+    _scrollBy (dx) {
         const targetX = Phaser.Math.Clamp(this._inner.x + dx, this._minX, this._maxX);
         this.scene.tweens.add({
             targets: this._inner,
@@ -154,7 +297,7 @@ export default class MarketView extends Phaser.GameObjects.Container {
     }
 
     // ── Drag-to-scroll ────────────────────────────────────────────────────────
-    _setupInput() {
+    _setupInput () {
         this.scene.input.on('pointerdown', (ptr) => {
             this._pointerDown = true;
             this._hasDragged = false;
@@ -177,7 +320,7 @@ export default class MarketView extends Phaser.GameObjects.Container {
         });
     }
 
-    _snapToBounds() {
+    _snapToBounds () {
         const clamped = Phaser.Math.Clamp(this._inner.x, this._minX, this._maxX);
         if (clamped !== this._inner.x) {
             this.scene.tweens.add({

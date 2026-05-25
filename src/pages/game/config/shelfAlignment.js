@@ -2,6 +2,7 @@
  * Per-bay alignment tuned to game-bg.png (3840×1080, 9 equal sections).
  * Usable shelf sits between pillars — asymmetric insets + gridXOffset shift items within the bay.
  * rackOffsetX — moves the whole ProductRack left/right (applied in getRackPlacements).
+ * Banner left/right/up/down — see config/bannerAlignment.js (not rackOffsetX).
  * rowYAdjust[n] — positive = row moves DOWN; negative = UP (per shelf, top index 0).
  * rowXAdjust[n] — positive = row moves RIGHT; negative = LEFT.
  * Per-row fine-tune in shelfLayouts.js: offsetX, offsetY (added on top of rowX/YAdjust).
