@@ -6,13 +6,14 @@ const ROW_CENTER_Y = TOP_Y + 30;
 
 const PAUSE_SIZE = 42;
 const PAUSE_X = 52;
-const BUDGET_W = 182;
+const BUDGET_W = 228;
 const BUDGET_GAP = 10;
-const BUDGET_X = PAUSE_X + PAUSE_SIZE / 2 + BUDGET_GAP + BUDGET_W / 2;
+const BUDGET_SHIFT_X = 16;
+const BUDGET_X = PAUSE_X + PAUSE_SIZE / 2 + BUDGET_GAP + BUDGET_W / 2 + BUDGET_SHIFT_X;
 
 const SHOPPING_LIST_W = 415;
 const CART_PANEL_W = 680;
-const TIMER_DISPLAY_W = 200;
+const TIMER_DISPLAY_W = 140;
 
 const RIGHT_MARGIN = 36;
 const TIMER_X = config.width - RIGHT_MARGIN - TIMER_DISPLAY_W / 2;
