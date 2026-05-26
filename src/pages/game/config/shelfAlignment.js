@@ -11,8 +11,8 @@
 /** @type {Record<string, object>} */
 export const RACK_ALIGNMENT = Object.freeze({
     candy: Object.freeze({
-        insetLeft: 36,
-        insetRight: 52,
+        insetLeft: 54,
+        insetRight: 68,
         gridXOffset: -28,
         gridYOffset: 8,
         shelfSurfaceInset: 15,
