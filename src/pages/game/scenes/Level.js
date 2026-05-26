@@ -6,7 +6,6 @@ import SoundManager from "../scripts/SoundManager.js";
 import MarketView from "../prefabs/MarketView.js";
 import MyCartPanel from "../prefabs/MyCartPanel.js";
 import BudgetPanel from "../prefabs/BudgetPanel.js";
-import PauseButton from "../prefabs/PauseButton.js";
 import ShoppingListPanel from "../prefabs/ShoppingListPanel.js";
 import TimerPanel from "../prefabs/TimerPanel.js";
 import { getRackByIndex } from "../utils/rackConfig.js";
@@ -23,8 +22,6 @@ class Level extends Phaser.Scene {
             undefined,
             (product, rackId, rackIndex) => this.onProductClick(product, rackId, rackIndex)
         );
-
-        this.oPause = new PauseButton(this, hud.pauseX, hud.rowCenterY);
 
         this.oBudget = new BudgetPanel(this, hud.budgetX, hud.rowCenterY, {
             amount: hud.budgetAmount,

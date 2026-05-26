@@ -314,6 +314,48 @@ export function getProductAsset (category, productKey) {
  * @param {string} assetCategory — folder under products/
  * @param {number} [startId=0]
  */
+/** Default shelf price (AED) per product key */
+const PRODUCT_PRICES_AED = Object.freeze({
+    lollipop: 16,
+    candy: 14,
+    jelly: 12,
+    giftCandy: 18,
+    tomatos: 8,
+    qualiflower: 10,
+    carrots: 7,
+    potato: 6,
+    capsicum: 9,
+    onion: 5,
+    milk: 6,
+    orangeJuice: 8,
+    grapeJuice: 9,
+    alowveraJuice: 7,
+    teddybear: 22,
+    toyCar: 18,
+    rings: 14,
+    ball: 12,
+    chilliWafers: 5,
+    lemonWafers: 5,
+    masalaWafers: 5,
+    onionWafers: 5,
+    breads: 6,
+    chocolateCake: 24,
+    cookies: 10,
+    vanillaCake: 20,
+    cleaner: 12,
+    dishwash: 9,
+    handwash: 8,
+    paper: 6,
+    gift: 45,
+    headphones: 80,
+    laptop: 120,
+    mobile: 95,
+    cola: 4,
+    donuts: 8,
+    icecreame: 10,
+    rice: 15,
+});
+
 export function buildProductsFromCatalog (assetCategory, startId = 0) {
     const catalog = getProductCatalogCategory(assetCategory);
     if (!catalog) return {};
@@ -325,7 +367,7 @@ export function buildProductsFromCatalog (assetCategory, startId = 0) {
                 key,
                 label: asset.label,
                 textureKey: asset.textureKey,
-                price: 1.0,
+                price: PRODUCT_PRICES_AED[key] ?? 6 + (index % 5) * 2,
                 color: 0x4A90D9,
             },
         ])

@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import { assets, assetPaths } from "../utils/assets";
 import config from "../utils/config";
 
+const LOGO_DISPLAY_W = 420;
+
 class Preload extends Phaser.Scene {
     constructor() {
         super("Preload");
@@ -16,7 +18,9 @@ class Preload extends Phaser.Scene {
     }
     editorCreate() {
         this.add.image(config.centerX, config.centerY, assets.home_bg);
-        this.add.image(config.centerX, config.centerY, assets.logo);
+        const logo = this.add.image(config.centerX, config.centerY, assets.logo);
+        const logoScale = LOGO_DISPLAY_W / logo.width;
+        logo.setDisplaySize(LOGO_DISPLAY_W, logo.height * logoScale);
         this.txt_progress = this.add.text(config.centerX, config.centerY + 600, "0%",
             { fontFamily: config.fonts.text, fontSize: '44px', color: '#ffffff', align: 'center', });
         this.txt_progress.setOrigin(0.5, 0.5);

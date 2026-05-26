@@ -4,12 +4,10 @@ const TOP_Y = 48;
 const ROW_H = 90;
 const ROW_CENTER_Y = TOP_Y + 30;
 
-const PAUSE_SIZE = 42;
-const PAUSE_X = 52;
+const HUD_LEFT = 36;
 const BUDGET_W = 228;
-const BUDGET_GAP = 10;
 const BUDGET_SHIFT_X = 16;
-const BUDGET_X = PAUSE_X + PAUSE_SIZE / 2 + BUDGET_GAP + BUDGET_W / 2 + BUDGET_SHIFT_X;
+const BUDGET_X = HUD_LEFT + BUDGET_W / 2 + BUDGET_SHIFT_X;
 
 const SHOPPING_LIST_W = 415;
 const CART_PANEL_W = 680;
@@ -23,7 +21,6 @@ export const HUD_LAYOUT = Object.freeze({
     topY: TOP_Y,
     rowH: ROW_H,
     rowCenterY: ROW_CENTER_Y,
-    pauseX: PAUSE_X,
     budgetX: BUDGET_X,
     shoppingListX: config.centerX,
     timerX: TIMER_X,

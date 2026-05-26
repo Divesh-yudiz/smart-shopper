@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
+import { UI_TEXTURE_KEYS } from '../config/componentAssets.js';
 import { getShelfRowsForRack } from '../config/shelfLayouts.js';
+import config from '../utils/config.js';
 import { getMarketLayout, normalizeRowBottomSpaces } from '../utils/rackConfig.js';
 
 const { rackWidth: RACK_W, rackHeight: RACK_H, productIconScale: DEFAULT_ICON_SCALE } = getMarketLayout();
@@ -26,6 +28,16 @@ const DEFAULT_LAYOUT = {
 };
 
 const PROD_GAP = 6;
+
+/** Price-Base.png */
+const PRICE_TAG_NATIVE_W = 85;
+const PRICE_TAG_NATIVE_H = 33;
+/** Default hang below shelf plank; lower = up, higher = down (per-row override in shelfLayouts.js) */
+const DEFAULT_PRICE_TAG_OFFSET_Y = 10;
+
+function formatShelfPrice (price) {
+    return `AED ${Math.round(Number(price ?? 0))}`;
+}
 
 function buildGridLayout (
     {
@@ -146,7 +158,9 @@ export default class ProductRack extends Phaser.GameObjects.Container {
                 explicitRows != null && explicitRows >= mappedMax ? explicitRows : mappedMax;
         }
         this._layout = buildGridLayout(layoutConfig);
+        this._rackId = rackId;
         this._onProductClick = onProductClick;
+        this._pendingShelfTags = [];
 
         const productMap = normalizeProductMap(products, category, this._layout.shelfRows * this._layout.productsPerRow);
         const shelfRows = layoutConfig.rows?.length
@@ -158,6 +172,10 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         } else {
             this._buildGridProducts(Array.isArray(productMap) ? productMap : Object.values(productMap));
         }
+
+        this._tagLayer = scene.add.container(0, 0);
+        this.add(this._tagLayer);
+        this._flushShelfPriceTags();
     }
 
     _rowSpan (layout) {
@@ -175,11 +193,22 @@ export default class ProductRack extends Phaser.GameObjects.Container {
     _buildGridProducts (products) {
         const { shelfRows, productsPerRow, colX, rowY, productW } = this._layout;
         const max = shelfRows * productsPerRow;
-        products.slice(0, max).forEach((product, index) => {
-            const col = index % productsPerRow;
-            const row = Math.floor(index / productsPerRow);
-            this.add(this._createCard(product, colX[col], rowY(row), productW, this._layout.sectionH));
-        });
+        const rowCenterX = (colX[0] + colX[productsPerRow - 1]) / 2;
+
+        for (let row = 0; row < shelfRows; row++) {
+            const rowProducts = [];
+            for (let col = 0; col < productsPerRow; col++) {
+                const index = row * productsPerRow + col;
+                if (index >= max) break;
+                rowProducts.push(products[index]);
+            }
+            if (!rowProducts.length) continue;
+
+            rowProducts.forEach((product, col) => {
+                this.add(this._createCard(product, colX[col], rowY(row), productW, this._layout.sectionH));
+            });
+            this._queueShelfRowPriceTag(rowCenterX, rowY(row), rowProducts[0]);
+        }
     }
 
     _buildRowProducts (productMap, rows) {
@@ -226,6 +255,8 @@ export default class ProductRack extends Phaser.GameObjects.Container {
                 const cx = startX + i * (slotW + gap);
                 this.add(this._createCard(product, cx, shelfY, slotW, sectionH, rowCfg));
             }
+
+            this._queueShelfRowPriceTag(rowStartX + rowOffsetX + usableW / 2, shelfY, product, rowCfg);
         });
     }
 
@@ -233,6 +264,11 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         const count = stacks.length;
         const slotW = count > 1 ? (usableW - gap * (count - 1)) / count : usableW;
         const startX = rowStartX + slotW / 2;
+        const perItemTags =
+            rowOverrides.priceTagPerItem === true ||
+            this._rackId === 'fruits';
+
+        let rowPriceProduct = null;
 
         stacks.forEach((entry, i) => {
             const product = catalog[entry.product];
@@ -240,10 +276,19 @@ export default class ProductRack extends Phaser.GameObjects.Container {
                 console.warn(`[ProductRack] Unknown product "${entry.product}" in mixed shelf`);
                 return;
             }
+            if (!rowPriceProduct) rowPriceProduct = product;
             const cx = startX + i * (slotW + gap);
             const perItem = { ...rowOverrides, ...entry };
             this.add(this._createCard(product, cx, shelfY, slotW, sectionH, perItem));
+
+            if (perItemTags) {
+                this._queueShelfRowPriceTag(cx, shelfY, product, perItem);
+            }
         });
+
+        if (!perItemTags && rowPriceProduct) {
+            this._queueShelfRowPriceTag(rowStartX + usableW / 2, shelfY, rowPriceProduct, rowOverrides);
+        }
     }
 
     _createCard (product, cx, shelfY, productW, sectionH, rowOverrides = {}) {
@@ -315,5 +360,41 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         });
 
         return container;
+    }
+
+    _queueShelfRowPriceTag (centerX, shelfY, product, rowCfg = {}) {
+        if (!product && rowCfg.price == null) return;
+        this._pendingShelfTags.push({ centerX, shelfY, product, rowCfg });
+    }
+
+    _flushShelfPriceTags () {
+        this._pendingShelfTags.forEach((tag) => this._createShelfRowPriceTag(tag));
+        this._pendingShelfTags = [];
+    }
+
+    /** One hanging tag per shelf row — Price-Base.png, centered (reference). */
+    _createShelfRowPriceTag ({ centerX, shelfY, product, rowCfg }) {
+        const price = rowCfg.price ?? product?.price ?? 16;
+        const tagOffsetY = rowCfg.priceTagOffsetY ?? DEFAULT_PRICE_TAG_OFFSET_Y;
+        const tagY = shelfY + tagOffsetY;
+
+        const tagContainer = this.scene.add.container(centerX, tagY);
+
+        const tag = this.scene.add.image(0, 0, UI_TEXTURE_KEYS.shelfPriceBase);
+        tag.setOrigin(0.5, 0.5);
+        tag.setDisplaySize(PRICE_TAG_NATIVE_W, PRICE_TAG_NATIVE_H);
+        tagContainer.add(tag);
+
+        const label = this.scene.add.text(0, -1, formatShelfPrice(price), {
+            fontFamily: config.fonts.text,
+            fontSize: '13px',
+            fontStyle: 'bold',
+            color: '#1e3a5f',
+            align: 'center',
+        });
+        label.setOrigin(0.5, 0.5);
+        tagContainer.add(label);
+
+        this._tagLayer.add(tagContainer);
     }
 }

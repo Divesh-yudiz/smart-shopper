@@ -14,6 +14,7 @@ import countBase from '../../../assets/images/Components/Count-Base.png';
 import listIcon from '../../../assets/images/Components/List-Icon.png';
 import shoppingListBase from '../../../assets/images/Components/Shoping-List-Ui-Base.png';
 import timerCoinBase from '../../../assets/images/Components/Timer-and-Coin-Base.png';
+import shelfPriceBase from '../../../assets/images/Components/Price-Base.png';
 
 export const UI_TEXTURE_KEYS = Object.freeze({
     cartPanelBg: 'ui_cart_panel_bg',
@@ -28,6 +29,7 @@ export const UI_TEXTURE_KEYS = Object.freeze({
     listIcon: 'ui_list_icon',
     shoppingListBase: 'ui_shopping_list_base',
     timerCoinBase: 'ui_timer_coin_base',
+    shelfPriceBase: 'ui_shelf_price_base',
 });
 
 export const componentAssetPaths = Object.freeze([
@@ -43,6 +45,7 @@ export const componentAssetPaths = Object.freeze([
     { key: UI_TEXTURE_KEYS.listIcon, path: listIcon },
     { key: UI_TEXTURE_KEYS.shoppingListBase, path: shoppingListBase },
     { key: UI_TEXTURE_KEYS.timerCoinBase, path: timerCoinBase },
+    { key: UI_TEXTURE_KEYS.shelfPriceBase, path: shelfPriceBase },
 ]);
 
 export const componentAssets = Object.freeze(
