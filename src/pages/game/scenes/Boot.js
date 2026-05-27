@@ -1,22 +1,20 @@
-import Phaser from "phaser";
-// splash
-import logo from '../../../assets/images/logo.png';
-import home_bg from '../../../assets/images/home_bg.png';
-// fonts
-// import Avega from '../../../assets/fonts/Avega.otf';
+import Phaser from 'phaser';
+import { homeBootAssetPaths } from '../config/homeAssets.js';
 
 class Boot extends Phaser.Scene {
-    constructor() {
-        super("Boot");
+    constructor () {
+        super('Boot');
     }
-    preload() {
-        this.load.image('logo', logo);
-        this.load.image('home_bg', home_bg);
-        // this.load.font('Avega', Avega);
+
+    preload () {
+        homeBootAssetPaths.forEach(({ key, path }) => {
+            this.load.image(key, path);
+        });
     }
-    create() {
+
+    create () {
         this.scene.stop('Boot');
-        this.scene.start('Preload');
+        this.scene.start('Home');
     }
 }
 

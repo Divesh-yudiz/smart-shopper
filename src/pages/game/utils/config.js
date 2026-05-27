@@ -6,7 +6,7 @@ const config = Object.freeze({
     height: height,
     centerX: width / 2,
     centerY: height / 2,
-    title: 'Game',
+    title: 'Smart Shopper',
     version: 1.0,
     fonts: {
         text: commonFont

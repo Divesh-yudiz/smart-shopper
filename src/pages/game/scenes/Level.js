@@ -53,11 +53,8 @@ class Level extends Phaser.Scene {
     }
     onProductClick(product, rackId, rackIndex) {
         const rack = getRackByIndex(rackIndex);
-        const added = this.oMyCart?.tryAddItem(product);
-        if (added) {
+        if (this.oMyCart?.tryAddItem(product)) {
             this.oShoppingList?.onProductCollected(product);
-        } else {
-            console.log(`Cart full — could not add ${product.label ?? product.key}`);
         }
         console.log(`Product clicked — ${rack?.category} (${rackId}):`, product);
     }
