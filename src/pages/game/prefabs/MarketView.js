@@ -26,6 +26,9 @@ export default class MarketView extends Phaser.GameObjects.Container {
         const { placements, scrollWidth } = getRackPlacements(rackIds);
         this._placements = placements;
 
+        // Build a lookup so we always use the caller-supplied products (may have API prices patched in)
+        const racksById = Object.fromEntries(racksData.map((r) => [r.id, r]));
+
         this._minX = Math.min(0, -(scrollWidth - config.width));
         this._maxX = 0;
 
@@ -54,12 +57,14 @@ export default class MarketView extends Phaser.GameObjects.Container {
             if (showCategoryLabel) {
                 this._buildCategoryLabel(rx, rackCfg.labelCenterY, rackCfg.category, rackCfg.headerColor);
             }
+            // Use products from the caller-supplied racksData so API-patched prices are preserved
+            const suppliedRack = racksById[rackCfg.id];
             const rack = new ProductRack(scene, rx, rackCfg.rackCenterY, {
                 rackId: rackCfg.id,
                 category: rackCfg.category,
                 headerColor: rackCfg.headerColor,
                 layout: rackCfg.layout,
-                products: rackCfg.products,
+                products: suppliedRack?.products ?? rackCfg.products,
                 onProductClick: (p) => this._onProductClick(p, rackCfg.id, i),
             });
             this._inner.add(rack);

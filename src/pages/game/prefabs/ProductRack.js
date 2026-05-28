@@ -36,7 +36,8 @@ const PRICE_TAG_NATIVE_H = 33;
 const DEFAULT_PRICE_TAG_OFFSET_Y = 10;
 
 function formatShelfPrice (price) {
-    return `AED ${Math.round(Number(price ?? 0))}`;
+    if (price === null || price === undefined) return '-';
+    return `AED ${Math.round(Number(price))}`;
 }
 
 function buildGridLayout (
@@ -374,7 +375,9 @@ export default class ProductRack extends Phaser.GameObjects.Container {
 
     /** One hanging tag per shelf row — Price-Base.png, centered (reference). */
     _createShelfRowPriceTag ({ centerX, shelfY, product, rowCfg }) {
-        const price = rowCfg.price ?? product?.price ?? 16;
+        // rowCfg.price: explicit override; product.price: null means not in API (show '-'); undefined means no data (use default 16)
+        const rawPrice = rowCfg.price !== undefined ? rowCfg.price : product?.price;
+        const price = rawPrice === undefined ? 16 : rawPrice;
         const tagOffsetY = rowCfg.priceTagOffsetY ?? DEFAULT_PRICE_TAG_OFFSET_Y;
         const tagY = shelfY + tagOffsetY;
 

@@ -17,11 +17,12 @@ const PROGRESS_COLOR = '#1e4a7a';
  * Top-center shopping list HUD (reference layout).
  */
 export default class ShoppingListPanel extends Phaser.GameObjects.Container {
-    constructor(scene, x, y, { displayWidth = PANEL_DISPLAY_W } = {}) {
+    constructor(scene, x, y, { displayWidth = PANEL_DISPLAY_W, entries = null } = {}) {
         super(scene, x, y);
         scene.add.existing(this);
 
-        this._entries = SHOPPING_LIST_ENTRIES.map((e) =>
+        const source = entries ?? SHOPPING_LIST_ENTRIES;
+        this._entries = source.map((e) =>
             e ? { ...e, collected: e.collected ?? 0 } : null
         );
         this._slotViews = [];
@@ -147,6 +148,32 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         graphics.lineTo(radius * 0.5, radius * 0.68);
         graphics.lineTo(radius * 0.72, radius * 0.42);
         graphics.strokePath();
+    }
+
+    /** Returns a shallow copy of the current entries (for checkout comparison). */
+    getEntries () {
+        return this._entries.map((e) => e ? { ...e } : null);
+    }
+
+    /** Call when player removes a product from the cart. */
+    onProductRemoved (product) {
+        const key = product.key ?? product.textureKey;
+        let changed = false;
+
+        this._entries.forEach((entry) => {
+            if (!entry) return;
+            const match =
+                entry.key === key ||
+                entry.textureKey === product.textureKey ||
+                entry.key === product.textureKey?.replace(/^product_\w+_/, '');
+            if (!match) return;
+            if (entry.collected > 0) {
+                entry.collected -= 1;
+                changed = true;
+            }
+        });
+
+        if (changed) this._refresh();
     }
 
     /** Call when player picks a product (e.g. added to cart). */

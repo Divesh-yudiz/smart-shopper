@@ -24,7 +24,7 @@ const TEXT_STYLE = {
  * Bottom "MY CART" bar — unlimited items; 6 visible at a time with smooth horizontal scroll.
  */
 export default class MyCartPanel extends Phaser.GameObjects.Container {
-    constructor(scene, x, y, { panelWidth = PANEL_DISPLAY_W } = {}) {
+    constructor(scene, x, y, { panelWidth = PANEL_DISPLAY_W, onItemRemoved = () => {} } = {}) {
         super(scene, x, y);
         scene.add.existing(this);
 
@@ -42,6 +42,7 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         this._isDragging = false;
         this._scrollSnapProxy = { value: 0 };
 
+        this._onItemRemoved = onItemRemoved;
         this.setDepth(300);
         this._panelWidth = panelWidth;
         this._buildPanel();
@@ -463,8 +464,9 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
     _removeItemAtSlot (slotIdx) {
         const itemIndex = Math.floor(this._scrollOffset) + slotIdx;
         if (itemIndex < 0 || itemIndex >= this._items.length) return;
-        this._items.splice(itemIndex, 1);
+        const [removed] = this._items.splice(itemIndex, 1);
         this._refresh();
+        this._onItemRemoved(removed);
     }
 
     _updateCrossBtns () {
