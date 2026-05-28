@@ -56,6 +56,7 @@ class Level extends Phaser.Scene {
         this.oTimer = new TimerPanel(this, hud.timerX, hud.topY, {
             startSeconds: timeLimit,
             displayWidth: hud.timerDisplayW,
+            onComplete: () => this.openCheckout(),
         });
 
         this.oMyCart = new MyCartPanel(this, config.centerX, config.height - 10, {

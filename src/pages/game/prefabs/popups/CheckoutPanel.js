@@ -79,7 +79,6 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
         this._drawOverlay();
         this._drawPanelBg();
         this._drawHeader(pct);
-        this._buildCloseBtn();
         this._drawScoreColumn(matched, total, pct, cartTotal, budget);
         this._drawColumnDivider();
         this._buildTable(entries, matched, total);
