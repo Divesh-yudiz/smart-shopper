@@ -24,12 +24,12 @@ const TEXT_STYLE = {
  * Bottom "MY CART" bar — unlimited items; 6 visible at a time with smooth horizontal scroll.
  */
 export default class MyCartPanel extends Phaser.GameObjects.Container {
-    constructor(scene, x, y, { panelWidth = PANEL_DISPLAY_W, onItemRemoved = () => {} } = {}) {
+    constructor(scene, x, y, { panelWidth = PANEL_DISPLAY_W, onItemRemoved = () => {}, initialItems = [] } = {}) {
         super(scene, x, y);
         scene.add.existing(this);
 
         /** @type {Array<object>} */
-        this._items = [];
+        this._items = [...initialItems];
         /** @type {Array<object>} */
         this._slotViews = [];
         /** First item index shown in the left-most visible slot */
@@ -373,6 +373,10 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
     _defaultPrice (product) {
         const base = 4 + (product.id ?? 0) % 7;
         return Number(base.toFixed(0));
+    }
+
+    getItems () {
+        return [...this._items];
     }
 
     getItemCount () {

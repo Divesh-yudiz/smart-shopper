@@ -25,6 +25,7 @@ export default class Home extends Phaser.Scene {
 
     create () {
         this._starting = false;
+        sessionStorage.removeItem('ss_inGame');
 
         const bg = this.add.image(config.centerX, config.centerY, HOME_TEXTURE_KEYS.bgBlur);
         bg.setDisplaySize(config.width, config.height);

@@ -14,7 +14,11 @@ class Boot extends Phaser.Scene {
 
     create () {
         this.scene.stop('Boot');
-        this.scene.start('Home');
+        if (sessionStorage.getItem('ss_inGame') === '1') {
+            this.scene.start('Preload');
+        } else {
+            this.scene.start('Home');
+        }
     }
 }
 

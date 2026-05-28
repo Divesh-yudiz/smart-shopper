@@ -10,16 +10,19 @@ import ShoppingListPanel from "../prefabs/ShoppingListPanel.js";
 import TimerPanel from "../prefabs/TimerPanel.js";
 import CheckoutPanel from "../prefabs/popups/CheckoutPanel.js";
 import { getRackByIndex, getRacksForView } from "../utils/rackConfig.js";
-import { fetchGameConfig, patchRacksWithApiPrices, buildShoppingListEntries, addToCart, removeFromCart, resolveItemKeyFromProduct, checkoutGame } from "../../../utils/gameApi.js";
+import { fetchGameConfig, patchRacksWithApiPrices, buildShoppingListEntries, addToCart, removeFromCart, resolveItemKeyFromProduct, checkoutGame, setGameId } from "../../../utils/gameApi.js";
+
+const SAVE_KEY = 'ss_gameState';
 
 class Level extends Phaser.Scene {
     constructor() {
         super({ key: 'Level' });
     }
 
-    editorCreate (gameConfig = null) {
+    editorCreate (gameConfig = null, savedState = null) {
         const hud = HUD_LAYOUT;
 
+        this._gameConfig = gameConfig;
         const budget    = gameConfig?.budget    ?? hud.budgetAmount;
         const timeLimit = gameConfig?.timeLimit  ?? hud.timerStartSeconds;
         this._budget = budget;
@@ -29,9 +32,9 @@ class Level extends Phaser.Scene {
             racksData = patchRacksWithApiPrices(gameConfig.items, racksData);
         }
 
-        const shoppingEntries = gameConfig?.shoppingList
-            ? buildShoppingListEntries(gameConfig.shoppingList)
-            : null;
+        // Use saved entries (with collected counts) on restore, fresh entries otherwise
+        const shoppingEntries = savedState?.shoppingEntries
+            ?? (gameConfig?.shoppingList ? buildShoppingListEntries(gameConfig.shoppingList) : null);
 
         this.oMarketView = new MarketView(
             this,
@@ -53,20 +56,28 @@ class Level extends Phaser.Scene {
             }
         );
 
+        // Resume from saved time, or start fresh
         this.oTimer = new TimerPanel(this, hud.timerX, hud.topY, {
-            startSeconds: timeLimit,
+            startSeconds: savedState?.timerRemaining ?? timeLimit,
             displayWidth: hud.timerDisplayW,
-            onComplete: () => this.openCheckout(),
+            onComplete:   () => this.openCheckout(),
+            onTick:       () => { if (this.oTimer.getRemaining() % 10 === 0) this._saveState(); },
         });
 
+        // Restore cart items if resuming
         this.oMyCart = new MyCartPanel(this, config.centerX, config.height - 10, {
-            panelWidth: hud.cartPanelWidth,
+            panelWidth:   hud.cartPanelWidth,
+            initialItems: savedState?.cartItems ?? [],
             onItemRemoved: (product) => {
                 this.oShoppingList?.onProductRemoved(product);
                 const sItemKey = resolveItemKeyFromProduct(product);
                 if (sItemKey) removeFromCart(sItemKey).catch(err => console.error('[Cart remove]', err));
+                this._saveState();
             },
         });
+
+        sessionStorage.setItem('ss_inGame', '1');
+        this._saveState();
 
         this.oCheckout = new CheckoutPanel(this);
         this._buildCheckoutButton();
@@ -130,14 +141,45 @@ class Level extends Phaser.Scene {
         this.oSoundManager.isMusic = isMusic;
         this.oSoundManager.isSound = isSound;
 
-        let gameConfig = null;
-        try {
-            gameConfig = await fetchGameConfig();
-        } catch (err) {
-            console.error('[Level] Failed to fetch game config, using defaults:', err);
+        const saved = this._loadSavedState();
+        if (saved) {
+            setGameId(saved.gameConfig.gameId);
+            this.editorCreate(saved.gameConfig, saved);
+        } else {
+            let gameConfig = null;
+            try {
+                gameConfig = await fetchGameConfig();
+            } catch (err) {
+                console.error('[Level] Failed to fetch game config, using defaults:', err);
+            }
+            this.editorCreate(gameConfig);
         }
+    }
 
-        this.editorCreate(gameConfig);
+    _loadSavedState () {
+        try {
+            const raw = sessionStorage.getItem(SAVE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    _saveState () {
+        try {
+            const state = {
+                gameConfig:       this._gameConfig,
+                cartItems:        this.oMyCart?.getItems()      ?? [],
+                timerRemaining:   this.oTimer?.getRemaining()   ?? 0,
+                shoppingEntries:  this.oShoppingList?.getEntries() ?? [],
+            };
+            sessionStorage.setItem(SAVE_KEY, JSON.stringify(state));
+        } catch { /* storage full or unavailable */ }
+    }
+
+    _clearSavedState () {
+        sessionStorage.removeItem(SAVE_KEY);
+        sessionStorage.removeItem('ss_inGame');
     }
 
     async openCheckout () {
@@ -156,6 +198,10 @@ class Level extends Phaser.Scene {
             entries:   this.oShoppingList?.getEntries() ?? [],
             cartTotal,
             budget,
+            onClose:   () => {
+                this._clearSavedState();
+                this.scene.start('Home');
+            },
         });
     }
 
@@ -163,6 +209,7 @@ class Level extends Phaser.Scene {
         const rack = getRackByIndex(rackIndex);
         if (this.oMyCart?.tryAddItem(product)) {
             this.oShoppingList?.onProductCollected(product);
+            this._saveState();
             const sItemKey = resolveItemKeyFromProduct(product);
             if (sItemKey) addToCart(sItemKey).catch(err => console.error('[Cart add]', err));
         }

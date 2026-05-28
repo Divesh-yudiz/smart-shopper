@@ -10,6 +10,9 @@ const authHeaders = () => ({
 // Resolved dynamically — set by fetchGameConfig, used by addToCart / removeFromCart
 let gameId = null;
 
+/** Restore gameId after a page refresh (called by Level when loading saved state). */
+export function setGameId (id) { gameId = id; }
+
 /**
  * Maps API sItemKey → internal rack/product identifiers.
  * rackId   : key in MARKET_RACKS
