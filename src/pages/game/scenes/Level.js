@@ -9,8 +9,10 @@ import BudgetPanel from "../prefabs/BudgetPanel.js";
 import ShoppingListPanel from "../prefabs/ShoppingListPanel.js";
 import TimerPanel from "../prefabs/TimerPanel.js";
 import CheckoutPanel from "../prefabs/popups/CheckoutPanel.js";
-import { getRackByIndex, getRacksForView } from "../utils/rackConfig.js";
+import { getRackByIndex, getRacksForView, getRackPlacements } from "../utils/rackConfig.js";
 import { fetchGameConfig, patchRacksWithApiPrices, buildShoppingListEntries, addToCart, removeFromCart, resolveItemKeyFromProduct, checkoutGame, setGameId } from "../../../utils/gameApi.js";
+import MissionPopup from "../prefabs/popups/MissionPopup.js";
+import WalkingCharacter from "../prefabs/WalkingCharacter.js";
 
 const SAVE_KEY = 'ss_gameState';
 
@@ -19,7 +21,7 @@ class Level extends Phaser.Scene {
         super({ key: 'Level' });
     }
 
-    editorCreate (gameConfig = null, savedState = null) {
+    editorCreate (gameConfig = null, savedState = null, { pauseTimer = false } = {}) {
         const hud = HUD_LAYOUT;
 
         this._gameConfig = gameConfig;
@@ -60,6 +62,7 @@ class Level extends Phaser.Scene {
         this.oTimer = new TimerPanel(this, hud.timerX, hud.topY, {
             startSeconds: savedState?.timerRemaining ?? timeLimit,
             displayWidth: hud.timerDisplayW,
+            startPaused:  pauseTimer,
             onComplete:   () => this.openCheckout(),
             onTick:       () => { if (this.oTimer.getRemaining() % 10 === 0) this._saveState(); },
         });
@@ -73,11 +76,32 @@ class Level extends Phaser.Scene {
                 const sItemKey = resolveItemKeyFromProduct(product);
                 if (sItemKey) removeFromCart(sItemKey).catch(err => console.error('[Cart remove]', err));
                 this._saveState();
+                this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
             },
         });
 
         sessionStorage.setItem('ss_inGame', '1');
         this._saveState();
+
+        // Derive character margins from rack placements
+        const rackIds = racksData.map(r => r.id);
+        const { placements, scrollWidth } = getRackPlacements(rackIds);
+        const secondRack   = placements[1];                      // fruits (index 1)
+        const secondLast   = placements[placements.length - 2];  // electronics
+
+        const marginLeft      = Math.round(secondRack.centerX - secondRack.sectionWidth / 2);
+        const minScroll       = -(scrollWidth - config.width);
+        const secondLastEndWX = secondLast.centerX + secondLast.sectionWidth / 2;
+        const marginRight     = Math.round(secondLastEndWX + minScroll);
+
+        this.oMarketView.scrollTo(0);
+        this.oCharacter = new WalkingCharacter(this, this.oMarketView, {
+            startX:      marginLeft,
+            marginLeft,
+            marginRight,
+        });
+        // Seed trolley visuals from any restored cart items
+        this.oCharacter.setCartItems(this.oMyCart?.getItems() ?? []);
 
         this.oCheckout = new CheckoutPanel(this);
         this._buildCheckoutButton();
@@ -152,8 +176,20 @@ class Level extends Phaser.Scene {
             } catch (err) {
                 console.error('[Level] Failed to fetch game config, using defaults:', err);
             }
-            this.editorCreate(gameConfig);
+            this.editorCreate(gameConfig, null, { pauseTimer: !!gameConfig });
+            if (gameConfig) this._showMissionPopup(gameConfig);
         }
+    }
+
+    _showMissionPopup (gameConfig) {
+        this.oMissionPopup = new MissionPopup(this);
+        this.oMissionPopup.open({
+            shoppingList:  gameConfig.shoppingList  ?? [],
+            category:      gameConfig.category      ?? '',
+            shoppingTotal: gameConfig.shoppingListTotal ?? 0,
+            budget:        gameConfig.budget        ?? 0,
+            onStart: () => this.oTimer?.resume(),
+        });
     }
 
     _loadSavedState () {
@@ -212,8 +248,40 @@ class Level extends Phaser.Scene {
             this._saveState();
             const sItemKey = resolveItemKeyFromProduct(product);
             if (sItemKey) addToCart(sItemKey).catch(err => console.error('[Cart add]', err));
+            // fly animation → trolley update on arrival
+            const ptr = this.input.activePointer;
+            this._flyToCart(product, ptr.worldX, ptr.worldY);
         }
         console.log(`Product clicked — ${rack?.category} (${rackId}):`, product);
+    }
+
+    _flyToCart (product, fromX, fromY) {
+        if (!product?.textureKey || !this.textures.exists(product.textureKey)) {
+            this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
+            return;
+        }
+
+        const dest = this.oCharacter?.getCartWorldPosition() ?? { x: config.centerX, y: 400 };
+
+        const flyImg = this.add.image(fromX, fromY, product.textureKey);
+        flyImg.setDisplaySize(140, 140);
+        const sx = flyImg.scaleX;
+        const sy = flyImg.scaleY;
+        flyImg.setDepth(500);
+
+        this.tweens.add({
+            targets:  flyImg,
+            x:        dest.x,
+            y:        dest.y,
+            scaleX:   sx * 0.5,
+            scaleY:   sy * 0.5,
+            duration: 900,
+            ease:     'Sine.easeInOut',
+            onComplete: () => {
+                flyImg.destroy();
+                this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
+            },
+        });
     }
 }
 

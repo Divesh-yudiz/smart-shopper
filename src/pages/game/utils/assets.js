@@ -4,6 +4,7 @@ import game_bg from '../../../assets/images/game-bg.png';
 import { bannerAssetPaths, bannerAssets } from '../config/bannerAssets.js';
 import { componentAssetPaths, componentAssets } from '../config/componentAssets.js';
 import { productAssetPaths, productAssets } from '../config/productAssets.js';
+import { characterAssetPaths } from '../config/characterAssets.js';
 
 //* Add the path to the assets object.
 const assetPaths = Object.freeze({
@@ -14,6 +15,7 @@ const assetPaths = Object.freeze({
         ...bannerAssetPaths,
         ...componentAssetPaths,
         ...productAssetPaths,
+        ...characterAssetPaths,
     ],
     sounds: [
 

@@ -35,7 +35,7 @@ function addStopwatchIcon (scene, x, y, size) {
 
 /** Top-right countdown timer (02:45 style). */
 export default class TimerPanel extends Phaser.GameObjects.Container {
-    constructor(scene, x, y, { startSeconds = 165, displayWidth = PANEL_DISPLAY_W, onComplete = null, onTick = null } = {}) {
+    constructor(scene, x, y, { startSeconds = 165, displayWidth = PANEL_DISPLAY_W, startPaused = false, onComplete = null, onTick = null } = {}) {
         super(scene, x, y);
         scene.add.existing(this);
         this.setDepth(300);
@@ -83,6 +83,15 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
             loop: true,
             callback: () => this._tick(),
         });
+        if (startPaused) this._tickEvent.paused = true;
+    }
+
+    resume () {
+        if (this._tickEvent) this._tickEvent.paused = false;
+    }
+
+    pause () {
+        if (this._tickEvent) this._tickEvent.paused = true;
     }
 
     _tick () {

@@ -70,8 +70,6 @@ export default class MarketView extends Phaser.GameObjects.Container {
             this._inner.add(rack);
         });
 
-        // 4. Keyboard scroll (← / →)
-        this._setupKeyboard();
     }
 
     // ── Category banner (colored plate + icon) ────────────────────────────────
@@ -252,43 +250,17 @@ export default class MarketView extends Phaser.GameObjects.Container {
         this._inner.addAt(bg, 0);
     }
 
-    // ── Arrow-key scroll (hold for smooth pan) ───────────────────────────────
-    _setupKeyboard () {
-        if (!this.scene.input.keyboard) return;
+    // ── Driven by WalkingCharacter — call each frame with character's dx ──────
+    scrollBy (dx) {
+        this.scene.tweens.killTweensOf(this._inner);
+        this._inner.x = Phaser.Math.Clamp(this._inner.x + dx, this._minX, this._maxX);
+    }
 
-        this._scrollSpeedPxPerSec = 420;
-
-        this._cursorKeys = this.scene.input.keyboard.addKeys({
-            left: Phaser.Input.Keyboard.KeyCodes.LEFT,
-            right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
-        });
-
-        this._onScrollUpdate = (_time, delta) => {
-            if (this.scene.scene.isPaused()) return;
-
-            const { left, right } = this._cursorKeys;
-            let direction = 0;
-            if (left.isDown) direction += 1;
-            if (right.isDown) direction -= 1;
-            if (direction === 0) return;
-
-            this.scene.tweens.killTweensOf(this._inner);
-            const dt = delta / 1000;
-            const nextX = Phaser.Math.Clamp(
-                this._inner.x + direction * this._scrollSpeedPxPerSec * dt,
-                this._minX,
-                this._maxX
-            );
-            this._inner.x = nextX;
-        };
-
-        this.scene.events.on('update', this._onScrollUpdate);
+    scrollTo (x) {
+        this._inner.x = Phaser.Math.Clamp(x, this._minX, this._maxX);
     }
 
     destroy (fromScene) {
-        if (this._onScrollUpdate) {
-            this.scene.events.off('update', this._onScrollUpdate);
-        }
         super.destroy(fromScene);
     }
 }

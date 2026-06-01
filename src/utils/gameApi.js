@@ -1,6 +1,6 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
-const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2YTE2ODAwNTM1ZTA5MjQyMDgwMTg2MjgiLCJzRW1haWwiOiJyYWp2aUBnbWFpbC5jb20iLCJpYXQiOjE3Nzk4NTk2NzF9.0xXbSR7KsgRxdwYakqRgoacnQ-bTD3Wr8NKn-__nXuk';
+const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2YTE2ODAwNTM1ZTA5MjQyMDgwMTg2MjgiLCJzRW1haWwiOiJyYWp2aUBnbWFpbC5jb20iLCJpYXQiOjE3ODAzMDQ2NDN9.kIuiHD-bLjQFay03LNeYW-wzmc-wWvX4DBYKlafUWLk';
 
 const authHeaders = () => ({
     'Content-Type': 'application/json',
@@ -157,6 +157,8 @@ export async function fetchGameConfig () {
             timeLimit: game.nTimeLimit,
             items: cfg.aItems,
             shoppingList: cfg.aShoppingList,
+            shoppingListTotal: cfg.nShoppingListTotal ?? 0,
+            category: cfg.sSelectedCategory ?? '',
             badge: gamesJson.data.eBadge,
         };
     }
