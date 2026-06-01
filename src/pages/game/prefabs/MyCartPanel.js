@@ -14,6 +14,15 @@ const SCROLL_WHEEL_SPEED = 0.35;
 const SCROLL_DRAG_SPEED = 1.0;
 const SCROLL_SNAP_DURATION = 300;
 
+const CART_ICON_SLOT_FILL = 0.68;
+const FRUIT_CART_ICON_SLOT_FILL = 0.88;
+
+function isFruitCartItem (item) {
+    if (item?.rackId === 'fruits') return true;
+    const key = item?.textureKey ?? '';
+    return key.startsWith('product_fruits_');
+}
+
 const TEXT_STYLE = {
     fontFamily: config.fonts.text,
     color: '#ffffff',
@@ -24,7 +33,7 @@ const TEXT_STYLE = {
  * Bottom "MY CART" bar — unlimited items; 6 visible at a time with smooth horizontal scroll.
  */
 export default class MyCartPanel extends Phaser.GameObjects.Container {
-    constructor(scene, x, y, { panelWidth = PANEL_DISPLAY_W, onItemRemoved = () => {}, initialItems = [] } = {}) {
+    constructor(scene, x, y, { panelWidth = PANEL_DISPLAY_W, onItemRemoved = () => { }, initialItems = [] } = {}) {
         super(scene, x, y);
         scene.add.existing(this);
 
@@ -414,7 +423,8 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
                 view.productImg.setTexture(item.textureKey);
                 view.productImg.setAlpha(1);
                 view.productImg.setVisible(true);
-                const max = view.slotSize * 0.68;
+                const fill = isFruitCartItem(item) ? FRUIT_CART_ICON_SLOT_FILL : CART_ICON_SLOT_FILL;
+                const max = view.slotSize * fill;
                 const tex = view.productImg.texture.getSourceImage();
                 const tw = tex?.width ?? max;
                 const th = tex?.height ?? max;

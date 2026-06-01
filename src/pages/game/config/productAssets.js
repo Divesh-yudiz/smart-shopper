@@ -40,6 +40,13 @@ import fruits_onion from '../../../assets/images/products/fruits/onion.png';
 import fruits_potato from '../../../assets/images/products/fruits/potato.png';
 import fruits_qualiflower from '../../../assets/images/products/fruits/qualiflower.png';
 import fruits_tomatos from '../../../assets/images/products/fruits/tomatos.png';
+// ─── fruits icons (cart / shopping-list / trolley) ───────────────────────────
+import fruits_icon_tomato from '../../../assets/images/products/fruits/tomato_icon.png';
+import fruits_icon_onion from '../../../assets/images/products/fruits/onion_icon.png';
+import fruits_icon_capsicum from '../../../assets/images/products/fruits/capsicum_icon.png';
+import fruits_icon_potato from '../../../assets/images/products/fruits/potato_icon.png';
+import fruits_icon_cabbage from '../../../assets/images/products/fruits/cabbage_icon.png';
+import fruits_icon_carrot from '../../../assets/images/products/fruits/carrot_icon.png';
 
 // ─── ration ──────────────────────────────────────────────────────────────────
 import ration_cola from '../../../assets/images/products/ration/cola.png';
@@ -217,6 +224,37 @@ export const PRODUCT_CATALOG = Object.freeze({
             textureKey: 'product_fruits_tomatos',
             path: fruits_tomatos,
             label: 'Tomatos',
+        }),
+        // ── UI icons (cart / shopping-list / trolley only) ────────────────────
+        tomato_icon: Object.freeze({
+            textureKey: 'product_fruits_tomato_icon',
+            path: fruits_icon_tomato,
+            label: 'Tomato',
+        }),
+        onion_icon: Object.freeze({
+            textureKey: 'product_fruits_onion_icon',
+            path: fruits_icon_onion,
+            label: 'Onion',
+        }),
+        capsicum_icon: Object.freeze({
+            textureKey: 'product_fruits_capsicum_icon',
+            path: fruits_icon_capsicum,
+            label: 'Capsicum',
+        }),
+        potato_icon: Object.freeze({
+            textureKey: 'product_fruits_potato_icon',
+            path: fruits_icon_potato,
+            label: 'Potato',
+        }),
+        cabbage_icon: Object.freeze({
+            textureKey: 'product_fruits_cabbage_icon',
+            path: fruits_icon_cabbage,
+            label: 'Cabbage',
+        }),
+        carrot_icon: Object.freeze({
+            textureKey: 'product_fruits_carrot_icon',
+            path: fruits_icon_carrot,
+            label: 'Carrot',
         }),
     }),
     ration: Object.freeze({

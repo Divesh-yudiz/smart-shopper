@@ -10,7 +10,7 @@ import ShoppingListPanel from "../prefabs/ShoppingListPanel.js";
 import TimerPanel from "../prefabs/TimerPanel.js";
 import CheckoutPanel from "../prefabs/popups/CheckoutPanel.js";
 import { getRackByIndex, getRacksForView, getRackPlacements } from "../utils/rackConfig.js";
-import { fetchGameConfig, patchRacksWithApiPrices, buildShoppingListEntries, addToCart, removeFromCart, resolveItemKeyFromProduct, checkoutGame, setGameId } from "../../../utils/gameApi.js";
+import { fetchGameConfig, patchRacksWithApiPrices, buildShoppingListEntries, addToCart, removeFromCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId } from "../../../utils/gameApi.js";
 import MissionPopup from "../prefabs/popups/MissionPopup.js";
 import WalkingCharacter from "../prefabs/WalkingCharacter.js";
 
@@ -243,14 +243,17 @@ class Level extends Phaser.Scene {
 
     onProductClick (product, rackId, rackIndex) {
         const rack = getRackByIndex(rackIndex);
-        if (this.oMyCart?.tryAddItem(product)) {
-            this.oShoppingList?.onProductCollected(product);
+        const sItemKey = resolveItemKeyFromProduct(product);
+        // Replace the shelf texture with the icon version for cart / trolley display
+        const iconInfo = sItemKey ? resolveItem(sItemKey) : null;
+        const cartProduct = iconInfo ? { ...product, textureKey: iconInfo.textureKey } : product;
+
+        if (this.oMyCart?.tryAddItem(cartProduct)) {
+            this.oShoppingList?.onProductCollected(cartProduct);
             this._saveState();
-            const sItemKey = resolveItemKeyFromProduct(product);
             if (sItemKey) addToCart(sItemKey).catch(err => console.error('[Cart add]', err));
-            // fly animation → trolley update on arrival
             const ptr = this.input.activePointer;
-            this._flyToCart(product, ptr.worldX, ptr.worldY);
+            this._flyToCart(cartProduct, ptr.worldX, ptr.worldY);
         }
         console.log(`Product clicked — ${rack?.category} (${rackId}):`, product);
     }

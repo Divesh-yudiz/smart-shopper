@@ -26,13 +26,13 @@ const ITEM_KEY_MAP = {
     grape_juice: { rackId: 'beverages', key: 'grapeJuice', textureKey: 'product_beverages_grapeJuice' },
     aloe_vera: { rackId: 'beverages', key: 'alowveraJuice', textureKey: 'product_beverages_alowveraJuice' },
 
-    // ── fruits / produce ───────────────────────────────────────────────────────
-    tomato: { rackId: 'fruits', key: 'tomatos', textureKey: 'product_fruits_tomatos' },
-    potato: { rackId: 'fruits', key: 'potato', textureKey: 'product_fruits_potato' },
-    carrot: { rackId: 'fruits', key: 'carrots', textureKey: 'product_fruits_carrots' },
-    onion: { rackId: 'fruits', key: 'onion', textureKey: 'product_fruits_onion' },
-    capsicum: { rackId: 'fruits', key: 'capsicum', textureKey: 'product_fruits_capsicum' },
-    qualiflower: { rackId: 'fruits', key: 'qualiflower', textureKey: 'product_fruits_qualiflower' },
+    // ── fruits / produce (icon textures used in cart / shopping-list / trolley)
+    tomato: { rackId: 'fruits', key: 'tomatos', textureKey: 'product_fruits_tomato_icon' },
+    potato: { rackId: 'fruits', key: 'potato', textureKey: 'product_fruits_potato_icon' },
+    carrot: { rackId: 'fruits', key: 'carrots', textureKey: 'product_fruits_carrot_icon' },
+    onion: { rackId: 'fruits', key: 'onion', textureKey: 'product_fruits_onion_icon' },
+    capsicum: { rackId: 'fruits', key: 'capsicum', textureKey: 'product_fruits_capsicum_icon' },
+    qualiflower: { rackId: 'fruits', key: 'qualiflower', textureKey: 'product_fruits_cabbage_icon' },
 
     // ── candy ──────────────────────────────────────────────────────────────────
     lollipop: { rackId: 'candy', key: 'lollipop', textureKey: 'product_candy_lollipop' },
