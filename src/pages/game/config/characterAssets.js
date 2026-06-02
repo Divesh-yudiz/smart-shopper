@@ -47,7 +47,7 @@ export function ensureCharacterWalkAnim (scene, frameRate = 24) {
         frames: walkFrames,
         frameRate,
         repeat: -1,
-        skipMissedFrames: true,
+        skipMissedFrames: false, // never jump frames; keeps the walk cycle smooth
     });
     return WALK_ANIM_KEY;
 }

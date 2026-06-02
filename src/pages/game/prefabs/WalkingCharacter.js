@@ -11,8 +11,8 @@ import {
 const DISPLAY_H = 400;
 const CART_LAYOUT_BASE_H = 480;
 const CART_LAYOUT_SCALE = DISPLAY_H / CART_LAYOUT_BASE_H;
-const WALK_SPEED = 280;   // px / second
-const WALK_ANIM_FPS = 24; // uses all loaded PNG frames via Phaser anim
+const WALK_SPEED = 260;   // px / second
+const WALK_ANIM_FPS = 26;
 const FLOOR_Y = config.height - 142;
 
 const CART_X = 120 * CART_LAYOUT_SCALE;
@@ -22,14 +22,14 @@ const ICON_SIZE = 52;
 const MAX_ICONS = 8;
 
 const CART_PILE_SLOTS = [
-    { x: -34, y: -2,  s: 1.02, r: -14, z: 0 },
-    { x: 10,  y: -6,  s: 1.00, r: 10,  z: 1 },
-    { x: 38,  y: 0,   s: 1.04, r: -8,  z: 2 },
-    { x: -14, y: 12,  s: 1.06, r: 12,  z: 3 },
-    { x: 20,  y: 10,  s: 1.08, r: -6,  z: 4 },
-    { x: -32, y: 22,  s: 1.10, r: 8,   z: 5 },
-    { x: 4,   y: 24,  s: 1.12, r: -11, z: 6 },
-    { x: 34,  y: 20,  s: 1.08, r: 5,   z: 7 },
+    { x: -34, y: -2, s: 1.02, r: -14, z: 0 },
+    { x: 10, y: -6, s: 1.00, r: 10, z: 1 },
+    { x: 38, y: 0, s: 1.04, r: -8, z: 2 },
+    { x: -14, y: 12, s: 1.06, r: 12, z: 3 },
+    { x: 20, y: 10, s: 1.08, r: -6, z: 4 },
+    { x: -32, y: 22, s: 1.10, r: 8, z: 5 },
+    { x: 4, y: 24, s: 1.12, r: -11, z: 6 },
+    { x: 34, y: 20, s: 1.08, r: 5, z: 7 },
 ];
 
 const CART_FILL_ORDER = [4, 2, 6, 1, 5, 0, 3, 7];
@@ -218,10 +218,10 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         const mv = this._marketView;
         // Use a 1px tolerance so floating-point scroll values that are just
         // barely off the limit (e.g. -0.0003 instead of 0) still trigger the wall.
-        const atLeftWall  = !mv || mv.scrollX >= mv.scrollMaxX - 1;
+        const atLeftWall = !mv || mv.scrollX >= mv.scrollMaxX - 1;
         const atRightWall = !mv || mv.scrollX <= mv.scrollMinX + 1;
-        const effectiveLeft  = atLeftWall  ? SPRITE_HALF_W                 : this._marginLeft;
-        const effectiveRight = atRightWall ? config.width - SPRITE_HALF_W  : this._marginRight;
+        const effectiveLeft = atLeftWall ? SPRITE_HALF_W : this._marginLeft;
+        const effectiveRight = atRightWall ? config.width - SPRITE_HALF_W : this._marginRight;
 
         this.x = Phaser.Math.Clamp(this.x + dx, effectiveLeft, effectiveRight);
         const overflow = dx - (this.x - prevX);
