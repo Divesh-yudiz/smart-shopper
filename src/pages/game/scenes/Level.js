@@ -168,6 +168,11 @@ class Level extends Phaser.Scene {
         if (saved) {
             setGameId(saved.gameConfig.gameId);
             this.editorCreate(saved.gameConfig, saved);
+            // On refresh the canvas has no keyboard focus (user never clicked it).
+            // Grab focus so arrow keys work immediately without a manual click.
+            const canvas = this.game.canvas;
+            canvas.setAttribute('tabindex', '1');
+            canvas.focus();
         } else {
             // Show the blurred home background immediately so there's no black screen
             // while the game config API call is in flight.

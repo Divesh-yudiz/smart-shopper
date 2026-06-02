@@ -34,6 +34,47 @@ const CART_PILE_SLOTS = [
 
 const CART_FILL_ORDER = [4, 2, 6, 1, 5, 0, 3, 7];
 
+/** Native arrow-key state — reliable after page refresh (Phaser keyboard can stall). */
+function attachArrowKeyListeners (host) {
+    host._keys = { left: false, right: false };
+
+    host._onKeyDown = (e) => {
+        if (e.code === 'ArrowLeft') {
+            host._keys.left = true;
+            e.preventDefault();
+        } else if (e.code === 'ArrowRight') {
+            host._keys.right = true;
+            e.preventDefault();
+        }
+    };
+
+    host._onKeyUp = (e) => {
+        if (e.code === 'ArrowLeft') host._keys.left = false;
+        else if (e.code === 'ArrowRight') host._keys.right = false;
+    };
+
+    host._clearKeys = () => {
+        host._keys.left = false;
+        host._keys.right = false;
+    };
+
+    window.addEventListener('keydown', host._onKeyDown);
+    window.addEventListener('keyup', host._onKeyUp);
+    window.addEventListener('blur', host._clearKeys);
+    document.addEventListener('visibilitychange', host._onVisibilityChange = () => {
+        if (document.visibilityState === 'hidden') host._clearKeys();
+    });
+}
+
+function detachArrowKeyListeners (host) {
+    if (host._onKeyDown) window.removeEventListener('keydown', host._onKeyDown);
+    if (host._onKeyUp) window.removeEventListener('keyup', host._onKeyUp);
+    if (host._clearKeys) window.removeEventListener('blur', host._clearKeys);
+    if (host._onVisibilityChange) {
+        document.removeEventListener('visibilitychange', host._onVisibilityChange);
+    }
+}
+
 function resolveCartTextureKey (scene, item) {
     if (item?.textureKey && scene.textures.exists(item.textureKey)) {
         return item.textureKey;
@@ -90,8 +131,12 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         this._cartLayer.add(this._cartFloor);
         this._prevItemCount = 0;
 
-        this._cursors = scene.input.keyboard.createCursorKeys();
+        attachArrowKeyListeners(this);
         this._setWalkPlaying(false);
+
+        // Register on the scene event bus — works in every scene-start path,
+        // unlike preUpdate which is skipped for Containers in some Phaser versions.
+        scene.events.on('update', this._onUpdate, this);
     }
 
     _syncFacingFlip () {
@@ -183,10 +228,9 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         this._idleImg.setVisible(true);
     }
 
-    preUpdate (_time, delta) {
-        const { left, right } = this._cursors;
-        const movingLeft = left.isDown;
-        const movingRight = right.isDown;
+    _onUpdate (_time, delta) {
+        const movingLeft = this._keys?.left ?? false;
+        const movingRight = this._keys?.right ?? false;
         const moving = movingLeft || movingRight;
 
         if (!moving) {
@@ -229,6 +273,8 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
     }
 
     destroy (fromScene) {
+        detachArrowKeyListeners(this);
+        try { this.scene?.events.off('update', this._onUpdate, this); } catch { /* scene gone */ }
         this._setWalkPlaying(false);
         super.destroy(fromScene);
     }
