@@ -38,6 +38,13 @@ export default class Home extends Phaser.Scene {
         this._buildBottomPrompt();
         this._buildInfoButton();
         this._setupInput();
+
+        // Focus canvas so clicks/keys register; Space also uses window listeners below.
+        const canvas = this.game.canvas;
+        if (canvas) {
+            canvas.setAttribute('tabindex', '1');
+            canvas.focus();
+        }
     }
 
     _buildBottomPrompt () {
@@ -97,21 +104,33 @@ export default class Home extends Phaser.Scene {
     }
 
     _setupInput () {
-        if (!this.input.keyboard) return;
+        this._onSpaceDown = (e) => {
+            if (e.code !== 'Space' && e.key !== ' ') return;
+            e.preventDefault();
 
-        this._spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-        this._spaceKey.on('down', () => {
             if (this._infoPopup?.isOpen) {
                 this._closeInfo();
                 return;
             }
             this._beginGame();
-        });
+        };
+
+        window.addEventListener('keydown', this._onSpaceDown);
+        this.events.once('shutdown', this._teardownInput, this);
+        this.events.once('destroy', this._teardownInput, this);
+    }
+
+    _teardownInput () {
+        if (this._onSpaceDown) {
+            window.removeEventListener('keydown', this._onSpaceDown);
+            this._onSpaceDown = null;
+        }
     }
 
     _beginGame () {
         if (this._starting || this._infoPopup?.isOpen) return;
         this._starting = true;
+        this._teardownInput();
         this.scene.start('Preload');
     }
 }

@@ -9,7 +9,7 @@ const config = Object.freeze({
     title: 'Smart Shopper',
     version: 1.0,
     fonts: {
-        text: commonFont
+        text: commonFont,
     },
 });
 
