@@ -223,8 +223,10 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             this.add(img);
         }
 
-        // item name — centred below circle
-        this.add(this.scene.add.text(cx, iconY + IR + 14, formatName(item.sItemKey), {
+        // item name — prefer resolved label/key (fixes API typos like icecreame → icecream)
+        const displayName = resolved?.label
+            ?? (resolved?.key ? formatName(resolved.key) : formatName(item.sItemKey));
+        this.add(this.scene.add.text(cx, iconY + IR + 14, displayName, {
             fontFamily: config.fonts.text,
             fontSize: '19px',
             fontStyle: 'bold',

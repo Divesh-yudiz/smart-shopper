@@ -88,7 +88,7 @@ export const PRODUCT_CATALOG = Object.freeze({
         alowveraJuice: Object.freeze({
             textureKey: 'product_beverages_alowveraJuice',
             path: beverages_alowveraJuice,
-            label: 'Alowvera Juice',
+            label: 'AlowVera Juice',
         }),
         grapeJuice: Object.freeze({
             textureKey: 'product_beverages_grapeJuice',
@@ -268,10 +268,10 @@ export const PRODUCT_CATALOG = Object.freeze({
             path: ration_donuts,
             label: 'Donuts',
         }),
-        icecreame: Object.freeze({
+        icecream: Object.freeze({
             textureKey: 'product_ration_icecreame',
             path: ration_icecreame,
-            label: 'Icecreame',
+            label: 'Icecream',
         }),
         rice: Object.freeze({
             textureKey: 'product_ration_rice',
@@ -390,7 +390,7 @@ const PRODUCT_PRICES_AED = Object.freeze({
     mobile: 95,
     cola: 4,
     donuts: 8,
-    icecreame: 10,
+    icecream: 10,
     rice: 15,
 });
 

@@ -24,7 +24,12 @@ const ITEM_KEY_MAP = {
     milk: { rackId: 'beverages', key: 'milk', textureKey: 'product_beverages_milk' },
     orange_juice: { rackId: 'beverages', key: 'orangeJuice', textureKey: 'product_beverages_orangeJuice' },
     grape_juice: { rackId: 'beverages', key: 'grapeJuice', textureKey: 'product_beverages_grapeJuice' },
-    aloe_vera: { rackId: 'beverages', key: 'alowveraJuice', textureKey: 'product_beverages_alowveraJuice' },
+    aloe_vera_juice: {
+        rackId: 'beverages',
+        key: 'alowveraJuice',
+        textureKey: 'product_beverages_alowveraJuice',
+        label: 'Aloe Vera Juice',
+    },
 
     // ── fruits / produce (icon textures used in cart / shopping-list / trolley)
     tomato: { rackId: 'fruits', key: 'tomatos', textureKey: 'product_fruits_tomato_icon' },
@@ -73,7 +78,7 @@ const ITEM_KEY_MAP = {
     // ── ration / grocery ───────────────────────────────────────────────────────
     cola: { rackId: 'ration', key: 'cola', textureKey: 'product_ration_cola' },
     donuts: { rackId: 'ration', key: 'donuts', textureKey: 'product_ration_donuts' },
-    icecreame: { rackId: 'ration', key: 'icecreame', textureKey: 'product_ration_icecreame' },
+    icecream: { rackId: 'ration', key: 'icecream', textureKey: 'product_ration_icecreame', label: 'Icecream' },
     rice: { rackId: 'ration', key: 'rice', textureKey: 'product_ration_rice' },
 };
 

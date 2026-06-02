@@ -92,7 +92,7 @@ export const RACK_SHELF_LAYOUTS = Object.freeze({
     ration: Object.freeze([
         { product: 'cola', count: 6, gap: -25, priceTagOffsetY: 10 },
         { product: 'donuts', count: 5, shelfHeightFactor: 0.65, iconSlotFill: 1.20, priceTagOffsetY: 4 },
-        { product: 'icecreame', count: 6, offsetY: -15, gap: -5, priceTagOffsetY: 10 },
+        { product: 'icecream', count: 6, offsetY: -15, gap: -5, priceTagOffsetY: 10 },
         { product: 'rice', count: 5, offsetY: -15, gap: -15, priceTagOffsetY: 10 },
     ]),
 });
