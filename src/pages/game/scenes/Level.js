@@ -25,8 +25,8 @@ class Level extends Phaser.Scene {
         const hud = HUD_LAYOUT;
 
         this._gameConfig = gameConfig;
-        const budget    = gameConfig?.budget    ?? hud.budgetAmount;
-        const timeLimit = gameConfig?.timeLimit  ?? hud.timerStartSeconds;
+        const budget = gameConfig?.budget ?? hud.budgetAmount;
+        const timeLimit = gameConfig?.timeLimit ?? hud.timerStartSeconds;
         this._budget = budget;
 
         let racksData = getRacksForView();
@@ -62,14 +62,14 @@ class Level extends Phaser.Scene {
         this.oTimer = new TimerPanel(this, hud.timerX, hud.topY, {
             startSeconds: savedState?.timerRemaining ?? timeLimit,
             displayWidth: hud.timerDisplayW,
-            startPaused:  pauseTimer,
-            onComplete:   () => this.openCheckout(),
-            onTick:       () => { if (this.oTimer.getRemaining() % 10 === 0) this._saveState(); },
+            startPaused: pauseTimer,
+            onComplete: () => this.openCheckout(),
+            onTick: () => { if (this.oTimer.getRemaining() % 10 === 0) this._saveState(); },
         });
 
         // Restore cart items if resuming
         this.oMyCart = new MyCartPanel(this, config.centerX, config.height - 10, {
-            panelWidth:   hud.cartPanelWidth,
+            panelWidth: hud.cartPanelWidth,
             initialItems: savedState?.cartItems ?? [],
             onItemRemoved: (product) => {
                 this.oShoppingList?.onProductRemoved(product);
@@ -86,17 +86,16 @@ class Level extends Phaser.Scene {
         // Derive character margins from rack placements
         const rackIds = racksData.map(r => r.id);
         const { placements, scrollWidth } = getRackPlacements(rackIds);
-        const secondRack   = placements[1];                      // fruits (index 1)
-        const secondLast   = placements[placements.length - 2];  // electronics
+        const secondRack = placements[1];                      // fruits (index 1)
 
-        const marginLeft      = Math.round(secondRack.centerX - secondRack.sectionWidth / 2);
-        const minScroll       = -(scrollWidth - config.width);
-        const secondLastEndWX = secondLast.centerX + secondLast.sectionWidth / 2;
-        const marginRight     = Math.round(secondLastEndWX + minScroll);
+        // Normal walking margins — trolley gets extra room only when the background
+        // has no more scroll left (handled inside WalkingCharacter)
+        const marginLeft = Math.round(secondRack.centerX - secondRack.sectionWidth / 2);
+        const marginRight = Math.round(config.width / 2);
 
         this.oMarketView.scrollTo(0);
         this.oCharacter = new WalkingCharacter(this, this.oMarketView, {
-            startX:      marginLeft,
+            startX: marginLeft,
             marginLeft,
             marginRight,
         });
@@ -161,7 +160,7 @@ class Level extends Phaser.Scene {
 
     async create ({ isMusic, isSound } = {}) {
         this.oSoundManager = new SoundManager(this);
-        this.oGameManager  = new GameManager(this);
+        this.oGameManager = new GameManager(this);
         this.oSoundManager.isMusic = isMusic;
         this.oSoundManager.isSound = isSound;
 
@@ -170,12 +169,18 @@ class Level extends Phaser.Scene {
             setGameId(saved.gameConfig.gameId);
             this.editorCreate(saved.gameConfig, saved);
         } else {
+            // Show the blurred home background immediately so there's no black screen
+            // while the game config API call is in flight.
+            const splash = this.add.image(config.centerX, config.centerY, 'home_bg_blur')
+                .setDisplaySize(config.width, config.height);
+
             let gameConfig = null;
             try {
                 gameConfig = await fetchGameConfig();
             } catch (err) {
                 console.error('[Level] Failed to fetch game config, using defaults:', err);
             }
+            splash.destroy();
             this.editorCreate(gameConfig, null, { pauseTimer: !!gameConfig });
             if (gameConfig) this._showMissionPopup(gameConfig);
         }
@@ -184,10 +189,10 @@ class Level extends Phaser.Scene {
     _showMissionPopup (gameConfig) {
         this.oMissionPopup = new MissionPopup(this);
         this.oMissionPopup.open({
-            shoppingList:  gameConfig.shoppingList  ?? [],
-            category:      gameConfig.category      ?? '',
+            shoppingList: gameConfig.shoppingList ?? [],
+            category: gameConfig.category ?? '',
             shoppingTotal: gameConfig.shoppingListTotal ?? 0,
-            budget:        gameConfig.budget        ?? 0,
+            budget: gameConfig.budget ?? 0,
             onStart: () => this.oTimer?.resume(),
         });
     }
@@ -204,10 +209,10 @@ class Level extends Phaser.Scene {
     _saveState () {
         try {
             const state = {
-                gameConfig:       this._gameConfig,
-                cartItems:        this.oMyCart?.getItems()      ?? [],
-                timerRemaining:   this.oTimer?.getRemaining()   ?? 0,
-                shoppingEntries:  this.oShoppingList?.getEntries() ?? [],
+                gameConfig: this._gameConfig,
+                cartItems: this.oMyCart?.getItems() ?? [],
+                timerRemaining: this.oTimer?.getRemaining() ?? 0,
+                shoppingEntries: this.oShoppingList?.getEntries() ?? [],
             };
             sessionStorage.setItem(SAVE_KEY, JSON.stringify(state));
         } catch { /* storage full or unavailable */ }
@@ -220,23 +225,22 @@ class Level extends Phaser.Scene {
 
     async openCheckout () {
         let cartTotal = this.oMyCart?.getTotal() ?? 0;
-        let budget    = this._budget ?? 0;
+        let budget = this._budget ?? 0;
 
         try {
             const result = await checkoutGame();
-            cartTotal = result.data?.nCartTotal    ?? cartTotal;
-            budget    = result.data?.nSessionBudget ?? budget;
+            cartTotal = result.data?.nCartTotal ?? cartTotal;
+            budget = result.data?.nSessionBudget ?? budget;
         } catch (err) {
             console.error('[Checkout] API error, using local values:', err);
         }
 
         this.oCheckout?.open({
-            entries:   this.oShoppingList?.getEntries() ?? [],
+            entries: this.oShoppingList?.getEntries() ?? [],
             cartTotal,
             budget,
-            onClose:   () => {
+            onClose: () => {
                 this._clearSavedState();
-                this.scene.start('Home');
             },
         });
     }
@@ -273,13 +277,13 @@ class Level extends Phaser.Scene {
         flyImg.setDepth(500);
 
         this.tweens.add({
-            targets:  flyImg,
-            x:        dest.x,
-            y:        dest.y,
-            scaleX:   sx * 0.5,
-            scaleY:   sy * 0.5,
+            targets: flyImg,
+            x: dest.x,
+            y: dest.y,
+            scaleX: sx * 0.5,
+            scaleY: sy * 0.5,
             duration: 900,
-            ease:     'Sine.easeInOut',
+            ease: 'Sine.easeInOut',
             onComplete: () => {
                 flyImg.destroy();
                 this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);

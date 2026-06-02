@@ -250,9 +250,12 @@ export default class MarketView extends Phaser.GameObjects.Container {
         this._inner.addAt(bg, 0);
     }
 
+    get scrollX ()    { return this._inner.x; }
+    get scrollMinX () { return this._minX; }
+    get scrollMaxX () { return this._maxX; }
+
     // ── Driven by WalkingCharacter — call each frame with character's dx ──────
     scrollBy (dx) {
-        this.scene.tweens.killTweensOf(this._inner);
         this._inner.x = Phaser.Math.Clamp(this._inner.x + dx, this._minX, this._maxX);
     }
 
