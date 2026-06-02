@@ -5,6 +5,7 @@ import config from '../utils/config.js';
 const PANEL_NATIVE_W = 1072;
 const PANEL_NATIVE_H = 606;
 const PANEL_DISPLAY_W = 1000;
+const PANEL_HEIGHT_SCALE = 1.2;
 
 const NAVY = '#1a2d4a';
 const BODY_COLOR = '#2c3e55';
@@ -55,7 +56,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this.add(this._dim);
 
         const panelScale = PANEL_DISPLAY_W / PANEL_NATIVE_W;
-        const panelH = PANEL_NATIVE_H * panelScale;
+        const panelH = PANEL_NATIVE_H * panelScale * PANEL_HEIGHT_SCALE;
         const panelY = config.centerY + 20;
 
         this._panel = this.scene.add.image(config.centerX, panelY, HOME_TEXTURE_KEYS.infoUi);
