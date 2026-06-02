@@ -389,7 +389,9 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
 
         if (entry.textureKey && this.scene.textures.exists(entry.textureKey)) {
             const img = this.scene.add.image(T_ICON, 0, entry.textureKey).setOrigin(0.5, 0.5);
-            const max = (ICON_R - 3) * 2;
+            const isFruit = entry.textureKey?.startsWith('product_fruits_') &&
+                !entry.textureKey?.includes('tomato');
+            const max = (ICON_R - 3) * (isFruit ? 3.0 : 2.0);
             const src = img.texture.getSourceImage();
             const s = Math.min(max / (src?.width || max), max / (src?.height || max));
             img.setScale(s);

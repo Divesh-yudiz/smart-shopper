@@ -1,6 +1,6 @@
 const width = 1920;
 const height = 1080;
-const commonFont = 'Arial';
+const commonFont = 'Cause';
 const config = Object.freeze({
     width: width,
     height: height,

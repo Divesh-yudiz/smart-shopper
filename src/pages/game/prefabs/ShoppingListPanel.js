@@ -226,7 +226,9 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
             if (entry.textureKey && this.scene.textures.exists(entry.textureKey)) {
                 view.productImg.setTexture(entry.textureKey);
                 view.productImg.setVisible(true);
-                const max = view.slotRadius * 1.35;
+                const isFruit = entry.textureKey?.startsWith('product_fruits_') &&
+                    !entry.textureKey?.includes('tomato');
+                const max = view.slotRadius * (isFruit ? 2.0 : 1.35);
                 const tex = view.productImg.texture.getSourceImage();
                 const tw = tex?.width ?? max;
                 const th = tex?.height ?? max;

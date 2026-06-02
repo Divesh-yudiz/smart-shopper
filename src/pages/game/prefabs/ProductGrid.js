@@ -68,7 +68,7 @@ export default class ProductGrid extends Phaser.GameObjects.Container {
 
         // Label text
         const label = this.scene.add.text(0, CELL_SIZE / 2 - 35, product.label, {
-            fontFamily: 'Arial',
+            fontFamily: 'Cause',
             fontSize: '28px',
             color: '#ffffff',
             align: 'center',

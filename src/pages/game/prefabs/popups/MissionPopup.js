@@ -3,31 +3,31 @@ import config from '../../utils/config.js';
 import { resolveItem } from '../../../../utils/gameApi.js';
 
 // ── layout constants ───────────────────────────────────────────────────────────
-const PW       = 920;    // panel width
-const CR       = 22;     // corner radius
+const PW = 920;    // panel width
+const CR = 22;     // corner radius
 const HEADER_H = 90;     // orange header height
 
 // Card grid
 const COLS = 3;
-const CW   = 262;   // card width
-const CH   = 210;   // card height
-const CGX  = 17;    // horizontal gap between cards
-const CGY  = 14;    // vertical gap between rows
-const IR   = 44;    // product icon circle radius
+const CW = 262;   // card width
+const CH = 210;   // card height
+const CGX = 17;    // horizontal gap between cards
+const CGY = 14;    // vertical gap between rows
+const IR = 44;    // product icon circle radius
 
 // ── palette ────────────────────────────────────────────────────────────────────
-const C_BG      = 0xfef9e4;   // warm cream panel fill
-const C_BORDER  = 0xf5a623;   // orange panel border
-const C_HEADER  = 0xf5a623;   // header fill
-const C_CARD    = 0xffffff;   // card fill
+const C_BG = 0xfef9e4;   // warm cream panel fill
+const C_BORDER = 0xf5a623;   // orange panel border
+const C_HEADER = 0xf5a623;   // header fill
+const C_CARD = 0xffffff;   // card fill
 const C_CARD_BD = 0xe8d5a0;   // card border (light tan)
 const C_ICON_BG = 0xf5eed6;   // product circle fill
-const C_QTY_BG  = 0xf5a623;   // qty badge fill (orange)
-const C_GREEN   = 0x27ae60;   // button / price green
-const C_WHITE   = '#ffffff';
-const C_NAVY    = '#1e3a5f';
-const C_ORANGE  = '#f5a623';
-const C_GRNSTR  = '#27ae60';
+const C_QTY_BG = 0xf5a623;   // qty badge fill (orange)
+const C_GREEN = 0x27ae60;   // button / price green
+const C_WHITE = '#ffffff';
+const C_NAVY = '#1e3a5f';
+const C_ORANGE = '#f5a623';
+const C_GRNSTR = '#27ae60';
 
 function formatName (key) {
     return key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()
@@ -35,7 +35,7 @@ function formatName (key) {
 }
 
 export default class MissionPopup extends Phaser.GameObjects.Container {
-    constructor (scene) {
+    constructor(scene) {
         super(scene, config.centerX, config.centerY);
         scene.add.existing(this);
         this.setDepth(550);
@@ -43,22 +43,22 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
     }
 
     open ({ shoppingList = [], category = '', shoppingTotal = 0, budget = 0,
-            onStart = () => {}, onItemSelect = null } = {}) {
-        this._onStart      = onStart;
+        onStart = () => { }, onItemSelect = null } = {}) {
+        this._onStart = onStart;
         this._onItemSelect = onItemSelect;
-        this._addedKeys    = new Set();
+        this._addedKeys = new Set();
 
         const items = shoppingList.filter(Boolean);
-        this._rows  = Math.max(1, Math.ceil(items.length / COLS));
+        this._rows = Math.max(1, Math.ceil(items.length / COLS));
 
         // Dynamic panel height based on content
         const cardsH = this._rows * CH + Math.max(0, this._rows - 1) * CGY;
         this._PH = HEADER_H        // orange header
-                 + 56              // category badge
-                 + 46              // "items to collect" label
-                 + cardsH          // card grid
-                 + 100             // footer (divider + 2 info rows)
-                 + 92;             // button + bottom pad
+            + 56              // category badge
+            + 46              // "items to collect" label
+            + cardsH          // card grid
+            + 100             // footer (divider + 2 info rows)
+            + 92;             // button + bottom pad
         this._PT = -this._PH / 2;
 
         this.removeAll(true);
@@ -107,7 +107,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
 
     _drawHeader (category) {
         const PT = this._PT;
-        const g  = this.scene.add.graphics();
+        const g = this.scene.add.graphics();
 
         // header fill
         g.fillStyle(C_HEADER, 1);
@@ -124,10 +124,10 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         const titleY = PT + HEADER_H / 2;
         this.add(this.scene.add.text(0, titleY, '★  YOUR SHOPPING MISSION!  ★', {
             fontFamily: config.fonts.text,
-            fontSize:   '36px',
-            fontStyle:  'bold',
-            color:      C_WHITE,
-            stroke:     '#9a3412',
+            fontSize: '36px',
+            fontStyle: 'bold',
+            color: C_WHITE,
+            stroke: '#9a3412',
             strokeThickness: 3,
         }).setOrigin(0.5, 0.5));
 
@@ -154,9 +154,9 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
 
             this.add(this.scene.add.text(0, badgeY, `🎯  ${category}`, {
                 fontFamily: config.fonts.text,
-                fontSize:   '22px',
-                fontStyle:  'bold',
-                color:      '#ffd88a',
+                fontSize: '22px',
+                fontStyle: 'bold',
+                color: '#ffd88a',
             }).setOrigin(0.5, 0.5));
         }
     }
@@ -170,26 +170,26 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         const labelY = this._PT + HEADER_H + 56 + 22;
         this.add(this.scene.add.text(0, labelY, '🛒  Items to collect', {
             fontFamily: config.fonts.text,
-            fontSize:   '22px',
-            color:      C_NAVY,
+            fontSize: '22px',
+            color: C_NAVY,
         }).setOrigin(0.5, 0.5));
 
-        const gridW  = COLS * CW + (COLS - 1) * CGX;
+        const gridW = COLS * CW + (COLS - 1) * CGX;
         const startX = -gridW / 2;
 
         items.forEach((item, i) => {
             const col = i % COLS;
             const row = Math.floor(i / COLS);
-            const cx  = startX + col * (CW + CGX) + CW / 2;
-            const cy  = cardsTop + row * (CH + CGY) + CH / 2;
+            const cx = startX + col * (CW + CGX) + CW / 2;
+            const cy = cardsTop + row * (CH + CGY) + CH / 2;
             this._drawCard(cx, cy, item);
         });
     }
 
     _drawCard (cx, cy, item) {
         const left = cx - CW / 2;
-        const top  = cy - CH / 2;
-        const g    = this.scene.add.graphics();
+        const top = cy - CH / 2;
+        const g = this.scene.add.graphics();
 
         // card shadow
         g.fillStyle(0x000000, 0.07);
@@ -216,18 +216,21 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         const resolved = resolveItem(item.sItemKey);
         if (resolved?.textureKey && this.scene.textures.exists(resolved.textureKey)) {
             const img = this.scene.add.image(cx, iconY, resolved.textureKey);
-            img.setDisplaySize((IR + 5) * 1.65, (IR + 5) * 1.65);
+            const isFruit = resolved.textureKey?.startsWith('product_fruits_') &&
+                !resolved.textureKey?.includes('tomato');
+            const sizeMul = isFruit ? 1.9 : 1.65;
+            img.setDisplaySize((IR + 5) * sizeMul, (IR + 5) * sizeMul);
             this.add(img);
         }
 
         // item name — centred below circle
         this.add(this.scene.add.text(cx, iconY + IR + 14, formatName(item.sItemKey), {
             fontFamily: config.fonts.text,
-            fontSize:   '19px',
-            fontStyle:  'bold',
-            color:      C_NAVY,
-            align:      'center',
-            wordWrap:   { width: CW - 20 },
+            fontSize: '19px',
+            fontStyle: 'bold',
+            color: C_NAVY,
+            align: 'center',
+            wordWrap: { width: CW - 20 },
         }).setOrigin(0.5, 0));
 
         // bottom row: qty badge left │ price right
@@ -241,16 +244,16 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
 
         this.add(this.scene.add.text(left + 14 + qW / 2, rowY, `×${item.nQuantity}`, {
             fontFamily: config.fonts.text,
-            fontSize:   '17px',
-            fontStyle:  'bold',
-            color:      C_WHITE,
+            fontSize: '17px',
+            fontStyle: 'bold',
+            color: C_WHITE,
         }).setOrigin(0.5, 0.5));
 
         this.add(this.scene.add.text(left + CW - 14, rowY, `AED ${item.nPrice}`, {
             fontFamily: config.fonts.text,
-            fontSize:   '20px',
-            fontStyle:  'bold',
-            color:      C_GRNSTR,
+            fontSize: '20px',
+            fontStyle: 'bold',
+            color: C_GRNSTR,
         }).setOrigin(1, 0.5));
 
         // ── tap-to-add interaction ─────────────────────────────────────────────
@@ -294,8 +297,8 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
 
     _drawFooter (shoppingTotal, budget) {
         const cardsTop = this._PT + HEADER_H + 56 + 46;
-        const gridBot  = cardsTop + this._rows * (CH + CGY) - CGY;
-        const divY     = gridBot + 22;
+        const gridBot = cardsTop + this._rows * (CH + CGY) - CGY;
+        const divY = gridBot + 22;
 
         // dashed line
         const g = this.scene.add.graphics();
@@ -307,7 +310,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
 
         let ty = divY + 30;
         const lx = -PW / 2 + 80;
-        const rx =  PW / 2 - 80;
+        const rx = PW / 2 - 80;
 
         const row = (label, value, valColor) => {
             this.add(this.scene.add.text(lx, ty, label, {
@@ -320,7 +323,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         };
 
         if (shoppingTotal > 0) row('Mission Cost', `AED ${shoppingTotal}`, C_ORANGE);
-        if (budget > 0)        row('Your Budget',  `AED ${budget}`,        C_GRNSTR);
+        if (budget > 0) row('Your Budget', `AED ${budget}`, C_GRNSTR);
     }
 
     // ── let's go button ───────────────────────────────────────────────────────
@@ -347,10 +350,10 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
 
         const lbl = this.scene.add.text(0, btnY, "🚀  Let's Go!", {
             fontFamily: config.fonts.text,
-            fontSize:   '32px',
-            fontStyle:  'bold',
-            color:      C_WHITE,
-            stroke:     '#14532d',
+            fontSize: '32px',
+            fontStyle: 'bold',
+            color: C_WHITE,
+            stroke: '#14532d',
             strokeThickness: 2,
         }).setOrigin(0.5, 0.5);
         this.add(lbl);

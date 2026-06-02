@@ -231,7 +231,7 @@ export default class MarketView extends Phaser.GameObjects.Container {
         this._inner.add(bg);
 
         const label = this.scene.add.text(cx, cy, category, {
-            fontFamily: 'Arial',
+            fontFamily: 'Cause',
             fontSize: '32px',
             fontStyle: 'bold',
             color: '#ffffff',

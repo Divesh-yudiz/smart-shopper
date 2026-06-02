@@ -216,10 +216,12 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         const prevX = this.x;
 
         const mv = this._marketView;
-        const atLeftWall = !mv || mv.scrollX >= mv.scrollMaxX;
-        const atRightWall = !mv || mv.scrollX <= mv.scrollMinX;
-        const effectiveLeft = atLeftWall ? SPRITE_HALF_W : this._marginLeft;
-        const effectiveRight = atRightWall ? config.width - SPRITE_HALF_W : this._marginRight;
+        // Use a 1px tolerance so floating-point scroll values that are just
+        // barely off the limit (e.g. -0.0003 instead of 0) still trigger the wall.
+        const atLeftWall  = !mv || mv.scrollX >= mv.scrollMaxX - 1;
+        const atRightWall = !mv || mv.scrollX <= mv.scrollMinX + 1;
+        const effectiveLeft  = atLeftWall  ? SPRITE_HALF_W                 : this._marginLeft;
+        const effectiveRight = atRightWall ? config.width - SPRITE_HALF_W  : this._marginRight;
 
         this.x = Phaser.Math.Clamp(this.x + dx, effectiveLeft, effectiveRight);
         const overflow = dx - (this.x - prevX);

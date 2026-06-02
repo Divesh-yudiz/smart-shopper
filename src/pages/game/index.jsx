@@ -9,28 +9,34 @@ import Level from "./scenes/Level.js";
 function GamePlay() {
     const gameRef = useRef(null);
     useEffect(() => {
-        const gameConfig = {
-            type: Phaser.AUTO,
-            width: config.width,
-            height: config.height,
-            parent: gameRef.current,
-            transparent: true,
-            title: 'Smart Shopper',
-            backgroundColor: '#1a1028',
-            scale: {
-                mode: Phaser.Scale.FIT,
-                autoCenter: Phaser.Scale.CENTER_BOTH,
-            },
-        };
+        let game;
 
-        const game = new Phaser.Game(gameConfig);
-        game.scene.add("Boot", Boot, true);
-        game.scene.add("Home", Home);
-        game.scene.add("Preload", Preload);
-        game.scene.add("Level", Level);
+        // Wait for all @font-face fonts (including Cause) to finish loading
+        // before creating the Phaser game, so canvas text uses the correct font.
+        document.fonts.ready.then(() => {
+            const gameConfig = {
+                type: Phaser.AUTO,
+                width: config.width,
+                height: config.height,
+                parent: gameRef.current,
+                transparent: true,
+                title: 'Smart Shopper',
+                backgroundColor: '#1a1028',
+                scale: {
+                    mode: Phaser.Scale.FIT,
+                    autoCenter: Phaser.Scale.CENTER_BOTH,
+                },
+            };
+
+            game = new Phaser.Game(gameConfig);
+            game.scene.add("Boot", Boot, true);
+            game.scene.add("Home", Home);
+            game.scene.add("Preload", Preload);
+            game.scene.add("Level", Level);
+        });
 
         return () => {
-            game.destroy(true);
+            game?.destroy(true);
         };
     }, []);
 
