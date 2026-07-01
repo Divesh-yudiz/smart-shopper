@@ -1,43 +1,41 @@
 import Phaser from 'phaser';
 import config from '../../utils/config.js';
+import { CHECKOUT_TEXTURE_KEYS } from '../../config/checkoutAssets.js';
+import { resolveItem } from '../../../../utils/gameApi.js';
 
-// ── panel geometry ─────────────────────────────────────────────────────────────
-const PANEL_W = 1300;
-const PANEL_H = 790;
-const CORNER_R = 24;
-const HEADER_H = 100;
-const SCORE_W = 320;
-const DIVIDER_X = -PANEL_W / 2 + SCORE_W;      // -330
-const SCORE_CX = -PANEL_W / 2 + SCORE_W / 2;  // -490
+const PANEL_W = 1240;
+const PANEL_H = 720;
+const HEADER_H = 78;
+const BODY_PAD = 16;
+const LEFT_W = 300;
+const RIGHT_W = PANEL_W - LEFT_W - BODY_PAD * 3;
+const ICON_SIZE = 44;
+const STATUS_BTN_W = 106;
+const STATUS_BTN_H = 32;
+const STAR_SIZE = 26;
 
-// table column positions (right section, panel-local)
-const T_EDGE = DIVIDER_X + 28;   // -302  left edge of table
-const T_ICON = T_EDGE + 38;      // -264  icon circle centre
-const T_NAME = T_EDGE + 84;      // -218  item name (left-aligned)
-const T_REQ = T_EDGE + 530;     // +228  required qty (centred)
-const T_CART = T_EDGE + 668;     // +366  in-cart qty (centred)
-const T_STATUS = T_EDGE + 840;     // +538  status pill centre
-
-// row geometry
-const HDR_ROW_Y = -PANEL_H / 2 + HEADER_H + 52;
-const ROW_START = -PANEL_H / 2 + HEADER_H + 98;
-const ROW_H = 68;
-const ICON_R = 22;
-
-// ── palette ────────────────────────────────────────────────────────────────────
-const C_BG = 0xfffbf0;
-const C_BORDER = 0xf5a623;
-const C_HDR = 0xf5a623;
-const C_DIVIDER = 0xfde68a;
-const C_ROW_A = 0xfff8e1;
-const C_ROW_B = 0xfffde7;
 const C_WHITE = '#ffffff';
-const C_NAVY = '#1a2d4a';
-const C_BODY = '#3a5070';
-const C_MUTED = '#9a8a6a';
+const C_NAVY = '#1e3a5f';
+const C_MUTED = '#8a9ab0';
 const C_GREEN = '#27ae60';
 const C_RED = '#c0392b';
 const C_ORANGE = '#e67e22';
+const C_SCORE_HDR = 0x1e3a5f;
+const C_PANEL_BODY = 0xc5ccd8;
+const C_PANEL_BORDER = 0x8a96a8;
+const SCORE_HDR_H = 48;
+const SCORE_CORNER_R = 12;
+const LIST_HDR_H = 48;
+const LIST_CORNER_R = 12;
+const C_ROW_A = 0xffffff;
+const C_ROW_B = 0xf0f3f8;
+
+function formatItemName(entry = {}) {
+    const resolved = resolveItem(entry.key);
+    if (resolved?.label) return resolved.label;
+    const key = entry.key ?? '';
+    return key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
 
 export default class CheckoutPanel extends Phaser.GameObjects.Container {
     constructor(scene, x = config.centerX, y = config.centerY) {
@@ -47,453 +45,443 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
         this.setVisible(false);
     }
 
-    open ({ entries = [], cartTotal = 0, budget = 0, onClose = () => { } } = {}) {
+    open({ entries = [], cartTotal = 0, budget = 0, onClose = () => { } } = {}) {
         this._onClose = onClose;
         const items = entries.filter(Boolean);
-        const matched = items.filter(e => (e.collected ?? 0) >= (e.required ?? 1)).length;
+        const matched = items.filter((e) => (e.collected ?? 0) >= (e.required ?? 1)).length;
         const total = items.length;
         const pct = total > 0 ? matched / total : 0;
         const overBudget = budget > 0 && cartTotal > budget;
-
-        // star count: 3 = perfect + under budget, 2 = all matched + over budget, 1 = ≥50%, 0 = <50%
         const starCount = (pct >= 1 && !overBudget) ? 3 : (pct >= 1 ? 2 : (pct >= 0.5 ? 1 : 0));
 
         this.removeAll(true);
 
-        // dim overlay
         const ov = this.scene.add.rectangle(0, 0, config.width, config.height, 0x0a1a30, 0.72);
         ov.setInteractive();
         this.add(ov);
 
-        this._drawPanelBg();
-        this._drawHeader(starCount);
-        this._drawScoreColumn(matched, total, pct, overBudget, cartTotal, budget, starCount);
-        this._drawDivider();
-        this._buildTable(items, matched, total, overBudget);
-        this._buildDoneButton();
+        this._drawFrame();
+        this._drawHeader();
+        this._drawCloseButton();
+        this._drawScorePanel(matched, total, pct, overBudget, cartTotal, budget, starCount);
+        this._drawItemPanel(items, matched, total, overBudget);
 
         this.setVisible(true);
         this.setAlpha(0);
-        this.setScale(0.88);
+        this.setScale(0.9);
         this.scene.tweens.add({
-            targets: this, alpha: 1, scale: 1,
-            duration: 380, ease: 'Back.easeOut',
+            targets: this,
+            alpha: 1,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 360,
+            ease: 'Back.easeOut',
         });
 
         if (pct >= 1 && !overBudget) this._launchConfetti(total);
     }
 
-    // ── panel background ──────────────────────────────────────────────────────
+    _pt() { return -PANEL_H / 2; }
+    _pl() { return -PANEL_W / 2; }
+    _bodyTop() { return this._pt() + HEADER_H + BODY_PAD; }
+    _bodyH() { return PANEL_H - HEADER_H - BODY_PAD * 2; }
 
-    _drawPanelBg () {
+    _drawFrame () {
+        const pl = this._pl();
+        const pt = this._pt();
         const g = this.scene.add.graphics();
-        const PT = -PANEL_H / 2;
 
-        // orange outer border
-        g.fillStyle(C_BORDER, 1);
-        g.fillRoundedRect(-PANEL_W / 2 - 5, PT - 5, PANEL_W + 10, PANEL_H + 10, CORNER_R + 4);
-
-        // thin white inner ring
         g.fillStyle(0xffffff, 1);
-        g.fillRoundedRect(-PANEL_W / 2 - 1, PT - 1, PANEL_W + 2, PANEL_H + 2, CORNER_R + 1);
+        g.fillRoundedRect(pl - 5, pt - 5, PANEL_W + 10, PANEL_H + 10, SCORE_CORNER_R + 3);
 
-        // cream body
-        g.fillStyle(C_BG, 1);
-        g.fillRoundedRect(-PANEL_W / 2, PT, PANEL_W, PANEL_H, CORNER_R);
+        g.fillStyle(C_PANEL_BODY, 1);
+        g.fillRoundedRect(pl, pt, PANEL_W, PANEL_H, SCORE_CORNER_R);
+
+        g.fillStyle(C_SCORE_HDR, 1);
+        g.fillRoundedRect(pl, pt, PANEL_W, HEADER_H, {
+            tl: SCORE_CORNER_R,
+            tr: SCORE_CORNER_R,
+            bl: 0,
+            br: 0,
+        });
+
+        g.lineStyle(2, C_PANEL_BORDER, 1);
+        g.strokeRoundedRect(pl, pt, PANEL_W, PANEL_H, SCORE_CORNER_R);
 
         this.add(g);
     }
 
-    // ── orange header ─────────────────────────────────────────────────────────
+    _drawHeader() {
+        const pl = this._pl();
+        const pt = this._pt();
+        const hCY = pt + HEADER_H / 2 + 2;
 
-    _drawHeader (starCount) {
-        const g = this.scene.add.graphics();
-        const PT = -PANEL_H / 2;
+        const cart = this.scene.add.image(pl + 54, hCY, CHECKOUT_TEXTURE_KEYS.cartIcon);
+        cart.setDisplaySize(32, 32);
+        this.add(cart);
 
-        g.fillStyle(C_HDR, 1);
-        g.fillRoundedRect(-PANEL_W / 2, PT, PANEL_W, HEADER_H,
-            { tl: CORNER_R, tr: CORNER_R, bl: 0, br: 0 });
-
-        // shine strip
-        g.fillStyle(0xffffff, 0.22);
-        g.fillRoundedRect(-PANEL_W / 2 + 4, PT + 3, PANEL_W - 8, HEADER_H * 0.44,
-            { tl: CORNER_R, tr: CORNER_R, bl: 0, br: 0 });
-
-        // bottom shadow
-        g.fillStyle(0x000000, 0.08);
-        g.fillRect(-PANEL_W / 2, PT + HEADER_H - 5, PANEL_W, 5);
-        this.add(g);
-
-        const hCY = PT + HEADER_H / 2;
-
-        // 🛒 icon left
-        this.add(this.scene.add.text(-PANEL_W / 2 + 46, hCY, '🛒', { fontSize: '38px' })
-            .setOrigin(0.5, 0.5));
-
-        // title
-        this.add(this.scene.add.text(-PANEL_W / 2 + 92, hCY, 'CHECKOUT SUMMARY', {
-            fontFamily: config.fonts.text, fontSize: '38px', fontStyle: 'bold',
-            color: C_WHITE, stroke: '#b87000', strokeThickness: 3,
+        this.add(this.scene.add.text(pl + 86, hCY, 'CHECKOUT SUMMARY', {
+            fontFamily: config.fonts.text,
+            fontSize: '32px',
+            fontStyle: 'bold',
+            color: C_WHITE,
         }).setOrigin(0, 0.5));
-
-        // 3 stars top-right (filled / empty based on starCount)
-        const starGap = 44, starR = 16;
-        const starX0 = PANEL_W / 2 - 52 - starGap * 2;
-        for (let i = 0; i < 3; i++) {
-            const sg = this.scene.add.graphics();
-            this._drawStarShape(sg, starX0 + i * starGap, hCY, starR, i < starCount);
-            sg.setScale(0);
-            this.add(sg);
-            this.scene.tweens.add({
-                targets: sg, scale: 1,
-                duration: 340, delay: 700 + i * 110, ease: 'Back.easeOut',
-            });
-        }
     }
 
-    // ── star polygon ──────────────────────────────────────────────────────────
-
-    _drawStarShape (g, cx, cy, r, filled) {
-        const inner = r * 0.42;
-        if (filled) {
-            g.fillStyle(0xffee44, 0.25);
-            g.fillCircle(cx, cy, r * 1.65);
-        }
-        g.fillStyle(filled ? 0xffd700 : 0xd0c8b8, 1);
-        if (filled) g.lineStyle(2, 0xffa500, 1);
-        g.beginPath();
-        for (let i = 0; i < 10; i++) {
-            const angle = (i * Math.PI) / 5 - Math.PI / 2;
-            const rad = i % 2 === 0 ? r : inner;
-            i === 0
-                ? g.moveTo(cx + Math.cos(angle) * rad, cy + Math.sin(angle) * rad)
-                : g.lineTo(cx + Math.cos(angle) * rad, cy + Math.sin(angle) * rad);
-        }
-        g.closePath();
-        g.fillPath();
-        if (filled) g.strokePath();
+    _drawCloseButton() {
+        const pt = this._pt();
+        const size = 50;
+        const closeBtn = this.scene.add.image(
+            PANEL_W / 2 - size / 2 + 16,
+            pt - 12,
+            CHECKOUT_TEXTURE_KEYS.closeButton,
+        );
+        closeBtn.setDisplaySize(size, size);
+        closeBtn.setInteractive({ useHandCursor: true });
+        closeBtn.on('pointerup', () => this._close());
+        this.add(closeBtn);
     }
 
-    // ── left score column ─────────────────────────────────────────────────────
+    _drawPanelShell (centerX, panelTop, panelW, panelH, headerH = SCORE_HDR_H, cornerR = SCORE_CORNER_R) {
+        const left = centerX - panelW / 2;
+        const g = this.scene.add.graphics();
 
-    _drawScoreColumn (matched, total, pct, overBudget, cartTotal, budget, starCount) {
-        const cx = SCORE_CX;
-        const CR = 65;
-        const cY = -PANEL_H / 2 + HEADER_H + 128;
+        g.fillStyle(C_PANEL_BODY, 1);
+        g.fillRoundedRect(left, panelTop, panelW, panelH, cornerR);
 
-        // column tint
-        const col = this.scene.add.graphics();
-        col.fillStyle(0xfff6d6, 0.62);
-        col.fillRoundedRect(-PANEL_W / 2 + 10, -PANEL_H / 2 + HEADER_H + 8,
-            SCORE_W - 20, PANEL_H - HEADER_H - 18, 14);
-        this.add(col);
+        g.fillStyle(C_SCORE_HDR, 1);
+        g.fillRoundedRect(left, panelTop, panelW, headerH, {
+            tl: cornerR,
+            tr: cornerR,
+            bl: 0,
+            br: 0,
+        });
 
-        // "🏆 SCORE"
-        this.add(this.scene.add.text(cx, -PANEL_H / 2 + HEADER_H + 28, '🏆  SCORE', {
-            fontFamily: config.fonts.text, fontSize: '20px', fontStyle: 'bold', color: '#b87000',
+        g.lineStyle(2, C_PANEL_BORDER, 1);
+        g.strokeRoundedRect(left, panelTop, panelW, panelH, cornerR);
+
+        this.add(g);
+    }
+
+    _drawScorePanelShell (cardX, panelTop, panelH) {
+        this._drawPanelShell(cardX, panelTop, LEFT_W, panelH);
+    }
+
+    _drawListPanelShell (panelX, panelTop, panelH) {
+        this._drawPanelShell(panelX, panelTop, RIGHT_W, panelH, LIST_HDR_H, LIST_CORNER_R);
+    }
+
+    _drawScorePanel (matched, total, pct, overBudget, cartTotal, budget, starCount) {
+        const pl = this._pl();
+        const bodyTop = this._bodyTop();
+        const bodyH = this._bodyH();
+        const cardX = pl + BODY_PAD + LEFT_W / 2;
+        const panelTop = bodyTop;
+        const panelH = bodyH;
+
+        this._drawScorePanelShell(cardX, panelTop, panelH);
+
+        const tabY = panelTop + SCORE_HDR_H / 2;
+        const trophy = this.scene.add.image(cardX - 50, tabY, CHECKOUT_TEXTURE_KEYS.trophy);
+        trophy.setDisplaySize(26, 26);
+        this.add(trophy);
+
+        this.add(this.scene.add.text(cardX + 2, tabY, 'SCORE', {
+            fontFamily: config.fonts.text,
+            fontSize: '16px',
+            fontStyle: 'bold',
+            color: C_WHITE,
         }).setOrigin(0.5, 0.5));
 
-        // track ring (beige)
-        const trackG = this.scene.add.graphics();
-        trackG.lineStyle(12, 0xe8d8a0, 1);
-        trackG.strokeCircle(cx, cY, CR);
-        this.add(trackG);
-
-        // animated arc / full circle
-        const arcColor = (pct >= 1 && !overBudget) ? 0x27ae60
-            : (pct >= 1) ? 0xe74c3c
-                : 0xf5a623;
+        const ringY = panelTop + SCORE_HDR_H + 70;
+        const ringSize = 112;
+        const ringBase = this.scene.add.image(cardX, ringY, CHECKOUT_TEXTURE_KEYS.progressBase);
+        ringBase.setDisplaySize(ringSize, ringSize);
+        this.add(ringBase);
 
         const arcG = this.scene.add.graphics();
         this.add(arcG);
+        const arcColor = (pct >= 1 && !overBudget) ? 0x27ae60 : (pct >= 1 ? 0xe74c3c : 0x27ae60);
         const proxy = { t: 0 };
         this.scene.tweens.add({
-            targets: proxy, t: pct, duration: 1000, delay: 400, ease: 'Cubic.easeOut',
+            targets: proxy,
+            t: pct,
+            duration: 1000,
+            delay: 350,
+            ease: 'Cubic.easeOut',
             onUpdate: () => {
                 arcG.clear();
                 if (proxy.t <= 0) return;
-                arcG.lineStyle(12, arcColor, 1);
+                arcG.lineStyle(10, arcColor, 1);
                 arcG.beginPath();
-                arcG.arc(cx, cY, CR, -Math.PI / 2, -Math.PI / 2 + proxy.t * Math.PI * 2, false);
+                arcG.arc(cardX, ringY, ringSize * 0.44, -Math.PI / 2,
+                    -Math.PI / 2 + proxy.t * Math.PI * 2, false);
                 arcG.strokePath();
             },
         });
 
-        // count-up number
-        const numT = this.scene.add.text(cx, cY - 14, '0', {
-            fontFamily: config.fonts.text, fontSize: '62px', fontStyle: 'bold', color: C_NAVY,
+        const numT = this.scene.add.text(cardX, ringY - 8, '0', {
+            fontFamily: config.fonts.text,
+            fontSize: '48px',
+            fontStyle: 'bold',
+            color: C_NAVY,
         }).setOrigin(0.5, 0.5);
         this.add(numT);
         const ctr = { n: 0 };
         this.scene.tweens.add({
-            targets: ctr, n: matched, duration: 1000, delay: 400, ease: 'Cubic.easeOut',
+            targets: ctr,
+            n: matched,
+            duration: 1000,
+            delay: 350,
+            ease: 'Cubic.easeOut',
             onUpdate: () => numT.setText(`${Math.round(ctr.n)}`),
         });
 
-        this.add(this.scene.add.text(cx, cY + 24, `of ${total} items`, {
-            fontFamily: config.fonts.text, fontSize: '17px', color: C_MUTED,
+        this.add(this.scene.add.text(cardX, ringY + 20, `of ${total} items`, {
+            fontFamily: config.fonts.text,
+            fontSize: '14px',
+            color: C_MUTED,
         }).setOrigin(0.5, 0.5));
 
-        this.add(this.scene.add.text(cx, cY + CR + 18, 'items matched', {
-            fontFamily: config.fonts.text, fontSize: '17px', color: C_MUTED,
+        const matchedY = ringY + ringSize / 2 + 16;
+        this.add(this.scene.add.text(cardX, matchedY, 'items matched', {
+            fontFamily: config.fonts.text,
+            fontSize: '14px',
+            color: C_MUTED,
         }).setOrigin(0.5, 0));
 
-        // 3 small stars below "items matched"
-        const starGap = 42, starR = 13;
-        const starX0 = cx - starGap;
+        const starY = matchedY + 30;
+        const starGap = 32;
         for (let i = 0; i < 3; i++) {
-            const sg = this.scene.add.graphics();
-            this._drawStarShape(sg, starX0 + i * starGap, cY + CR + 52, starR, i < starCount);
-            sg.setScale(0);
-            this.add(sg);
+            const starKey = i < starCount
+                ? CHECKOUT_TEXTURE_KEYS.starFilled
+                : CHECKOUT_TEXTURE_KEYS.starEmpty;
+            const star = this.scene.add.image(cardX - starGap + i * starGap, starY, starKey);
+            star.setDisplaySize(STAR_SIZE, STAR_SIZE);
+            star.setAlpha(0);
+            this.add(star);
             this.scene.tweens.add({
-                targets: sg, scale: 1,
-                duration: 320, delay: 860 + i * 120, ease: 'Back.easeOut',
+                targets: star,
+                alpha: 1,
+                duration: 300,
+                delay: 820 + i * 110,
+                ease: 'Quad.easeOut',
             });
         }
 
-        // dashed horizontal separator
-        const sepY = PANEL_H / 2 - 192;
-        const sepG = this.scene.add.graphics();
-        sepG.fillStyle(0xd4b87a, 0.80);
-        for (let x = SCORE_CX - SCORE_W / 2 + 22; x < SCORE_CX + SCORE_W / 2 - 22; x += 10) {
-            sepG.fillCircle(x, sepY, 2);
-        }
-        this.add(sepG);
+        const panelBottom = panelTop + panelH;
+        const savedY = panelBottom - 22;
+        const spentY = panelBottom - 54;
+        const totalLabelY = panelBottom - 78;
+        const sepY = panelBottom - 108;
 
-        // "💰 TOTAL SPENT"
-        this.add(this.scene.add.text(cx, sepY + 16, '💰  TOTAL SPENT', {
-            fontFamily: config.fonts.text, fontSize: '15px', fontStyle: 'bold', color: C_MUTED,
-        }).setOrigin(0.5, 0));
+        const dotted = this.scene.add.image(cardX, sepY, CHECKOUT_TEXTURE_KEYS.dottedLine);
+        dotted.setDisplaySize(LEFT_W - 40, 8);
+        this.add(dotted);
 
-        // "AED X / AED Y"
+        const aed = this.scene.add.image(cardX - 64, totalLabelY, CHECKOUT_TEXTURE_KEYS.aedIcon);
+        aed.setDisplaySize(18, 18);
+        this.add(aed);
+
+        this.add(this.scene.add.text(cardX - 42, totalLabelY, 'TOTAL SPENT', {
+            fontFamily: config.fonts.text,
+            fontSize: '12px',
+            fontStyle: 'bold',
+            color: C_MUTED,
+        }).setOrigin(0, 0.5));
+
         const spentStr = budget > 0 ? `AED ${cartTotal} / AED ${budget}` : `AED ${cartTotal}`;
-        const spentColor = overBudget ? C_RED : C_NAVY;
-        this.add(this.scene.add.text(cx, sepY + 42, spentStr, {
-            fontFamily: config.fonts.text, fontSize: '26px', fontStyle: 'bold', color: spentColor,
-        }).setOrigin(0.5, 0));
+        this.add(this.scene.add.text(cardX, spentY, spentStr, {
+            fontFamily: config.fonts.text,
+            fontSize: '20px',
+            fontStyle: 'bold',
+            color: overBudget ? C_RED : C_NAVY,
+        }).setOrigin(0.5, 0.5));
 
-        // savings / over-budget note
         if (budget > 0) {
             const noteStr = overBudget
-                ? `⚠  AED ${cartTotal - budget} over budget`
-                : `🎉  AED ${budget - cartTotal} saved!`;
+                ? `AED ${cartTotal - budget} over budget`
+                : `AED ${budget - cartTotal} saved!`;
             const noteColor = overBudget ? C_RED : C_GREEN;
-            this.add(this.scene.add.text(cx, sepY + 76, noteStr, {
-                fontFamily: config.fonts.text, fontSize: '17px', color: noteColor,
-            }).setOrigin(0.5, 0));
+
+            if (!overBudget) {
+                const gift = this.scene.add.image(cardX - 64, savedY, CHECKOUT_TEXTURE_KEYS.giftIcon);
+                gift.setDisplaySize(20, 20);
+                this.add(gift);
+            }
+
+            this.add(this.scene.add.text(cardX - (overBudget ? 0 : 42), savedY, noteStr, {
+                fontFamily: config.fonts.text,
+                fontSize: '14px',
+                fontStyle: 'bold',
+                color: noteColor,
+            }).setOrigin(overBudget ? 0.5 : 0, 0.5));
         }
     }
 
-    // ── vertical divider ──────────────────────────────────────────────────────
+    _drawItemPanel (items, matched, total, overBudget) {
+        const pl = this._pl();
+        const bodyTop = this._bodyTop();
+        const bodyH = this._bodyH();
+        const panelX = pl + BODY_PAD + LEFT_W + BODY_PAD + RIGHT_W / 2;
+        const panelTop = bodyTop;
+        const panelH = bodyH;
 
-    _drawDivider () {
-        const g = this.scene.add.graphics();
-        g.lineStyle(2, C_DIVIDER, 1);
-        g.lineBetween(DIVIDER_X, -PANEL_H / 2 + HEADER_H + 10, DIVIDER_X, PANEL_H / 2 - 90);
-        this.add(g);
-    }
+        this._drawListPanelShell(panelX, panelTop, panelH);
 
-    // ── item table ────────────────────────────────────────────────────────────
+        const innerPad = 12;
+        const innerLeft = panelX - RIGHT_W / 2 + innerPad;
+        const innerW = RIGHT_W - innerPad * 2;
+        const hdrY = panelTop + LIST_HDR_H / 2;
 
-    _buildTable (items, matched, total, overBudget) {
-        const hStyle = {
-            fontFamily: config.fonts.text, fontSize: '18px', fontStyle: 'bold', color: '#9a7a20',
+        const colIcon = innerLeft + 26;
+        const colName = innerLeft + 58;
+        const colReq = innerLeft + innerW * 0.56;
+        const colCart = innerLeft + innerW * 0.72;
+        const colStatus = innerLeft + innerW * 0.88;
+
+        const hdrStyle = {
+            fontFamily: config.fonts.text,
+            fontSize: '13px',
+            fontStyle: 'bold',
+            color: C_WHITE,
         };
-        [
-            ['ITEM', T_NAME + 60],
-            ['REQUIRED', T_REQ],
-            ['IN CART', T_CART],
-            ['STATUS', T_STATUS],
-        ].forEach(([lbl, cx]) => {
-            this.add(this.scene.add.text(cx, HDR_ROW_Y, lbl, hStyle).setOrigin(0.5, 0.5));
+        this.add(this.scene.add.text(colName, hdrY, 'ITEM', hdrStyle).setOrigin(0, 0.5));
+        this.add(this.scene.add.text(colReq, hdrY, 'REQUIRED', hdrStyle).setOrigin(1, 0.5));
+        this.add(this.scene.add.text(colCart, hdrY, 'IN CART', hdrStyle).setOrigin(1, 0.5));
+        this.add(this.scene.add.text(colStatus, hdrY, 'STATUS', hdrStyle).setOrigin(0.5, 0.5));
+
+        const summaryH = 46;
+        const summaryY = panelTop + panelH - summaryH - 10;
+        const rowTop = panelTop + LIST_HDR_H + 8;
+        const rowGap = 0;
+        const rowCount = Math.max(items.length, 1);
+        const listBodyH = summaryY - 6 - rowTop;
+        const rowH = Math.min(52, listBodyH / rowCount - rowGap);
+
+        const listBody = this.scene.add.graphics();
+        listBody.fillStyle(0xffffff, 1);
+        listBody.fillRoundedRect(innerLeft, rowTop, innerW, listBodyH, 8);
+        this.add(listBody);
+
+        items.forEach((entry, i) => {
+            const rowCY = rowTop + i * (rowH + rowGap) + rowH / 2;
+            this._drawRow(entry, rowCY, innerLeft, innerW, colIcon, colName, colReq, colCart, colStatus, rowH, i);
         });
 
-        // header underline
-        const hDiv = this.scene.add.graphics();
-        hDiv.lineStyle(2, 0xfde68a, 1);
-        hDiv.lineBetween(T_EDGE, HDR_ROW_Y + 16, PANEL_W / 2 - 20, HDR_ROW_Y + 16);
-        this.add(hDiv);
-
-        items.forEach((entry, i) => this._buildRow(entry, i));
-
-        // summary message
         const allDone = matched === total && total > 0;
-        let msg, msgColor;
+        let msg;
+        let msgColor;
         if (allDone && overBudget) {
-            msg = '⚠️  All matched, but you went over budget!';
+            msg = 'All matched, but you went over budget!';
             msgColor = C_ORANGE;
         } else if (allDone) {
-            msg = `🎉  All ${total} items matched – amazing shopping!`;
+            msg = `All ${total} items matched – amazing shopping!`;
             msgColor = C_GREEN;
         } else {
-            msg = `👍  Nice try! ${matched} of ${total} matched – grab the rest next time.`;
-            msgColor = C_ORANGE;
+            msg = `Nice try ${matched} of ${total} matched - grab the rest next time.`;
+            msgColor = C_GREEN;
         }
 
-        const tableCX = (T_EDGE + PANEL_W / 2 - 20) / 2;
-        const summaryT = this.scene.add.text(
-            tableCX,
-            ROW_START + total * ROW_H + 16,
-            msg, {
-            fontFamily: config.fonts.text, fontSize: '24px', fontStyle: 'bold', color: msgColor,
-        }
-        ).setOrigin(0.5, 0).setAlpha(0);
+        const box = this.scene.add.graphics();
+        box.fillStyle(0xe8f8ef, 1);
+        box.fillRoundedRect(innerLeft, summaryY, innerW, summaryH, 10);
+        box.lineStyle(2, 0x27ae60, 0.55);
+        box.strokeRoundedRect(innerLeft, summaryY, innerW, summaryH, 10);
+        this.add(box);
+
+        const summaryT = this.scene.add.text(innerLeft + innerW / 2, summaryY + summaryH / 2, msg, {
+            fontFamily: config.fonts.text,
+            fontSize: '16px',
+            color: msgColor,
+            align: 'center',
+            wordWrap: { width: innerW - 24 },
+        }).setOrigin(0.5, 0.5).setAlpha(0);
         this.add(summaryT);
         this.scene.tweens.add({
-            targets: summaryT, alpha: 1,
-            duration: 340, delay: 200 + total * 68 + 260, ease: 'Quad.easeOut',
+            targets: summaryT,
+            alpha: 1,
+            duration: 320,
+            delay: 220 + items.length * 55,
+            ease: 'Quad.easeOut',
         });
-
-        if (allDone && !overBudget) this._launchConfetti(total);
     }
 
-    // ── single row ────────────────────────────────────────────────────────────
-
-    _buildRow (entry, i) {
-        const ry = ROW_START + i * ROW_H;
+    _drawRow (entry, rowCY, innerLeft, innerW, colIcon, colName, colReq, colCart, colStatus, rowH, i) {
         const inCart = entry.collected ?? 0;
         const required = entry.required ?? 1;
         const done = inCart >= required;
-        const tableW = PANEL_W / 2 - T_EDGE - 20;
+        const rowTop = rowCY - rowH / 2;
 
-        const rowC = this.scene.add.container(0, ry + 14).setAlpha(0);
-        this.add(rowC);
-        this.scene.tweens.add({
-            targets: rowC, y: ry, alpha: 1,
-            duration: 280, delay: 160 + i * 68, ease: 'Cubic.easeOut',
-        });
-
-        // alternating stripe
-        const stripe = this.scene.add.graphics();
-        stripe.fillStyle(i % 2 === 0 ? C_ROW_A : C_ROW_B, 1);
-        stripe.fillRoundedRect(T_EDGE - 8, -ROW_H / 2 + 3, tableW + 8, ROW_H - 6, 8);
-        rowC.add(stripe);
-
-        // green left accent (only matched rows)
-        if (done) {
-            const bar = this.scene.add.graphics();
-            bar.fillStyle(0x27ae60, 1);
-            bar.fillRoundedRect(T_EDGE - 8, -ROW_H / 2 + 3, 5, ROW_H - 6,
-                { tl: 4, tr: 0, bl: 4, br: 0 });
-            rowC.add(bar);
+        const rowG = this.scene.add.graphics();
+        rowG.fillStyle(i % 2 === 0 ? C_ROW_A : C_ROW_B, 1);
+        rowG.fillRect(innerLeft, rowTop, innerW, rowH);
+        if (i > 0) {
+            rowG.lineStyle(1, 0xd8dee8, 1);
+            rowG.lineBetween(innerLeft, rowTop, innerLeft + innerW, rowTop);
         }
+        rowG.setAlpha(0);
+        this.add(rowG);
 
-        // icon circle (beige)
-        const iconBg = this.scene.add.graphics();
-        iconBg.fillStyle(0xf5eed6, 1);
-        iconBg.fillCircle(T_ICON, 0, ICON_R);
-        iconBg.lineStyle(1.5, 0xd4b87a, 0.60);
-        iconBg.strokeCircle(T_ICON, 0, ICON_R);
-        rowC.add(iconBg);
+        const iconBg = this.scene.add.image(colIcon, rowCY, CHECKOUT_TEXTURE_KEYS.productBase);
+        iconBg.setDisplaySize(ICON_SIZE, ICON_SIZE);
+        iconBg.setAlpha(0);
+        this.add(iconBg);
 
+        let productImg = null;
         if (entry.textureKey && this.scene.textures.exists(entry.textureKey)) {
-            const img = this.scene.add.image(T_ICON, 0, entry.textureKey).setOrigin(0.5, 0.5);
+            productImg = this.scene.add.image(colIcon, rowCY, entry.textureKey).setOrigin(0.5, 0.5);
             const isFruit = entry.textureKey?.startsWith('product_fruits_') &&
                 !entry.textureKey?.includes('tomato');
-            const max = (ICON_R - 3) * (isFruit ? 3.0 : 2.0);
-            const src = img.texture.getSourceImage();
+            const max = ICON_SIZE * (isFruit ? 0.8 : 0.66);
+            const src = productImg.texture.getSourceImage();
             const s = Math.min(max / (src?.width || max), max / (src?.height || max));
-            img.setScale(s);
-            rowC.add(img);
+            productImg.setDisplaySize((src?.width || max) * s, (src?.height || max) * s);
+            productImg.setAlpha(0);
+            this.add(productImg);
         }
 
-        // item name
-        const name = (entry.key ?? '').replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
-        rowC.add(this.scene.add.text(T_NAME, 0, name, {
-            fontFamily: config.fonts.text, fontSize: '24px', color: C_NAVY,
-        }).setOrigin(0, 0.5));
+        const nameT = this.scene.add.text(colName, rowCY, formatItemName(entry), {
+            fontFamily: config.fonts.text,
+            fontSize: '19px',
+            color: C_NAVY,
+        }).setOrigin(0, 0.5).setAlpha(0);
+        this.add(nameT);
 
-        // required qty (neutral)
-        rowC.add(this.scene.add.text(T_REQ, 0, `×${required}`, {
-            fontFamily: config.fonts.text, fontSize: '24px', fontStyle: 'bold', color: C_BODY,
-        }).setOrigin(0.5, 0.5));
+        const reqT = this.scene.add.text(colReq, rowCY, `x${required}`, {
+            fontFamily: config.fonts.text,
+            fontSize: '19px',
+            fontStyle: 'bold',
+            color: C_NAVY,
+        }).setOrigin(1, 0.5).setAlpha(0);
+        this.add(reqT);
 
-        // in-cart qty (green = done, red = not done)
-        rowC.add(this.scene.add.text(T_CART, 0, `×${inCart}`, {
-            fontFamily: config.fonts.text, fontSize: '24px', fontStyle: 'bold',
-            color: done ? C_GREEN : C_RED,
-        }).setOrigin(0.5, 0.5));
+        const cartT = this.scene.add.text(colCart, rowCY, `x${inCart}`, {
+            fontFamily: config.fonts.text,
+            fontSize: '19px',
+            fontStyle: 'bold',
+            color: done ? C_GREEN : C_ORANGE,
+        }).setOrigin(1, 0.5).setAlpha(0);
+        this.add(cartT);
 
-        // status pill
-        const bW = 132, bH = 36;
-        const pillBg = this.scene.add.graphics();
-        pillBg.fillStyle(done ? 0x27ae60 : 0x90a4ae, 1);
-        pillBg.fillRoundedRect(T_STATUS - bW / 2, -bH / 2, bW, bH, bH / 2);
-        rowC.add(pillBg);
+        const statusKey = done ? CHECKOUT_TEXTURE_KEYS.doneButton : CHECKOUT_TEXTURE_KEYS.missedButton;
+        const statusBtn = this.scene.add.image(colStatus, rowCY, statusKey);
+        statusBtn.setDisplaySize(STATUS_BTN_W, STATUS_BTN_H);
+        statusBtn.setAlpha(0);
+        this.add(statusBtn);
 
-        rowC.add(this.scene.add.text(T_STATUS, 0, done ? '✓  Done' : 'Missed', {
-            fontFamily: config.fonts.text, fontSize: '18px', fontStyle: 'bold', color: C_WHITE,
-        }).setOrigin(0.5, 0.5));
-
-        // pulse matched rows
-        if (done) {
-            this.scene.time.delayedCall(160 + i * 68 + 320, () => {
-                if (!rowC.active) return;
-                this.scene.tweens.add({
-                    targets: rowC, scaleX: 1.014, scaleY: 1.014,
-                    duration: 130, yoyo: true, ease: 'Sine.easeInOut',
-                });
-            });
-        }
-    }
-
-    // ── done button (centred in right section) ────────────────────────────────
-
-    _buildDoneButton () {
-        const btnW = 240;
-        const btnH = 62;
-        const btnX = (DIVIDER_X + PANEL_W / 2) / 2;   // centre of right section
-        const btnY = PANEL_H / 2 - 44;
-
-        const g = this.scene.add.graphics();
-        const draw = (hover) => {
-            g.clear();
-            g.fillStyle(0x000000, 0.14);
-            g.fillRoundedRect(btnX - btnW / 2 + 3, btnY - btnH / 2 + 5, btnW, btnH, btnH / 2);
-            g.fillStyle(hover ? 0x219a52 : 0x27ae60, 1);
-            g.fillRoundedRect(btnX - btnW / 2, btnY - btnH / 2, btnW, btnH, btnH / 2);
-            g.fillStyle(0xffffff, 0.20);
-            g.fillRoundedRect(btnX - btnW / 2 + 4, btnY - btnH / 2 + 3, btnW - 8, btnH / 2 - 3, {
-                tl: btnH / 2, tr: btnH / 2, bl: 0, br: 0,
-            });
-        };
-        draw(false);
-        this.add(g);
-
-        const lbl = this.scene.add.text(btnX, btnY, '🎯  Done', {
-            fontFamily: config.fonts.text, fontSize: '30px', fontStyle: 'bold',
-            color: C_WHITE, stroke: '#14532d', strokeThickness: 2,
-        }).setOrigin(0.5, 0.5);
-        this.add(lbl);
-
+        const fadeTargets = [rowG, iconBg, nameT, reqT, cartT, statusBtn];
+        if (productImg) fadeTargets.push(productImg);
         this.scene.tweens.add({
-            targets: lbl, scaleX: 1.04, scaleY: 1.04,
-            duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+            targets: fadeTargets,
+            alpha: 1,
+            duration: 260,
+            delay: 120 + i * 55,
+            ease: 'Cubic.easeOut',
         });
-
-        const hit = this.scene.add.rectangle(btnX, btnY, btnW, btnH, 0, 0);
-        hit.setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => {
-            draw(true);
-            this.scene.tweens.killTweensOf(lbl);
-            this.scene.tweens.add({ targets: lbl, scale: 1.08, duration: 80, ease: 'Quad.easeOut' });
-        });
-        hit.on('pointerout', () => {
-            draw(false);
-            this.scene.tweens.killTweensOf(lbl);
-            this.scene.tweens.add({
-                targets: lbl, scaleX: 1.04, scaleY: 1.04,
-                duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-            });
-        });
-        hit.on('pointerup', () => this._close());
-        this.add(hit);
     }
 
-    // ── confetti ──────────────────────────────────────────────────────────────
-
-    _launchConfetti (total) {
+    _launchConfetti(total) {
         const COLORS = [0xff4444, 0xff9800, 0xffeb3b, 0x4caf50, 0x2196f3, 0x9c27b0, 0xff69b4, 0x00bcd4];
         this._confettiPieces = [];
 
@@ -514,15 +502,20 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
                 { bx: 0, by: config.height + 50, speedX: { min: 100, max: 480 }, speedY: { min: -1000, max: -500 } },
                 { bx: config.width, by: config.height + 50, speedX: { min: -480, max: -100 }, speedY: { min: -1000, max: -500 } },
             ];
-            COLORS.forEach((_, i) => {
-                const { bx, by, speedX, speedY } = bursts[i % bursts.length];
-                const em = this.scene.add.particles(bx, by, `__conf_${i}`, {
-                    x: { min: -400, max: 400 }, y: { min: -700, max: -300 },
-                    speedX, speedY, gravityY: 520,
+            COLORS.forEach((_, idx) => {
+                const { bx, by, speedX, speedY } = bursts[idx % bursts.length];
+                const em = this.scene.add.particles(bx, by, `__conf_${idx}`, {
+                    x: { min: -400, max: 400 },
+                    y: { min: -700, max: -300 },
+                    speedX,
+                    speedY,
+                    gravityY: 520,
                     rotate: { min: -360, max: 360 },
                     alpha: { start: 1, end: 0 },
                     lifespan: { min: 1800, max: 2600 },
-                    quantity: 7, frequency: 30, duration: 300,
+                    quantity: 7,
+                    frequency: 30,
+                    duration: 300,
                     scale: { min: 0.9, max: 1.6 },
                 });
                 em.setDepth(700);
@@ -532,21 +525,25 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
         });
     }
 
-    _destroyConfetti () {
-        this._confettiPieces?.forEach(e => { if (e?.active) e.destroy(); });
+    _destroyConfetti() {
+        this._confettiPieces?.forEach((e) => { if (e?.active) e.destroy(); });
         this._confettiPieces = [];
     }
 
-    // ── close ─────────────────────────────────────────────────────────────────
-
-    _close () {
+    _close() {
         this._destroyConfetti();
         this.scene.tweens.add({
-            targets: this, alpha: 0, scale: 0.88, duration: 200, ease: 'Quad.easeIn',
+            targets: this,
+            alpha: 0,
+            scaleX: 0.94,
+            scaleY: 0.94,
+            duration: 200,
+            ease: 'Quad.easeIn',
             onComplete: () => {
+                this.setScale(1);
                 this.setVisible(false);
-                this._onClose?.();      // clears ss_inGame + saved state
-                window.location.reload(); // Boot re-runs → sees no ss_inGame → starts Home
+                this._onClose?.();
+                window.location.reload();
             },
         });
     }

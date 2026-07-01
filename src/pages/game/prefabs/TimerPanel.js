@@ -40,9 +40,10 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
         scene.add.existing(this);
         this.setDepth(300);
 
-        this._remaining   = startSeconds;
+        this._remaining   = Math.max(0, startSeconds);
         this._onComplete  = onComplete;
         this._onTick      = onTick;
+        this._completed   = false;
         const displayW = displayWidth;
         const scale = displayW / PANEL_NATIVE_W;
         this._panelH = PANEL_NATIVE_H * scale;
@@ -83,7 +84,21 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
             loop: true,
             callback: () => this._tick(),
         });
-        if (startPaused) this._tickEvent.paused = true;
+        if (startPaused) {
+            this._tickEvent.paused = true;
+        } else if (this._remaining <= 0) {
+            this._tickEvent.remove();
+            scene.time.delayedCall(0, () => this._fireComplete());
+        }
+    }
+
+    _fireComplete () {
+        if (this._completed) return;
+        this._completed = true;
+        this._tickEvent?.remove();
+        this._remaining = 0;
+        this._timeText?.setText(formatTime(0));
+        this._onComplete?.();
     }
 
     resume () {
@@ -96,7 +111,7 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
 
     _tick () {
         if (this._remaining <= 0) {
-            this._tickEvent?.remove();
+            this._fireComplete();
             return;
         }
         this._remaining -= 1;
@@ -104,8 +119,7 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
         this._onTick?.();
 
         if (this._remaining <= 0) {
-            this._tickEvent?.remove();
-            this._onComplete?.();
+            this._fireComplete();
         }
     }
 

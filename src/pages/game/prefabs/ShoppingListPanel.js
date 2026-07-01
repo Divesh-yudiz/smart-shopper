@@ -157,16 +157,11 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
 
     /** Call when player removes a product from the cart. */
     onProductRemoved (product) {
-        const key = product.key ?? product.textureKey;
         let changed = false;
 
         this._entries.forEach((entry) => {
             if (!entry) return;
-            const match =
-                entry.key === key ||
-                entry.textureKey === product.textureKey ||
-                entry.key === product.textureKey?.replace(/^product_\w+_/, '');
-            if (!match) return;
+            if (!this._matchesProduct(entry, product)) return;
             if (entry.collected > 0) {
                 entry.collected -= 1;
                 changed = true;
@@ -176,18 +171,34 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         if (changed) this._refresh();
     }
 
+    _matchesProduct (entry, product) {
+        const key = product.key ?? product.textureKey;
+        return (
+            entry.key === key ||
+            entry.textureKey === product.textureKey ||
+            entry.key === product.textureKey?.replace(/^product_\w+_/, '')
+        );
+    }
+
+    /** True when the product is on the list and still needs collecting. */
+    isProductNeeded (product) {
+        return this._entries.some(
+            (entry) => entry && this._matchesProduct(entry, product) && entry.collected < entry.required
+        );
+    }
+
+    /** True when the product appears anywhere on the shopping list. */
+    isProductOnList (product) {
+        return this._entries.some((entry) => entry && this._matchesProduct(entry, product));
+    }
+
     /** Call when player picks a product (e.g. added to cart). */
     onProductCollected (product) {
-        const key = product.key ?? product.textureKey;
         let changed = false;
 
-        this._entries.forEach((entry, i) => {
+        this._entries.forEach((entry) => {
             if (!entry) return;
-            const match =
-                entry.key === key ||
-                entry.textureKey === product.textureKey ||
-                entry.key === product.textureKey?.replace(/^product_\w+_/, '');
-            if (!match) return;
+            if (!this._matchesProduct(entry, product)) return;
             if (entry.collected < entry.required) {
                 entry.collected += 1;
                 changed = true;

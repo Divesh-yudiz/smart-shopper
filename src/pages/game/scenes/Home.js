@@ -3,6 +3,8 @@ import { HOME_TEXTURE_KEYS } from '../config/homeAssets.js';
 import HomeInfoPopup from '../prefabs/HomeInfoPopup.js';
 import config from '../utils/config.js';
 
+const SAVE_KEY = 'ss_gameState';
+
 const LOGO_DISPLAY_W = 720;
 const START_BTN_DISPLAY_W = 300;
 const INFO_BTN_SIZE = 72;
@@ -26,6 +28,7 @@ export default class Home extends Phaser.Scene {
     create () {
         this._starting = false;
         sessionStorage.removeItem('ss_inGame');
+        sessionStorage.removeItem(SAVE_KEY);
 
         const bg = this.add.image(config.centerX, config.centerY, HOME_TEXTURE_KEYS.bgBlur);
         bg.setDisplaySize(config.width, config.height);
@@ -131,6 +134,8 @@ export default class Home extends Phaser.Scene {
         if (this._starting || this._infoPopup?.isOpen) return;
         this._starting = true;
         this._teardownInput();
+        sessionStorage.removeItem('ss_inGame');
+        sessionStorage.removeItem(SAVE_KEY);
         this.scene.start('Preload');
     }
 }

@@ -2,6 +2,9 @@ import Phaser from 'phaser';
 import { HOME_TEXTURE_KEYS } from '../config/homeAssets.js';
 import { assetPaths } from '../utils/assets.js';
 import config from '../utils/config.js';
+import { fetchGameConfig, setGameId } from '../../../utils/gameApi.js';
+
+const SAVE_KEY = 'ss_gameState';
 
 class Preload extends Phaser.Scene {
     constructor () {
@@ -34,8 +37,36 @@ class Preload extends Phaser.Scene {
         });
 
         this.load.on(Phaser.Loader.Events.COMPLETE, () => {
-            this.scene.start('Level', { isMusic: true, isSound: true });
+            this._onAssetsReady();
         });
+    }
+
+    _loadSavedState () {
+        try {
+            const raw = sessionStorage.getItem(SAVE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    async _onAssetsReady () {
+        const resuming = sessionStorage.getItem('ss_inGame') === '1';
+        const saved = resuming ? this._loadSavedState() : null;
+        let gameConfig = saved?.gameConfig ?? null;
+
+        if (!gameConfig) {
+            this.txt_progress.setText('Loading...');
+            try {
+                gameConfig = await fetchGameConfig();
+            } catch (err) {
+                console.error('[Preload] Failed to fetch game config, using defaults:', err);
+            }
+        } else {
+            setGameId(gameConfig.gameId);
+        }
+
+        this.scene.start('Level', { isMusic: true, isSound: true, gameConfig });
     }
 }
 

@@ -102,6 +102,7 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
 
         this._isMoving = false;
         this._facingRight = true;
+        this._inputEnabled = true;
 
         ensureCharacterWalkAnim(scene, WALK_ANIM_FPS);
 
@@ -228,7 +229,26 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         this._idleImg.setVisible(true);
     }
 
+    setInputEnabled (enabled) {
+        this._inputEnabled = enabled !== false;
+        if (!this._inputEnabled) {
+            this._clearKeys?.();
+            if (this._isMoving) {
+                this._isMoving = false;
+                this._setWalkPlaying(false);
+            }
+        }
+    }
+
     _onUpdate (_time, delta) {
+        if (!this._inputEnabled) {
+            if (this._isMoving) {
+                this._isMoving = false;
+                this._setWalkPlaying(false);
+            }
+            return;
+        }
+
         const movingLeft = this._keys?.left ?? false;
         const movingRight = this._keys?.right ?? false;
         const moving = movingLeft || movingRight;

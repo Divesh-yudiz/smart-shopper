@@ -1,6 +1,6 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
-const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2YTE2ODAwNTM1ZTA5MjQyMDgwMTg2MjgiLCJzRW1haWwiOiJyYWp2aUBnbWFpbC5jb20iLCJpYXQiOjE3ODAzMDQ2NDN9.kIuiHD-bLjQFay03LNeYW-wzmc-wWvX4DBYKlafUWLk';
+const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2YTE2ODAwNTM1ZTA5MjQyMDgwMTg2MjgiLCJzRW1haWwiOiJyYWp2aUBnbWFpbC5jb20iLCJpYXQiOjE3ODIxMDQ5MzR9.lyBYfpYfFPNyYCwa_KkWS-KAlzWe_DyWuNm6BHwinGs';
 
 const authHeaders = () => ({
     'Content-Type': 'application/json',
@@ -11,7 +11,7 @@ const authHeaders = () => ({
 let gameId = null;
 
 /** Restore gameId after a page refresh (called by Level when loading saved state). */
-export function setGameId (id) { gameId = id; }
+export function setGameId(id) { gameId = id; }
 
 /**
  * Maps API sItemKey → internal rack/product identifiers.
@@ -83,7 +83,7 @@ const ITEM_KEY_MAP = {
 };
 
 /** @param {string} sItemKey */
-export function resolveItem (sItemKey) {
+export function resolveItem(sItemKey) {
     return ITEM_KEY_MAP[sItemKey] ?? null;
 }
 
@@ -95,14 +95,14 @@ for (const [sItemKey, info] of Object.entries(ITEM_KEY_MAP)) {
 }
 
 /** Resolve a cart product object back to its API sItemKey. */
-export function resolveItemKeyFromProduct (product) {
+export function resolveItemKeyFromProduct(product) {
     return PRODUCT_TO_ITEM_KEY[product?.key]
         ?? PRODUCT_TO_ITEM_KEY[product?.textureKey]
         ?? null;
 }
 
 /** POST /mini-games/cart/add */
-export async function addToCart (sItemKey) {
+export async function addToCart(sItemKey) {
     const res = await fetch(`${BASE_URL}/mini-games/cart/add`, {
         method: 'POST',
         headers: authHeaders(),
@@ -113,7 +113,7 @@ export async function addToCart (sItemKey) {
 }
 
 /** POST /mini-games/checkout */
-export async function checkoutGame () {
+export async function checkoutGame() {
     const res = await fetch(`${BASE_URL}/mini-games/checkout`, {
         method: 'POST',
         headers: authHeaders(),
@@ -124,7 +124,7 @@ export async function checkoutGame () {
 }
 
 /** POST /mini-games/cart/remove */
-export async function removeFromCart (sItemKey) {
+export async function removeFromCart(sItemKey) {
     const res = await fetch(`${BASE_URL}/mini-games/cart/remove`, {
         method: 'POST',
         headers: authHeaders(),
@@ -135,40 +135,31 @@ export async function removeFromCart (sItemKey) {
 }
 
 /**
- * Step 1 — fetch all modules, find the one that has the smart_shopper mini-game.
- * Step 2 — fetch that module's mini-games and return the parsed game config.
+ * Fetch mini-games config for the configured module.
  * Sets the module-level `gameId` used by addToCart / removeFromCart.
  */
-export async function fetchGameConfig () {
-    // Step 1: get all modules
-    const modulesRes = await fetch(`${BASE_URL}/module`, { headers: authHeaders() });
-    if (!modulesRes.ok) throw new Error(`Modules API ${modulesRes.status}: ${modulesRes.statusText}`);
-    const modulesJson = await modulesRes.json();
-    const modules = modulesJson.data.modules;
+const MODULE_ID = import.meta.env.VITE_MODULE_ID ?? '69c2724009d18ece8c914c74';
 
-    // Step 2: find the module whose mini-games contain eGameType === 'smart_shopper'
-    for (const module of modules) {
-        const gamesRes = await fetch(`${BASE_URL}/mini-games/${module._id}`, { headers: authHeaders() });
-        if (!gamesRes.ok) continue;
-        const gamesJson = await gamesRes.json();
-        const game = gamesJson.data.miniGames.find(g => g.eGameType === 'smart_shopper');
-        if (!game) continue;
+export async function fetchGameConfig() {
+    const gamesRes = await fetch(`${BASE_URL}/${MODULE_ID}`, { headers: authHeaders() });
+    if (!gamesRes.ok) throw new Error(`Mini-games API ${gamesRes.status}: ${gamesRes.statusText}`);
 
-        gameId = game._id;
-        const cfg = game.oGameConfig;
-        return {
-            gameId: game._id,
-            budget: cfg.nBudget,
-            timeLimit: game.nTimeLimit,
-            items: cfg.aItems,
-            shoppingList: cfg.aShoppingList,
-            shoppingListTotal: cfg.nShoppingListTotal ?? 0,
-            category: cfg.sSelectedCategory ?? '',
-            badge: gamesJson.data.eBadge,
-        };
-    }
+    const gamesJson = await gamesRes.json();
+    const game = gamesJson.data.miniGames.find((g) => g.eGameType === 'smart_shopper');
+    if (!game) throw new Error('smart_shopper mini-game not found in module');
 
-    throw new Error('smart_shopper mini-game not found in any module');
+    gameId = game._id;
+    const cfg = game.oGameConfig;
+    return {
+        gameId: game._id,
+        budget: cfg.nBudget,
+        timeLimit: game.nTimeLimit,
+        items: cfg.aItems,
+        shoppingList: cfg.aShoppingList,
+        shoppingListTotal: cfg.nShoppingListTotal ?? 0,
+        category: cfg.sSelectedCategory ?? '',
+        badge: gamesJson.data.eBadge,
+    };
 }
 
 /**
@@ -177,7 +168,7 @@ export async function fetchGameConfig () {
  * @param {Array<{sItemKey:string, nPrice:number}>} aItems
  * @param {ReturnType<getRacksForView>} racksData
  */
-export function patchRacksWithApiPrices (aItems, racksData) {
+export function patchRacksWithApiPrices(aItems, racksData) {
     // Build { rackId → { productKey → price } }
     const priceLookup = {};
     for (const item of aItems) {
@@ -205,7 +196,7 @@ export function patchRacksWithApiPrices (aItems, racksData) {
  * @param {Array<{sItemKey:string, nQuantity:number, nPrice:number}>} aShoppingList
  * @returns {Array<{key,textureKey,required,collected}|null>}
  */
-export function buildShoppingListEntries (aShoppingList) {
+export function buildShoppingListEntries(aShoppingList) {
     const SLOT_COUNT = 6;
     const entries = aShoppingList.map((item) => {
         const resolved = resolveItem(item.sItemKey);

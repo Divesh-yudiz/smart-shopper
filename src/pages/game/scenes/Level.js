@@ -10,8 +10,9 @@ import ShoppingListPanel from "../prefabs/ShoppingListPanel.js";
 import TimerPanel from "../prefabs/TimerPanel.js";
 import CheckoutPanel from "../prefabs/popups/CheckoutPanel.js";
 import { getRackByIndex, getRacksForView, getRackPlacements } from "../utils/rackConfig.js";
-import { fetchGameConfig, patchRacksWithApiPrices, buildShoppingListEntries, addToCart, removeFromCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId } from "../../../utils/gameApi.js";
+import { patchRacksWithApiPrices, buildShoppingListEntries, addToCart, removeFromCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId } from "../../../utils/gameApi.js";
 import MissionPopup from "../prefabs/popups/MissionPopup.js";
+import PickupFeedbackPopup from "../prefabs/popups/PickupFeedbackPopup.js";
 import WalkingCharacter from "../prefabs/WalkingCharacter.js";
 
 const SAVE_KEY = 'ss_gameState';
@@ -21,7 +22,7 @@ class Level extends Phaser.Scene {
         super({ key: 'Level' });
     }
 
-    editorCreate (gameConfig = null, savedState = null, { pauseTimer = false } = {}) {
+    editorCreate(gameConfig = null, savedState = null, { pauseTimer = false } = {}) {
         const hud = HUD_LAYOUT;
 
         this._gameConfig = gameConfig;
@@ -103,10 +104,41 @@ class Level extends Phaser.Scene {
         this.oCharacter.setCartItems(this.oMyCart?.getItems() ?? []);
 
         this.oCheckout = new CheckoutPanel(this);
+        this.oPickupPopup = new PickupFeedbackPopup(this);
+        this._checkoutOpen = false;
         this._buildCheckoutButton();
+
+        if (!pauseTimer && (savedState?.timerRemaining ?? timeLimit) <= 0) {
+            this.time.delayedCall(200, () => this.openCheckout());
+        }
     }
 
-    _buildCheckoutButton () {
+    _canAfford (product) {
+        const price = product.price ?? 0;
+        if (!this._budget || this._budget <= 0) return true;
+        return (this.oMyCart?.getTotal() ?? 0) + price <= this._budget;
+    }
+
+    _showPickupPopup (type, product) {
+        if (this._pickupPopupOpen) return;
+        this._pickupPopupOpen = true;
+        this.oTimer?.pause();
+
+        const onClose = () => {
+            this._pickupPopupOpen = false;
+            this.oTimer?.resume();
+        };
+
+        if (type === 'correct') {
+            this.oPickupPopup.openCorrect({ product, onClose });
+        } else if (type === 'wrong') {
+            this.oPickupPopup.openWrong({ product, onClose });
+        } else {
+            this.oPickupPopup.openBudget({ onClose });
+        }
+    }
+
+    _buildCheckoutButton() {
         const btnW = 210;
         const btnH = 62;
         const btnX = config.width - 56 - btnW / 2;
@@ -158,14 +190,15 @@ class Level extends Phaser.Scene {
         btn.add(hit);
     }
 
-    async create ({ isMusic, isSound } = {}) {
+    create({ isMusic, isSound, gameConfig = null } = {}) {
         this.oSoundManager = new SoundManager(this);
         this.oGameManager = new GameManager(this);
         this.oSoundManager.isMusic = isMusic;
         this.oSoundManager.isSound = isSound;
 
         const saved = this._loadSavedState();
-        if (saved) {
+        const resuming = sessionStorage.getItem('ss_inGame') === '1' && !!saved?.gameConfig;
+        if (resuming) {
             setGameId(saved.gameConfig.gameId);
             this.editorCreate(saved.gameConfig, saved);
             // On refresh the canvas has no keyboard focus (user never clicked it).
@@ -174,24 +207,15 @@ class Level extends Phaser.Scene {
             canvas.setAttribute('tabindex', '1');
             canvas.focus();
         } else {
-            // Show the blurred home background immediately so there's no black screen
-            // while the game config API call is in flight.
-            const splash = this.add.image(config.centerX, config.centerY, 'home_bg_blur')
-                .setDisplaySize(config.width, config.height);
+            // Saved state had no valid gameConfig (API had failed) — discard and use Preload result.
+            if (saved) this._clearSavedState();
 
-            let gameConfig = null;
-            try {
-                gameConfig = await fetchGameConfig();
-            } catch (err) {
-                console.error('[Level] Failed to fetch game config, using defaults:', err);
-            }
-            splash.destroy();
             this.editorCreate(gameConfig, null, { pauseTimer: !!gameConfig });
-            if (gameConfig) this._showMissionPopup(gameConfig);
+            if (gameConfig?.shoppingList?.length) this._showMissionPopup(gameConfig);
         }
     }
 
-    _showMissionPopup (gameConfig) {
+    _showMissionPopup(gameConfig) {
         this.oMissionPopup = new MissionPopup(this);
         this.oMissionPopup.open({
             shoppingList: gameConfig.shoppingList ?? [],
@@ -202,7 +226,7 @@ class Level extends Phaser.Scene {
         });
     }
 
-    _loadSavedState () {
+    _loadSavedState() {
         try {
             const raw = sessionStorage.getItem(SAVE_KEY);
             return raw ? JSON.parse(raw) : null;
@@ -211,7 +235,7 @@ class Level extends Phaser.Scene {
         }
     }
 
-    _saveState () {
+    _saveState() {
         try {
             const state = {
                 gameConfig: this._gameConfig,
@@ -223,14 +247,29 @@ class Level extends Phaser.Scene {
         } catch { /* storage full or unavailable */ }
     }
 
-    _clearSavedState () {
+    _clearSavedState() {
         sessionStorage.removeItem(SAVE_KEY);
         sessionStorage.removeItem('ss_inGame');
     }
 
-    async openCheckout () {
+    async openCheckout() {
+        if (this._checkoutOpen) return;
+        this._checkoutOpen = true;
+        this.oTimer?.pause();
+        this.oCharacter?.setInputEnabled(false);
+
         let cartTotal = this.oMyCart?.getTotal() ?? 0;
         let budget = this._budget ?? 0;
+
+        this.oCheckout?.open({
+            entries: this.oShoppingList?.getEntries() ?? [],
+            cartTotal,
+            budget,
+            onClose: () => {
+                this._checkoutOpen = false;
+                this._clearSavedState();
+            },
+        });
 
         try {
             const result = await checkoutGame();
@@ -239,23 +278,30 @@ class Level extends Phaser.Scene {
         } catch (err) {
             console.error('[Checkout] API error, using local values:', err);
         }
-
-        this.oCheckout?.open({
-            entries: this.oShoppingList?.getEntries() ?? [],
-            cartTotal,
-            budget,
-            onClose: () => {
-                this._clearSavedState();
-            },
-        });
     }
 
-    onProductClick (product, rackId, rackIndex) {
+    onProductClick(product, rackId, rackIndex) {
+        if (this._pickupPopupOpen || this._checkoutOpen) return;
+
         const rack = getRackByIndex(rackIndex);
         const sItemKey = resolveItemKeyFromProduct(product);
-        // Replace the shelf texture with the icon version for cart / trolley display
         const iconInfo = sItemKey ? resolveItem(sItemKey) : null;
         const cartProduct = iconInfo ? { ...product, textureKey: iconInfo.textureKey } : product;
+
+        const onList = this.oShoppingList?.isProductOnList(cartProduct) ?? false;
+        const needed = this.oShoppingList?.isProductNeeded(cartProduct) ?? false;
+
+        if (!onList || !needed) {
+            this._showPickupPopup('wrong', cartProduct);
+            console.log(`Product clicked — ${rack?.category} (${rackId}):`, product);
+            return;
+        }
+
+        if (!this._canAfford(cartProduct)) {
+            this._showPickupPopup('budget');
+            console.log(`Product clicked — ${rack?.category} (${rackId}):`, product);
+            return;
+        }
 
         if (this.oMyCart?.tryAddItem(cartProduct)) {
             this.oShoppingList?.onProductCollected(cartProduct);
@@ -263,11 +309,12 @@ class Level extends Phaser.Scene {
             if (sItemKey) addToCart(sItemKey).catch(err => console.error('[Cart add]', err));
             const ptr = this.input.activePointer;
             this._flyToCart(cartProduct, ptr.worldX, ptr.worldY);
+            this._showPickupPopup('correct', cartProduct);
         }
         console.log(`Product clicked — ${rack?.category} (${rackId}):`, product);
     }
 
-    _flyToCart (product, fromX, fromY) {
+    _flyToCart(product, fromX, fromY) {
         if (!product?.textureKey || !this.textures.exists(product.textureKey)) {
             this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
             return;
