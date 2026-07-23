@@ -101,9 +101,9 @@ export function resolveItemKeyFromProduct(product) {
         ?? null;
 }
 
-/** POST /mini-games/cart/add */
+/** POST /cart/add */
 export async function addToCart(sItemKey) {
-    const res = await fetch(`${BASE_URL}/mini-games/cart/add`, {
+    const res = await fetch(`${BASE_URL}/cart/add`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ iMiniGameId: gameId, sItemKey }),
@@ -112,9 +112,9 @@ export async function addToCart(sItemKey) {
     return res.json();
 }
 
-/** POST /mini-games/checkout */
+/** POST /checkout */
 export async function checkoutGame() {
-    const res = await fetch(`${BASE_URL}/mini-games/checkout`, {
+    const res = await fetch(`${BASE_URL}/checkout`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ iMiniGameId: gameId }),
@@ -123,9 +123,9 @@ export async function checkoutGame() {
     return res.json();
 }
 
-/** POST /mini-games/cart/remove */
+/** POST /cart/remove */
 export async function removeFromCart(sItemKey) {
-    const res = await fetch(`${BASE_URL}/mini-games/cart/remove`, {
+    const res = await fetch(`${BASE_URL}/cart/remove`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ iMiniGameId: gameId, sItemKey }),
@@ -158,6 +158,8 @@ export async function fetchGameConfig() {
         shoppingList: cfg.aShoppingList,
         shoppingListTotal: cfg.nShoppingListTotal ?? 0,
         category: cfg.sSelectedCategory ?? '',
+        ecoMeter: cfg.nEcoMeter ?? 0,
+        ecoMeterMax: cfg.nEcoMeterMax ?? cfg.nMaxEcoMeter ?? 100,
         badge: gamesJson.data.eBadge,
     };
 }

@@ -12,9 +12,11 @@ import budgetGreenBase from '../../../assets/images/Components/Budget-Green-Base
 import coinIcon from '../../../assets/images/Components/Coin.png';
 import countBase from '../../../assets/images/Components/Count-Base.png';
 import listIcon from '../../../assets/images/Components/List-Icon.png';
+import objectBase from '../../../assets/images/Components/Object-BAse.png';
 import shoppingListBase from '../../../assets/images/Components/Shoping-List-Ui-Base.png';
 import timerCoinBase from '../../../assets/images/Components/Timer-and-Coin-Base.png';
 import shelfPriceBase from '../../../assets/images/Components/Price-Base.png';
+import ecoIcon from '../../../assets/images/home/eco-icon.png';
 
 export const UI_TEXTURE_KEYS = Object.freeze({
     cartPanelBg: 'ui_cart_panel_bg',
@@ -30,6 +32,9 @@ export const UI_TEXTURE_KEYS = Object.freeze({
     shoppingListBase: 'ui_shopping_list_base',
     timerCoinBase: 'ui_timer_coin_base',
     shelfPriceBase: 'ui_shelf_price_base',
+    ecoIcon: 'ui_eco_icon',
+    ecoMeterBg: 'ecoMeterBg',
+    ecoMeterFill: 'ecoMeterFill',
 });
 
 export const componentAssetPaths = Object.freeze([
@@ -46,6 +51,9 @@ export const componentAssetPaths = Object.freeze([
     { key: UI_TEXTURE_KEYS.shoppingListBase, path: shoppingListBase },
     { key: UI_TEXTURE_KEYS.timerCoinBase, path: timerCoinBase },
     { key: UI_TEXTURE_KEYS.shelfPriceBase, path: shelfPriceBase },
+    { key: UI_TEXTURE_KEYS.ecoIcon, path: ecoIcon },
+    { key: UI_TEXTURE_KEYS.ecoMeterBg, path: objectBase },
+    { key: UI_TEXTURE_KEYS.ecoMeterFill, path: budgetGreenBase },
 ]);
 
 export const componentAssets = Object.freeze(

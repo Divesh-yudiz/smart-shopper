@@ -5,7 +5,7 @@ const ROW_H = 90;
 const ROW_CENTER_Y = TOP_Y + 30;
 
 const HUD_LEFT = 36;
-const BUDGET_W = 228;
+const BUDGET_W = 300;
 const BUDGET_SHIFT_X = 16;
 const BUDGET_X = HUD_LEFT + BUDGET_W / 2 + BUDGET_SHIFT_X;
 

@@ -5,14 +5,15 @@ import GameManager from "../scripts/GameManager.js";
 import SoundManager from "../scripts/SoundManager.js";
 import MarketView from "../prefabs/MarketView.js";
 import MyCartPanel from "../prefabs/MyCartPanel.js";
-import BudgetPanel from "../prefabs/BudgetPanel.js";
+import HudProgressBar, { hudMeterRowHeight } from "../prefabs/HudProgressBar.js";
 import ShoppingListPanel from "../prefabs/ShoppingListPanel.js";
 import TimerPanel from "../prefabs/TimerPanel.js";
 import CheckoutPanel from "../prefabs/popups/CheckoutPanel.js";
 import { getRackByIndex, getRacksForView, getRackPlacements } from "../utils/rackConfig.js";
+import { UI_TEXTURE_KEYS } from "../config/componentAssets.js";
 import { patchRacksWithApiPrices, buildShoppingListEntries, addToCart, removeFromCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId } from "../../../utils/gameApi.js";
 import MissionPopup from "../prefabs/popups/MissionPopup.js";
-import PickupFeedbackPopup from "../prefabs/popups/PickupFeedbackPopup.js";
+import ProductInfoPopup from "../prefabs/popups/ProductInfoPopup.js";
 import WalkingCharacter from "../prefabs/WalkingCharacter.js";
 
 const SAVE_KEY = 'ss_gameState';
@@ -29,6 +30,8 @@ class Level extends Phaser.Scene {
         const budget = gameConfig?.budget ?? hud.budgetAmount;
         const timeLimit = gameConfig?.timeLimit ?? hud.timerStartSeconds;
         this._budget = budget;
+        this._ecoMax = Math.max(1, gameConfig?.ecoMeterMax ?? 100);
+        this._ecoValue = gameConfig?.ecoMeter ?? 0;
 
         let racksData = getRacksForView();
         if (gameConfig?.items?.length) {
@@ -44,10 +47,6 @@ class Level extends Phaser.Scene {
             racksData,
             (product, rackId, rackIndex) => this.onProductClick(product, rackId, rackIndex)
         );
-
-        this.oBudget = new BudgetPanel(this, hud.budgetX, hud.rowCenterY, {
-            amount: budget,
-        });
 
         this.oShoppingList = new ShoppingListPanel(
             this,
@@ -78,8 +77,11 @@ class Level extends Phaser.Scene {
                 if (sItemKey) removeFromCart(sItemKey).catch(err => console.error('[Cart remove]', err));
                 this._saveState();
                 this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
+                this._updateHudMeters();
             },
         });
+
+        this._createEcoMeter({ budgetMax: budget });
 
         sessionStorage.setItem('ss_inGame', '1');
         this._saveState();
@@ -104,7 +106,7 @@ class Level extends Phaser.Scene {
         this.oCharacter.setCartItems(this.oMyCart?.getItems() ?? []);
 
         this.oCheckout = new CheckoutPanel(this);
-        this.oPickupPopup = new PickupFeedbackPopup(this);
+        this.oProductPopup = new ProductInfoPopup(this);
         this._checkoutOpen = false;
         this._buildCheckoutButton();
 
@@ -119,22 +121,102 @@ class Level extends Phaser.Scene {
         return (this.oMyCart?.getTotal() ?? 0) + price <= this._budget;
     }
 
-    _showPickupPopup (type, product) {
-        if (this._pickupPopupOpen) return;
-        this._pickupPopupOpen = true;
+    _maxAffordableQuantity (price) {
+        const budget = this._budget ?? 0;
+        if (!budget || budget <= 0) return 99;
+        const spent = this.oMyCart?.getTotal() ?? 0;
+        const left = budget - spent;
+        if (price <= 0) return 99;
+        return Math.max(0, Math.floor(left / price));
+    }
+
+    _getMaxAddQuantity (cartProduct, price) {
+        const budgetMax = this._maxAffordableQuantity(price);
+        const listRemaining = this.oShoppingList?.getRemainingForProduct(cartProduct);
+        if (listRemaining !== null) return Math.min(listRemaining, budgetMax);
+        return budgetMax;
+    }
+
+    _buildProductPopupMeta (cartProduct, price) {
+        const listRemaining = this.oShoppingList?.getRemainingForProduct(cartProduct);
+        const maxQuantity = this._getMaxAddQuantity(cartProduct, price);
+
+        if (maxQuantity <= 0) {
+            if (listRemaining === 0) {
+                return { infoLine: 'You already have enough of this item on your list', infoColor: '#e67e22', maxQuantity: 0 };
+            }
+            return { infoLine: 'Not enough budget left to add this item', infoColor: '#c0392b', maxQuantity: 0 };
+        }
+
+        if (listRemaining !== null) {
+            return {
+                infoLine: `On your shopping list — need ${listRemaining} more`,
+                infoColor: '#27ae60',
+                maxQuantity,
+            };
+        }
+
+        return {
+            infoLine: 'This item is not on your shopping list',
+            infoColor: '#e67e22',
+            maxQuantity,
+        };
+    }
+
+    _formatProductName (cartProduct, sItemKey) {
+        const resolved = sItemKey ? resolveItem(sItemKey) : null;
+        if (resolved?.label) return resolved.label;
+        const key = cartProduct?.key ?? '';
+        return key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) || 'Product';
+    }
+
+    _showProductPopup (cartProduct, sItemKey) {
+        if (this._productPopupOpen) return;
+        this._productPopupOpen = true;
         this.oTimer?.pause();
+        this.oCharacter?.setInputEnabled(false);
+
+        const price = cartProduct.price ?? 0;
+        const meta = this._buildProductPopupMeta(cartProduct, price);
 
         const onClose = () => {
-            this._pickupPopupOpen = false;
+            this._productPopupOpen = false;
             this.oTimer?.resume();
+            this.oCharacter?.setInputEnabled(true);
         };
 
-        if (type === 'correct') {
-            this.oPickupPopup.openCorrect({ product, onClose });
-        } else if (type === 'wrong') {
-            this.oPickupPopup.openWrong({ product, onClose });
-        } else {
-            this.oPickupPopup.openBudget({ onClose });
+        this.oProductPopup.open({
+            product: cartProduct,
+            displayName: this._formatProductName(cartProduct, sItemKey),
+            price,
+            infoLine: meta.infoLine,
+            infoColor: meta.infoColor,
+            maxQuantity: meta.maxQuantity,
+            onClose,
+            onConfirm: (qty) => this._addProductToCart(cartProduct, sItemKey, qty),
+        });
+    }
+
+    _addProductToCart (cartProduct, sItemKey, quantity) {
+        const onList = this.oShoppingList?.isProductOnList(cartProduct) ?? false;
+        let added = 0;
+
+        for (let i = 0; i < quantity; i++) {
+            if (!this._canAfford(cartProduct)) break;
+            if (onList && !this.oShoppingList?.isProductNeeded(cartProduct)) break;
+            if (!this.oMyCart?.tryAddItem(cartProduct)) break;
+
+            if (onList) this.oShoppingList?.onProductCollected(cartProduct);
+            if (sItemKey) addToCart(sItemKey).catch(err => console.error('[Cart add]', err));
+            added += 1;
+        }
+
+        if (added > 0) {
+            this._saveState();
+            this._updateHudMeters();
+            const ptr = this.input.activePointer;
+            this._flyToCart(cartProduct, ptr.worldX, ptr.worldY);
+            this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
         }
     }
 
@@ -252,6 +334,87 @@ class Level extends Phaser.Scene {
         sessionStorage.removeItem('ss_inGame');
     }
 
+    _createEcoMeter ({ budgetMax = 150 } = {}) {
+        const hud = HUD_LAYOUT;
+        const panelW = 300;
+        const coinColW = 50;
+        const padRight = 16;
+        const barH = 22;
+        const rowH = hudMeterRowHeight(barH);
+        const rowGap = 14;
+        const padY = 18;
+        const panelH = padY * 2 + rowH * 2 + rowGap;
+        const barW = panelW - coinColW - padRight - 10;
+        const barLeft = -panelW / 2 + coinColW + 10;
+
+        this._budgetMax = budgetMax;
+        this.oEcoMeter = this.add.container(hud.budgetX, hud.topY + panelH / 2 + 4).setDepth(300);
+
+        const panel = this.add.image(0, 0, UI_TEXTURE_KEYS.timerCoinBase);
+        panel.setDisplaySize(panelW, panelH);
+        this.oEcoMeter.add(panel);
+
+        const coinSize = 34;
+        const coinX = -panelW / 2 + coinColW / 2 + 4;
+        const barCenterOffset = 12 + 6 + barH / 2;
+
+        const ecoY = -panelH / 2 + padY;
+        const budgetY = ecoY + rowH + rowGap;
+
+        const ecoIcon = this.add.image(coinX, ecoY + barCenterOffset, UI_TEXTURE_KEYS.ecoIcon);
+        ecoIcon.setDisplaySize(coinSize, coinSize);
+        this.oEcoMeter.add(ecoIcon);
+
+        const coin = this.add.image(coinX, budgetY + barCenterOffset, UI_TEXTURE_KEYS.coinIcon);
+        coin.setDisplaySize(coinSize, coinSize);
+        this.oEcoMeter.add(coin);
+
+        this.oEcoBar = new HudProgressBar(this, barLeft, ecoY, {
+            width: barW,
+            height: barH,
+            label: 'ECO METER',
+            max: this._ecoMax,
+            value: this._ecoValue,
+            fillColor: 0x3ddc84,
+            formatText: (v, max) => `${Math.round(v)} / ${Math.round(max)}`,
+        });
+        this.oEcoMeter.add(this.oEcoBar);
+
+        const spent = this.oMyCart?.getTotal() ?? 0;
+        this.oBudgetBar = new HudProgressBar(this, barLeft, budgetY, {
+            width: barW,
+            height: barH,
+            label: 'BUDGET',
+            max: budgetMax,
+            value: Math.max(0, budgetMax - spent),
+            fillColor: 0x2ecc71,
+            formatText: (remaining, max) => `AED ${Math.round(remaining)} / ${Math.round(max)}`,
+        });
+        this.oEcoMeter.add(this.oBudgetBar);
+
+        this._updateHudMeters();
+    }
+
+    _updateHudMeters () {
+        const spent = this.oMyCart?.getTotal() ?? 0;
+        const budgetMax = Math.max(1, this._budgetMax ?? 1);
+        const remaining = Math.max(0, budgetMax - spent);
+
+        this.oBudgetBar?.setProgress(remaining, budgetMax);
+
+        const budgetRatio = remaining / budgetMax;
+        const budgetFill = budgetRatio <= 0.2 ? 0xe74c3c : (budgetRatio <= 0.45 ? 0xf39c12 : 0x27ae60);
+        this.oBudgetBar?.setFillColor(budgetFill);
+
+        this.oEcoBar?.setProgress(this._ecoValue ?? 0, this._ecoMax ?? 1);
+    }
+
+    setEcoMeter (value, max) {
+        if (max != null) this._ecoMax = Math.max(1, max);
+        this._ecoValue = Phaser.Math.Clamp(value, 0, this._ecoMax);
+        this._updateHudMeters();
+    }
+
     async openCheckout() {
         if (this._checkoutOpen) return;
         this._checkoutOpen = true;
@@ -281,36 +444,14 @@ class Level extends Phaser.Scene {
     }
 
     onProductClick(product, rackId, rackIndex) {
-        if (this._pickupPopupOpen || this._checkoutOpen) return;
+        if (this._productPopupOpen || this._checkoutOpen) return;
 
         const rack = getRackByIndex(rackIndex);
         const sItemKey = resolveItemKeyFromProduct(product);
         const iconInfo = sItemKey ? resolveItem(sItemKey) : null;
         const cartProduct = iconInfo ? { ...product, textureKey: iconInfo.textureKey } : product;
 
-        const onList = this.oShoppingList?.isProductOnList(cartProduct) ?? false;
-        const needed = this.oShoppingList?.isProductNeeded(cartProduct) ?? false;
-
-        if (!onList || !needed) {
-            this._showPickupPopup('wrong', cartProduct);
-            console.log(`Product clicked — ${rack?.category} (${rackId}):`, product);
-            return;
-        }
-
-        if (!this._canAfford(cartProduct)) {
-            this._showPickupPopup('budget');
-            console.log(`Product clicked — ${rack?.category} (${rackId}):`, product);
-            return;
-        }
-
-        if (this.oMyCart?.tryAddItem(cartProduct)) {
-            this.oShoppingList?.onProductCollected(cartProduct);
-            this._saveState();
-            if (sItemKey) addToCart(sItemKey).catch(err => console.error('[Cart add]', err));
-            const ptr = this.input.activePointer;
-            this._flyToCart(cartProduct, ptr.worldX, ptr.worldY);
-            this._showPickupPopup('correct', cartProduct);
-        }
+        this._showProductPopup(cartProduct, sItemKey);
         console.log(`Product clicked — ${rack?.category} (${rackId}):`, product);
     }
 

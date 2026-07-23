@@ -33,7 +33,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         this._refresh();
     }
 
-    _buildPanel () {
+    _buildPanel() {
         const scale = this._displayWidth / PANEL_NATIVE_W;
         this._scale = scale;
         this._panelW = this._displayWidth;
@@ -138,7 +138,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         }
     }
 
-    _drawCheckmark (graphics, radius) {
+    _drawCheckmark(graphics, radius) {
         graphics.clear();
         graphics.fillStyle(0x2ecc71, 1);
         graphics.fillCircle(radius * 0.55, radius * 0.55, radius * 0.32);
@@ -151,12 +151,12 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
     }
 
     /** Returns a shallow copy of the current entries (for checkout comparison). */
-    getEntries () {
+    getEntries() {
         return this._entries.map((e) => e ? { ...e } : null);
     }
 
     /** Call when player removes a product from the cart. */
-    onProductRemoved (product) {
+    onProductRemoved(product) {
         let changed = false;
 
         this._entries.forEach((entry) => {
@@ -171,7 +171,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         if (changed) this._refresh();
     }
 
-    _matchesProduct (entry, product) {
+    _matchesProduct(entry, product) {
         const key = product.key ?? product.textureKey;
         return (
             entry.key === key ||
@@ -181,19 +181,26 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
     }
 
     /** True when the product is on the list and still needs collecting. */
-    isProductNeeded (product) {
+    isProductNeeded(product) {
         return this._entries.some(
             (entry) => entry && this._matchesProduct(entry, product) && entry.collected < entry.required
         );
     }
 
     /** True when the product appears anywhere on the shopping list. */
-    isProductOnList (product) {
+    isProductOnList(product) {
         return this._entries.some((entry) => entry && this._matchesProduct(entry, product));
     }
 
+    /** How many more of this product the list still needs (null if not on list). */
+    getRemainingForProduct(product) {
+        const entry = this._entries.find((e) => e && this._matchesProduct(e, product));
+        if (!entry) return null;
+        return Math.max(0, entry.required - entry.collected);
+    }
+
     /** Call when player picks a product (e.g. added to cart). */
-    onProductCollected (product) {
+    onProductCollected(product) {
         let changed = false;
 
         this._entries.forEach((entry) => {
@@ -209,15 +216,15 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         return changed;
     }
 
-    _countCompleted () {
+    _countCompleted() {
         return this._entries.filter((e) => e && e.collected >= e.required).length;
     }
 
-    _countActive () {
+    _countActive() {
         return this._entries.filter(Boolean).length;
     }
 
-    _refresh () {
+    _refresh() {
         const done = this._countCompleted();
         const total = this._countActive();
         this._progressBadgeText.setText(`${done}/${SHOPPING_LIST_SLOT_COUNT}`);
