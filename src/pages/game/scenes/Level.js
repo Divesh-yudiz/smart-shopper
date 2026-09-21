@@ -11,10 +11,11 @@ import TimerPanel from "../prefabs/TimerPanel.js";
 import CheckoutPanel from "../prefabs/popups/CheckoutPanel.js";
 import { getRackByIndex, getRacksForView, getRackPlacements } from "../utils/rackConfig.js";
 import { UI_TEXTURE_KEYS } from "../config/componentAssets.js";
-import { patchRacksWithApiPrices, buildShoppingListEntries, addToCart, removeFromCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId } from "../../../utils/gameApi.js";
+import { patchRacksWithApiPrices, buildShoppingListEntries, buildCartItemsFromApi, addToCart, removeFromCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId, setItemVariants, getItemVariants, getItemId, fetchItemVariants } from "../../../utils/gameApi.js";
 import MissionPopup from "../prefabs/popups/MissionPopup.js";
 import ProductInfoPopup from "../prefabs/popups/ProductInfoPopup.js";
 import WalkingCharacter from "../prefabs/WalkingCharacter.js";
+import { buildEcoVariantPair } from "../config/ecoConfig.js";
 
 const SAVE_KEY = 'ss_gameState';
 
@@ -31,12 +32,16 @@ class Level extends Phaser.Scene {
         const timeLimit = gameConfig?.timeLimit ?? hud.timerStartSeconds;
         this._budget = budget;
         this._ecoMax = Math.max(1, gameConfig?.ecoMeterMax ?? 100);
-        this._ecoValue = gameConfig?.ecoMeter ?? 0;
+        this._ecoValue = gameConfig?.ecoMeter ?? this._ecoMax;
+        this._budgetRemaining = null;
 
         let racksData = getRacksForView();
         if (gameConfig?.items?.length) {
             racksData = patchRacksWithApiPrices(gameConfig.items, racksData);
         }
+        // Rebuilt every time (not just on fresh load) — a page-refresh resume starts
+        // from an empty module-level cache in gameApi.js, so this must run unconditionally.
+        setItemVariants(gameConfig?.items ?? []);
 
         // Use saved entries (with collected counts) on restore, fresh entries otherwise
         const shoppingEntries = savedState?.shoppingEntries
@@ -74,7 +79,12 @@ class Level extends Phaser.Scene {
             onItemRemoved: (product) => {
                 this.oShoppingList?.onProductRemoved(product);
                 const sItemKey = resolveItemKeyFromProduct(product);
-                if (sItemKey) removeFromCart(sItemKey).catch(err => console.error('[Cart remove]', err));
+                if (sItemKey) {
+                    removeFromCart(sItemKey)
+                        .then((result) => this._applyCartMutationResult(result))
+                        .catch(err => console.error('[Cart remove]', err));
+                }
+                this.setEcoMeter((this._ecoValue ?? 0) - (product.ecoImpact ?? 0), this._ecoMax);
                 this._saveState();
                 this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
                 this._updateHudMeters();
@@ -130,22 +140,16 @@ class Level extends Phaser.Scene {
         return Math.max(0, Math.floor(left / price));
     }
 
-    _getMaxAddQuantity (cartProduct, price) {
-        const budgetMax = this._maxAffordableQuantity(price);
-        const listRemaining = this.oShoppingList?.getRemainingForProduct(cartProduct);
-        if (listRemaining !== null) return Math.min(listRemaining, budgetMax);
-        return budgetMax;
-    }
-
     _buildProductPopupMeta (cartProduct, price) {
         const listRemaining = this.oShoppingList?.getRemainingForProduct(cartProduct);
-        const maxQuantity = this._getMaxAddQuantity(cartProduct, price);
+        const budgetMax = this._maxAffordableQuantity(price);
+        const maxQuantity = listRemaining !== null ? Math.min(listRemaining, budgetMax) : budgetMax;
 
         if (maxQuantity <= 0) {
             if (listRemaining === 0) {
-                return { infoLine: 'You already have enough of this item on your list', infoColor: '#e67e22', maxQuantity: 0 };
+                return { infoLine: 'You already have enough of this item on your list', infoColor: '#e67e22', maxQuantity: 0, listRemaining, budgetMax };
             }
-            return { infoLine: 'Not enough budget left to add this item', infoColor: '#c0392b', maxQuantity: 0 };
+            return { infoLine: 'Not enough budget left to add this item', infoColor: '#c0392b', maxQuantity: 0, listRemaining, budgetMax };
         }
 
         if (listRemaining !== null) {
@@ -153,6 +157,8 @@ class Level extends Phaser.Scene {
                 infoLine: `On your shopping list — need ${listRemaining} more`,
                 infoColor: '#27ae60',
                 maxQuantity,
+                listRemaining,
+                budgetMax,
             };
         }
 
@@ -160,24 +166,51 @@ class Level extends Phaser.Scene {
             infoLine: 'This item is not on your shopping list',
             infoColor: '#e67e22',
             maxQuantity,
+            listRemaining,
+            budgetMax,
         };
     }
 
     _formatProductName (cartProduct, sItemKey) {
+        const apiName = sItemKey ? getItemVariants(sItemKey)?.sName : null;
+        if (apiName) return apiName;
         const resolved = sItemKey ? resolveItem(sItemKey) : null;
         if (resolved?.label) return resolved.label;
         const key = cartProduct?.key ?? '';
         return key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) || 'Product';
     }
 
-    _showProductPopup (cartProduct, sItemKey) {
+    async _showProductPopup (cartProduct, sItemKey) {
         if (this._productPopupOpen) return;
         this._productPopupOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
 
-        const price = cartProduct.price ?? 0;
-        const meta = this._buildProductPopupMeta(cartProduct, price);
+        let apiVariants = sItemKey ? getItemVariants(sItemKey) : null;
+        const itemId = sItemKey ? getItemId(sItemKey) : null;
+        if (itemId) {
+            try {
+                apiVariants = await fetchItemVariants(itemId);
+            } catch (err) {
+                console.error('[Item details]', err);
+            }
+        }
+
+        const pair = buildEcoVariantPair(cartProduct, apiVariants);
+        const variants = ['standard', 'eco'].map((key) => {
+            const product = pair[key];
+            const meta = this._buildProductPopupMeta(product, product.price);
+            return {
+                key,
+                product,
+                price: product.price,
+                isEcoVariant: product.isEcoVariant,
+                infoLine: meta.infoLine,
+                infoColor: meta.infoColor,
+                listRemaining: meta.listRemaining,
+                budgetMax: meta.budgetMax,
+            };
+        });
 
         const onClose = () => {
             this._productPopupOpen = false;
@@ -186,38 +219,83 @@ class Level extends Phaser.Scene {
         };
 
         this.oProductPopup.open({
-            product: cartProduct,
             displayName: this._formatProductName(cartProduct, sItemKey),
-            price,
-            infoLine: meta.infoLine,
-            infoColor: meta.infoColor,
-            maxQuantity: meta.maxQuantity,
+            variants,
             onClose,
-            onConfirm: (qty) => this._addProductToCart(cartProduct, sItemKey, qty),
+            onConfirm: (selections) => this._addProductToCart(selections, sItemKey),
         });
     }
 
-    _addProductToCart (cartProduct, sItemKey, quantity) {
-        const onList = this.oShoppingList?.isProductOnList(cartProduct) ?? false;
-        let added = 0;
+    /**
+     * @param {Array<{product:object, qty:number}>} selections — one entry per variant (standard/eco),
+     *   each with the quantity chosen independently in the popup.
+     * @param {string} sItemKey
+     */
+    async _addProductToCart (selections, sItemKey) {
+        const budget = this._budget ?? 0;
+        let spent = this.oMyCart?.getTotal() ?? 0;
+        const collectedDelta = {};
+        const itemKey = (p) => p.key ?? p.textureKey;
 
-        for (let i = 0; i < quantity; i++) {
-            if (!this._canAfford(cartProduct)) break;
-            if (onList && !this.oShoppingList?.isProductNeeded(cartProduct)) break;
-            if (!this.oMyCart?.tryAddItem(cartProduct)) break;
+        // Clamp each variant's requested quantity against budget/shopping-list limits,
+        // accounting for the combined effect of both variants in this same batch.
+        const batches = [];
+        for (const { product, qty } of selections) {
+            if (!product || qty <= 0) continue;
+            const onList = this.oShoppingList?.isProductOnList(product) ?? false;
+            const price = product.price ?? 0;
+            let added = 0;
 
-            if (onList) this.oShoppingList?.onProductCollected(cartProduct);
-            if (sItemKey) addToCart(sItemKey).catch(err => console.error('[Cart add]', err));
-            added += 1;
+            for (let i = 0; i < qty; i++) {
+                if (budget > 0 && spent + price > budget) break;
+                if (onList) {
+                    const remaining = (this.oShoppingList?.getRemainingForProduct(product) ?? Infinity)
+                        - (collectedDelta[itemKey(product)] ?? 0);
+                    if (remaining <= 0) break;
+                }
+                spent += price;
+                collectedDelta[itemKey(product)] = (collectedDelta[itemKey(product)] ?? 0) + 1;
+                added += 1;
+            }
+
+            if (added > 0) batches.push({ product, qty: added, onList });
         }
 
-        if (added > 0) {
-            this._saveState();
-            this._updateHudMeters();
-            const ptr = this.input.activePointer;
-            this._flyToCart(cartProduct, ptr.worldX, ptr.worldY);
+        if (!batches.length) return;
+
+        // Both variants (standard/eco) resolve to the same sItemKey server-side, so a
+        // single call carrying their combined quantity is all the API needs — never one
+        // call per variant. The cart/add response's aCartItems is the sole source of
+        // truth for what ends up in the cart.
+        const totalQty = batches.reduce((sum, b) => sum + b.qty, 0);
+
+        if (sItemKey) {
+            try {
+                const result = await addToCart(sItemKey, totalQty);
+                this._applyCartMutationResult(result);
+            } catch (err) {
+                console.error('[Cart add]', err);
+                return;
+            }
+        } else {
+            for (const { product, qty } of batches) {
+                for (let i = 0; i < qty; i++) this.oMyCart?.tryAddItem(product);
+            }
+            const ecoDelta = batches.reduce((sum, b) => sum + (b.product.ecoImpact ?? 0) * b.qty, 0);
+            this.setEcoMeter((this._ecoValue ?? 0) + ecoDelta, this._ecoMax);
             this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
         }
+
+        const ptr = this.input.activePointer;
+        for (const { product, qty, onList } of batches) {
+            if (onList) {
+                for (let i = 0; i < qty; i++) this.oShoppingList?.onProductCollected(product);
+            }
+            this._flyToCart(product, ptr.worldX, ptr.worldY);
+        }
+
+        this._saveState();
+        this._updateHudMeters();
     }
 
     _buildCheckoutButton() {
@@ -301,11 +379,20 @@ class Level extends Phaser.Scene {
         this.oMissionPopup = new MissionPopup(this);
         this.oMissionPopup.open({
             shoppingList: gameConfig.shoppingList ?? [],
-            category: gameConfig.category ?? '',
-            shoppingTotal: gameConfig.shoppingListTotal ?? 0,
+            title: gameConfig.category ?? '',
+            description: gameConfig.description ?? '',
+            missionOrder: gameConfig.missionOrder ?? 0,
             budget: gameConfig.budget ?? 0,
+            timeLimit: gameConfig.timeLimit ?? 0,
+            ecoLimit: gameConfig.ecoMeterMax ?? 100,
             onStart: () => this.oTimer?.resume(),
+            onChooseAnother: () => this._chooseAnotherMission(),
         });
+    }
+
+    _chooseAnotherMission() {
+        this._clearSavedState();
+        this.scene.start('Home');
     }
 
     _loadSavedState() {
@@ -336,13 +423,13 @@ class Level extends Phaser.Scene {
 
     _createEcoMeter ({ budgetMax = 150 } = {}) {
         const hud = HUD_LAYOUT;
-        const panelW = 300;
-        const coinColW = 50;
-        const padRight = 16;
-        const barH = 22;
+        const panelW = 330;
+        const coinColW = 56;
+        const padRight = 22;
+        const barH = 24;
         const rowH = hudMeterRowHeight(barH);
-        const rowGap = 14;
-        const padY = 18;
+        const rowGap = 18;
+        const padY = 24;
         const panelH = padY * 2 + rowH * 2 + rowGap;
         const barW = panelW - coinColW - padRight - 10;
         const barLeft = -panelW / 2 + coinColW + 10;
@@ -354,7 +441,7 @@ class Level extends Phaser.Scene {
         panel.setDisplaySize(panelW, panelH);
         this.oEcoMeter.add(panel);
 
-        const coinSize = 34;
+        const coinSize = 36;
         const coinX = -panelW / 2 + coinColW / 2 + 4;
         const barCenterOffset = 12 + 6 + barH / 2;
 
@@ -398,7 +485,7 @@ class Level extends Phaser.Scene {
     _updateHudMeters () {
         const spent = this.oMyCart?.getTotal() ?? 0;
         const budgetMax = Math.max(1, this._budgetMax ?? 1);
-        const remaining = Math.max(0, budgetMax - spent);
+        const remaining = this._budgetRemaining ?? Math.max(0, budgetMax - spent);
 
         this.oBudgetBar?.setProgress(remaining, budgetMax);
 
@@ -407,6 +494,27 @@ class Level extends Phaser.Scene {
         this.oBudgetBar?.setFillColor(budgetFill);
 
         this.oEcoBar?.setProgress(this._ecoValue ?? 0, this._ecoMax ?? 1);
+    }
+
+    /** Reconciles the cart contents / eco meter / remaining budget with the authoritative values from a cart add/remove API response. */
+    _applyCartMutationResult (result) {
+        const data = result?.data;
+        if (!data) return;
+
+        if (data.aCartItems) {
+            this.oMyCart?.setItems(buildCartItemsFromApi(data.aCartItems));
+            this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
+        }
+
+        const ecoValue = data.nEcoMeter ?? data.nCurrentEcoMeter ?? data.nEcoPoints;
+        const ecoMax = data.nEcoMeterMax ?? data.nMaxEcoMeter ?? this._ecoMax;
+        if (ecoValue != null) this.setEcoMeter(ecoValue, ecoMax);
+
+        const remainingBudget = data.nSessionBudget ?? data.nRemainingBudget ?? data.nBudgetRemaining;
+        if (remainingBudget != null) {
+            this._budgetRemaining = remainingBudget;
+            this._updateHudMeters();
+        }
     }
 
     setEcoMeter (value, max) {

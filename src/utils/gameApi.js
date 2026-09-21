@@ -1,3 +1,5 @@
+import { PRODUCT_CATALOG } from '../pages/game/config/productAssets.js';
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2YTE2ODAwNTM1ZTA5MjQyMDgwMTg2MjgiLCJzRW1haWwiOiJyYWp2aUBnbWFpbC5jb20iLCJpYXQiOjE3ODIxMDQ5MzR9.lyBYfpYfFPNyYCwa_KkWS-KAlzWe_DyWuNm6BHwinGs';
@@ -12,6 +14,59 @@ let gameId = null;
 
 /** Restore gameId after a page refresh (called by Level when loading saved state). */
 export function setGameId(id) { gameId = id; }
+
+// sItemKey → { sName, standard: {price, ecoImpact, description, image}|null, eco: {...}|null }
+let itemVariantsBySItemKey = {};
+// sItemKey → { id, sName } — aItems no longer carries oNormal/oEco, only enough to look an item back up by id
+let itemMetaBySItemKey = {};
+
+const toVariant = (v) => v ? {
+    price: v.nPrice,
+    ecoImpact: v.nEcoPoints,
+    description: v.sDescription,
+    image: v.sImage || null,
+} : null;
+
+const buildVariants = (item) => ({
+    sName: item.sName,
+    standard: toVariant(item.oNormal),
+    eco: toVariant(item.oEco),
+});
+
+/** Populates the item id/name lookup from aItems (called on fresh load and on resume). */
+export function setItemVariants(aItems) {
+    itemVariantsBySItemKey = {};
+    itemMetaBySItemKey = {};
+    for (const item of aItems ?? []) {
+        if (!item?.sItemKey) continue;
+        itemMetaBySItemKey[item.sItemKey] = { id: item._id, sName: item.sName };
+        // Older API shape embedded oNormal/oEco directly on the item — cache it if present.
+        if (item.oNormal || item.oEco) {
+            itemVariantsBySItemKey[item.sItemKey] = buildVariants(item);
+        }
+    }
+}
+
+/** @param {string} sItemKey @returns {{sName, standard, eco}|null} */
+export function getItemVariants(sItemKey) {
+    return itemVariantsBySItemKey[sItemKey] ?? null;
+}
+
+/** @param {string} sItemKey @returns {string|null} the item's Mongo _id, for fetchItemVariants */
+export function getItemId(sItemKey) {
+    return itemMetaBySItemKey[sItemKey]?.id ?? null;
+}
+
+/** GET /item/:iItemId — a single item's oNormal/oEco detail by id, cached for getItemVariants. */
+export async function fetchItemVariants(itemId) {
+    const res = await fetch(`${BASE_URL}/item/${itemId}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Item details ${res.status}: ${res.statusText}`);
+    const json = await res.json();
+    const item = json.data;
+    const variants = buildVariants(item);
+    if (item?.sItemKey) itemVariantsBySItemKey[item.sItemKey] = variants;
+    return variants;
+}
 
 /**
  * Maps API sItemKey → internal rack/product identifiers.
@@ -38,6 +93,7 @@ const ITEM_KEY_MAP = {
     onion: { rackId: 'fruits', key: 'onion', textureKey: 'product_fruits_onion_icon' },
     capsicum: { rackId: 'fruits', key: 'capsicum', textureKey: 'product_fruits_capsicum_icon' },
     qualiflower: { rackId: 'fruits', key: 'qualiflower', textureKey: 'product_fruits_cabbage_icon' },
+    cauliflower: { rackId: 'fruits', key: 'qualiflower', textureKey: 'product_fruits_cabbage_icon', label: 'Cauliflower' },
 
     // ── candy ──────────────────────────────────────────────────────────────────
     lollipop: { rackId: 'candy', key: 'lollipop', textureKey: 'product_candy_lollipop' },
@@ -102,11 +158,11 @@ export function resolveItemKeyFromProduct(product) {
 }
 
 /** POST /cart/add */
-export async function addToCart(sItemKey) {
+export async function addToCart(sItemKey, quantity = 1) {
     const res = await fetch(`${BASE_URL}/cart/add`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ iMiniGameId: gameId, sItemKey }),
+        body: JSON.stringify({ iMiniGameId: gameId, sItemKey, nQuantity: quantity }),
     });
     if (!res.ok) throw new Error(`Cart add ${res.status}: ${res.statusText}`);
     return res.json();
@@ -134,6 +190,99 @@ export async function removeFromCart(sItemKey) {
     return res.json();
 }
 
+function normalizeMission(m = {}) {
+    return {
+        _id: m._id,
+        iMiniGameId: m.iMiniGameId,
+        eAgeCategory: m.eAgeCategory,
+        nOrder: m.nOrder ?? 0,
+        sName: m.sName ?? 'Mission',
+        sDescription: m.sDescription ?? '',
+        nBudget: m.nBudget ?? 0,
+        nTimeLimit: m.nTimeLimit ?? 0,
+        aShoppingList: m.aShoppingList ?? [],
+        eStatus: m.eStatus ?? m.sStatus ?? null,
+        sImage: m.sImage ?? m.sThumbnail ?? null,
+    };
+}
+
+/**
+ * GET /mini-games/missions — pickable missions for the player's age category.
+ * Shown in the Choose Your Mission popup on Start.
+ * @returns {Promise<{gameId: string, ageCategory: string, name: string, missions: Array}>}
+ */
+export async function fetchMissions() {
+    const res = await fetch(`${BASE_URL}/missions`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Missions API ${res.status}: ${res.statusText}`);
+    const json = await res.json();
+    const data = json.data ?? {};
+    const raw = data.missions ?? data.aMissions ?? [];
+    const missions = raw.map(normalizeMission).sort((a, b) => a.nOrder - b.nOrder);
+
+    return {
+        gameId: data.iMiniGameId,
+        ageCategory: data.eAgeCategory,
+        name: data.sMiniGameName,
+        missions,
+    };
+}
+
+/**
+ * GET /mini-games/missions/:id — full brief for one mission.
+ * `:id` is the mission's `_id` from the list response (not iMiniGameId —
+ * that value is the shared mini-game and returns 404 here).
+ * @param {string} missionId
+ * @returns {Promise<{gameId: string, ageCategory: string, name: string, mission: object}>}
+ */
+export async function fetchMissionBrief(missionId) {
+    const res = await fetch(`${BASE_URL}/missions/${missionId}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Mission brief ${res.status}: ${res.statusText}`);
+    const json = await res.json();
+    const data = json.data ?? {};
+    const mission = normalizeMission(data.mission ?? data);
+    return {
+        gameId: data.iMiniGameId ?? mission.iMiniGameId,
+        ageCategory: data.eAgeCategory,
+        name: data.sMiniGameName,
+        mission,
+    };
+}
+
+/**
+ * Builds the gameConfig shape Level/Preload expect directly from a single
+ * mission picked in the mission-select popup — no separate module-config
+ * fetch needed. `items` is reshaped from aShoppingList's iItemId/sItemKey/sName
+ * so Level's setItemVariants(gameConfig.items) call keeps getItemId /
+ * fetchItemVariants working for this mission's items, including after a
+ * page-refresh resume (gameConfig round-trips through sessionStorage).
+ * @param {object} mission one entry from fetchMissions().missions
+ * @param {string} gameId fetchMissions().gameId
+ */
+export function buildGameConfigFromMission(mission, gameId) {
+    setGameId(gameId);
+    const items = (mission.aShoppingList ?? []).map((it) => ({
+        _id: it.iItemId,
+        sItemKey: it.sItemKey,
+        sName: it.sName,
+    }));
+
+    return {
+        gameId,
+        missionId: mission._id,
+        budget: mission.nBudget,
+        timeLimit: mission.nTimeLimit,
+        items,
+        shoppingList: mission.aShoppingList ?? [],
+        shoppingListTotal: 0,
+        category: mission.sName ?? '',
+        description: mission.sDescription ?? '',
+        missionOrder: mission.nOrder ?? 0,
+        ecoMeter: 100,
+        ecoMeterMax: 100,
+        badge: null,
+    };
+}
+
 /**
  * Fetch mini-games config for the configured module.
  * Sets the module-level `gameId` used by addToCart / removeFromCart.
@@ -158,45 +307,61 @@ export async function fetchGameConfig() {
         shoppingList: cfg.aShoppingList,
         shoppingListTotal: cfg.nShoppingListTotal ?? 0,
         category: cfg.sSelectedCategory ?? '',
-        ecoMeter: cfg.nEcoMeter ?? 0,
+        ecoMeter: cfg.nEcoMeter ?? cfg.nEcoMeterMax ?? cfg.nMaxEcoMeter ?? 100,
         ecoMeterMax: cfg.nEcoMeterMax ?? cfg.nMaxEcoMeter ?? 100,
         badge: gamesJson.data.eBadge,
     };
 }
 
 /**
- * Returns a new racks array with prices overridden from aItems.
- * Products not listed in aItems keep their default price.
- * @param {Array<{sItemKey:string, nPrice:number}>} aItems
+ * Returns a new racks array with prices/labels overridden from aItems.
+ * Products not listed in aItems keep their default price and catalog label.
+ * @param {Array<{sItemKey:string, sName?:string, oNormal?:{nPrice:number}, nPrice?:number}>} aItems
  * @param {ReturnType<getRacksForView>} racksData
  */
 export function patchRacksWithApiPrices(aItems, racksData) {
-    // Build { rackId → { productKey → price } }
-    const priceLookup = {};
+    // Build { rackId → { productKey → { price, label } } }
+    const dataLookup = {};
     for (const item of aItems) {
         const resolved = resolveItem(item.sItemKey);
         if (!resolved) continue;
-        (priceLookup[resolved.rackId] ??= {})[resolved.key] = item.nPrice;
+        // oNormal.nPrice is the current shape; nPrice is kept as a fallback for older API responses.
+        const price = item.oNormal?.nPrice ?? item.nPrice ?? null;
+        (dataLookup[resolved.rackId] ??= {})[resolved.key] = { price, label: item.sName };
     }
 
     return racksData.map((rack) => {
-        const prices = priceLookup[rack.id];
+        const rackData = dataLookup[rack.id];
         const patchedProducts = Object.fromEntries(
-            Object.entries(rack.products).map(([key, product]) => [
-                key,
-                // null price → item not in API response, shelf tag shows '-'
-                { ...product, price: prices?.[key] ?? null },
-            ])
+            Object.entries(rack.products).map(([key, product]) => {
+                const entry = rackData?.[key];
+                return [key, {
+                    ...product,
+                    // null price → item not in API response, shelf tag shows '-'
+                    price: entry?.price ?? null,
+                    label: entry?.label ?? product.label,
+                }];
+            })
         );
         return { ...rack, products: patchedProducts };
     });
+}
+
+/** Resolves a display label for an API shopping-list/cart item: API name → ITEM_KEY_MAP override → catalog label → humanized key. */
+export function resolveItemLabel(sItemKey, resolved) {
+    const apiName = getItemVariants(sItemKey)?.sName;
+    if (apiName) return apiName;
+    if (resolved.label) return resolved.label;
+    const catalogLabel = PRODUCT_CATALOG[resolved.rackId]?.[resolved.key]?.label;
+    if (catalogLabel) return catalogLabel;
+    return resolved.key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 }
 
 /**
  * Converts aShoppingList from the API into the format expected by ShoppingListPanel.
  * Always returns exactly 6 slots (pads with null).
  * @param {Array<{sItemKey:string, nQuantity:number, nPrice:number}>} aShoppingList
- * @returns {Array<{key,textureKey,required,collected}|null>}
+ * @returns {Array<{key,textureKey,label,required,collected}|null>}
  */
 export function buildShoppingListEntries(aShoppingList) {
     const SLOT_COUNT = 6;
@@ -206,10 +371,37 @@ export function buildShoppingListEntries(aShoppingList) {
         return {
             key: resolved.key,
             textureKey: resolved.textureKey,
+            label: resolveItemLabel(item.sItemKey, resolved),
             required: item.nQuantity,
             collected: 0,
         };
     });
     while (entries.length < SLOT_COUNT) entries.push(null);
     return entries.slice(0, SLOT_COUNT);
+}
+
+/**
+ * Converts the aCartItems array from a cart/add or cart/remove response into the
+ * flat, one-entry-per-unit item list MyCartPanel expects — the cart's authoritative
+ * source of truth is always this server response, never local bookkeeping.
+ * @param {Array<{sItemKey:string, nQuantity:number, nPrice:number}>} aCartItems
+ */
+export function buildCartItemsFromApi(aCartItems) {
+    const items = [];
+    for (const entry of aCartItems ?? []) {
+        const resolved = resolveItem(entry.sItemKey);
+        if (!resolved) continue;
+        const label = resolveItemLabel(entry.sItemKey, resolved);
+        const qty = Math.max(0, entry.nQuantity ?? 0);
+        for (let i = 0; i < qty; i++) {
+            items.push({
+                key: resolved.key,
+                textureKey: resolved.textureKey,
+                rackId: resolved.rackId,
+                label,
+                price: entry.nPrice ?? 0,
+            });
+        }
+    }
+    return items;
 }

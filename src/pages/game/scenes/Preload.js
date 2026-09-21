@@ -11,6 +11,11 @@ class Preload extends Phaser.Scene {
         super('Preload');
     }
 
+    init (data) {
+        // gameConfig built from the mission picked in Home's mission-select popup
+        this._pickedConfig = data?.gameConfig ?? null;
+    }
+
     preload () {
         const bg = this.add.image(config.centerX, config.centerY, HOME_TEXTURE_KEYS.bgBlur);
         bg.setDisplaySize(config.width, config.height);
@@ -53,9 +58,10 @@ class Preload extends Phaser.Scene {
     async _onAssetsReady () {
         const resuming = sessionStorage.getItem('ss_inGame') === '1';
         const saved = resuming ? this._loadSavedState() : null;
-        let gameConfig = saved?.gameConfig ?? null;
+        let gameConfig = this._pickedConfig ?? saved?.gameConfig ?? null;
 
         if (!gameConfig) {
+            // Fallback only — Home's mission-select popup normally supplies gameConfig directly.
             this.txt_progress.setText('Loading...');
             try {
                 gameConfig = await fetchGameConfig();

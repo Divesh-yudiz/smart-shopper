@@ -1,37 +1,45 @@
 import Phaser from 'phaser';
 import config from '../../utils/config.js';
 import { resolveItem } from '../../../../utils/gameApi.js';
+import { UI_TEXTURE_KEYS } from '../../config/componentAssets.js';
+import { HOME_TEXTURE_KEYS } from '../../config/homeAssets.js';
+import HomeInfoPopup from '../HomeInfoPopup.js';
 
-// ── layout constants ───────────────────────────────────────────────────────────
-const PW = 920;    // panel width
-const CR = 22;     // corner radius
-const HEADER_H = 90;     // orange header height
+const PW = 1640;
+const PH = 780;
+const CR = 24;
+const PAD = 28;
+const COL_GAP = 24;
+const LEFT_W = 320;
+const RIGHT_W = PW - PAD * 2 - LEFT_W - COL_GAP;
 
-// Card grid
-const COLS = 3;
-const CW = 262;   // card width
-const CH = 210;   // card height
-const CGX = 17;    // horizontal gap between cards
-const CGY = 14;    // vertical gap between rows
-const IR = 44;    // product icon circle radius
+const C_CREAM = 0xfef9e4;
+const C_ORANGE = 0xf5a623;
+const C_GREEN = 0x27ae60;
+const C_GREEN_H = 0x219a52;
+const C_WHITE = 0xffffff;
+const C_CARD = 0xffffff;
+const C_CARD_BD = 0xe8d5a0;
+const C_IMG_BG = 0xf5eed6;
+const C_IMG_ICON = 0xcaa568;
+const C_TIPS_BG = 0xfff6df;
 
-// ── palette ────────────────────────────────────────────────────────────────────
-const C_BG = 0xfef9e4;   // warm cream panel fill
-const C_BORDER = 0xf5a623;   // orange panel border
-const C_HEADER = 0xf5a623;   // header fill
-const C_CARD = 0xffffff;   // card fill
-const C_CARD_BD = 0xe8d5a0;   // card border (light tan)
-const C_ICON_BG = 0xf5eed6;   // product circle fill
-const C_QTY_BG = 0xf5a623;   // qty badge fill (orange)
-const C_GREEN = 0x27ae60;   // button / price green
-const C_WHITE = '#ffffff';
-const C_NAVY = '#1e3a5f';
-const C_ORANGE = '#f5a623';
-const C_GRNSTR = '#27ae60';
+const T_NAVY = '#1e3a5f';
+const T_MUTED = '#7c5a2e';
+const T_WHITE = '#ffffff';
+const T_ORANGE = '#b06010';
+const T_GREEN = '#1a7a45';
 
 function formatName (key) {
     return key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()
         .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatTime (seconds) {
+    const s = Math.max(0, Math.floor(seconds));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
 }
 
 export default class MissionPopup extends Phaser.GameObjects.Container {
@@ -42,355 +50,421 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this.setVisible(false);
     }
 
-    open ({ shoppingList = [], category = '', shoppingTotal = 0, budget = 0,
-        onStart = () => { }, onItemSelect = null } = {}) {
+    open ({
+        shoppingList = [],
+        title = '',
+        description = '',
+        missionOrder = 0,
+        budget = 0,
+        timeLimit = 0,
+        ecoLimit = 100,
+        onStart = () => { },
+        onChooseAnother = null,
+    } = {}) {
         this._onStart = onStart;
-        this._onItemSelect = onItemSelect;
-        this._addedKeys = new Set();
-
-        const items = shoppingList.filter(Boolean);
-        this._rows = Math.max(1, Math.ceil(items.length / COLS));
-
-        // Dynamic panel height based on content
-        const cardsH = this._rows * CH + Math.max(0, this._rows - 1) * CGY;
-        this._PH = HEADER_H        // orange header
-            + 56              // category badge
-            + 46              // "items to collect" label
-            + cardsH          // card grid
-            + 100             // footer (divider + 2 info rows)
-            + 92;             // button + bottom pad
-        this._PT = -this._PH / 2;
+        this._onChooseAnother = onChooseAnother;
+        this._PT = -PH / 2;
+        this._PL = -PW / 2;
 
         this.removeAll(true);
 
-        // dim overlay
-        const ov = this.scene.add.rectangle(0, 0, config.width, config.height, 0x000000, 0.55);
+        const ov = this.scene.add.rectangle(0, 0, config.width, config.height, 0x000000, 0.45);
         ov.setInteractive();
         this.add(ov);
 
+        const wash = this.scene.add.rectangle(0, 0, config.width, config.height, C_CREAM, 0.88);
+        this.add(wash);
+
+        this._drawChrome();
         this._drawPanel();
-        this._drawHeader(category);
-        this._drawItems(items);
-        this._drawFooter(shoppingTotal, budget);
-        this._drawButton();
+
+        const leftX = this._PL + PAD;
+        const rightX = leftX + LEFT_W + COL_GAP;
+        const topY = this._PT + PAD;
+
+        this._drawLeftColumn(leftX, topY, title, missionOrder);
+        this._drawRightColumn(rightX, topY, {
+            description,
+            budget,
+            ecoLimit,
+            timeLimit,
+            items: shoppingList.filter(Boolean),
+        });
 
         this.setVisible(true);
         this.setAlpha(0);
-        this.setScale(0.88);
+        this.setScale(0.97);
         this.scene.tweens.add({
             targets: this, alpha: 1, scale: 1,
-            duration: 380, ease: 'Back.easeOut',
+            duration: 320, ease: 'Back.easeOut',
         });
     }
 
-    // ── panel background ──────────────────────────────────────────────────────
+    _drawChrome () {
+        const top = -config.height / 2;
+        const headerY = top + 56;
+
+        this._pillButton(-config.width / 2 + 110, headerY, 150, 48, '←  Back', {
+            fill: C_WHITE,
+            border: C_ORANGE,
+            color: T_ORANGE,
+            onClick: () => this._close(() => this._onChooseAnother?.()),
+        });
+
+        this.add(this.scene.add.text(0, headerY - 10, 'Smart Shopper', {
+            fontFamily: config.fonts.text,
+            fontSize: '42px',
+            fontStyle: 'bold',
+            color: T_NAVY,
+        }).setOrigin(0.5, 0.5));
+
+        this.add(this.scene.add.text(0, headerY + 28, 'Shop Smart. Choose Wisely.', {
+            fontFamily: config.fonts.text,
+            fontSize: '20px',
+            color: T_MUTED,
+        }).setOrigin(0.5, 0.5));
+
+        const aboutX = config.width / 2 - 90;
+        if (this.scene.textures.exists(HOME_TEXTURE_KEYS.infoButton)) {
+            const info = this.scene.add.image(aboutX, headerY - 8, HOME_TEXTURE_KEYS.infoButton);
+            info.setDisplaySize(52, 52);
+            info.setInteractive({ useHandCursor: true });
+            info.on('pointerup', () => this._openAbout());
+            this.add(info);
+        } else {
+            const g = this.scene.add.graphics();
+            g.fillStyle(C_ORANGE, 1);
+            g.fillCircle(aboutX, headerY - 8, 22);
+            g.fillStyle(C_WHITE, 1);
+            this.add(g);
+            const hit = this.scene.add.circle(aboutX, headerY - 8, 26, 0, 0);
+            hit.setInteractive({ useHandCursor: true });
+            hit.on('pointerup', () => this._openAbout());
+            this.add(hit);
+            this.add(this.scene.add.text(aboutX, headerY - 8, 'i', {
+                fontFamily: config.fonts.text, fontSize: '24px', fontStyle: 'bold', color: T_WHITE,
+            }).setOrigin(0.5, 0.5));
+        }
+
+        this.add(this.scene.add.text(aboutX, headerY + 30, 'About Game', {
+            fontFamily: config.fonts.text,
+            fontSize: '16px',
+            fontStyle: 'bold',
+            color: T_NAVY,
+        }).setOrigin(0.5, 0));
+    }
+
+    _openAbout () {
+        if (!this._infoPopup) {
+            this._infoPopup = new HomeInfoPopup(this.scene);
+            this._infoPopup.setDepth(700);
+        }
+        this._infoPopup.open();
+    }
 
     _drawPanel () {
         const g = this.scene.add.graphics();
-
-        // soft drop shadow
-        g.fillStyle(0x000000, 0.20);
-        g.fillRoundedRect(-PW / 2 + 6, this._PT + 8, PW, this._PH, CR);
-
-        // orange border (slightly larger rect behind)
-        g.fillStyle(C_BORDER, 1);
-        g.fillRoundedRect(-PW / 2 - 5, this._PT - 5, PW + 10, this._PH + 10, CR + 5);
-
-        // cream body
-        g.fillStyle(C_BG, 1);
-        g.fillRoundedRect(-PW / 2, this._PT, PW, this._PH, CR);
-
+        g.fillStyle(0x000000, 0.12);
+        g.fillRoundedRect(this._PL + 6, this._PT + 8, PW, PH, CR);
+        g.fillStyle(C_ORANGE, 1);
+        g.fillRoundedRect(this._PL - 4, this._PT - 4, PW + 8, PH + 8, CR + 4);
+        g.fillStyle(C_CREAM, 1);
+        g.fillRoundedRect(this._PL, this._PT, PW, PH, CR);
         this.add(g);
     }
 
-    // ── orange header ─────────────────────────────────────────────────────────
+    _drawLeftColumn (x, y, title, order) {
+        const titleH = 100;
+        this._shadowCard(x, y, LEFT_W, titleH, 16);
 
-    _drawHeader (category) {
-        const PT = this._PT;
-        const g = this.scene.add.graphics();
-
-        // header fill
-        g.fillStyle(C_HEADER, 1);
-        g.fillRoundedRect(-PW / 2, PT, PW, HEADER_H, { tl: CR, tr: CR, bl: 0, br: 0 });
-
-        // top shine strip
-        g.fillStyle(0xffffff, 0.18);
-        g.fillRoundedRect(-PW / 2 + 8, PT + 4, PW - 16, HEADER_H * 0.43, {
-            tl: CR - 2, tr: CR - 2, bl: 0, br: 0,
-        });
-        this.add(g);
-
-        // title  "★  YOUR SHOPPING MISSION!  ★"
-        const titleY = PT + HEADER_H / 2;
-        this.add(this.scene.add.text(0, titleY, '★  YOUR SHOPPING MISSION!  ★', {
+        this.add(this.scene.add.text(x + LEFT_W / 2, y + 28, `Mission ${order || ''}`.trim(), {
             fontFamily: config.fonts.text,
-            fontSize: '36px',
+            fontSize: '18px',
             fontStyle: 'bold',
-            color: C_WHITE,
-            stroke: '#9a3412',
-            strokeThickness: 3,
+            color: T_ORANGE,
         }).setOrigin(0.5, 0.5));
 
-        // category badge
-        if (category) {
-            const badgeY = PT + HEADER_H + 30;
-            const bH = 42;
-            const bg = this.scene.add.graphics();
-
-            // measure text to get badge width
-            const tempT = this.scene.add.text(0, -9999, `🎯  ${category}`, {
-                fontFamily: config.fonts.text, fontSize: '22px', fontStyle: 'bold',
-            });
-            const bW = Math.max(220, tempT.width + 48);
-            tempT.destroy();
-
-            bg.fillStyle(0xb06010, 1);
-            bg.fillRoundedRect(-bW / 2, badgeY - bH / 2, bW, bH, bH / 2);
-            bg.fillStyle(0xffffff, 0.10);
-            bg.fillRoundedRect(-bW / 2 + 4, badgeY - bH / 2 + 3, bW - 8, bH / 2 - 3, {
-                tl: bH / 2, tr: bH / 2, bl: 0, br: 0,
-            });
-            this.add(bg);
-
-            this.add(this.scene.add.text(0, badgeY, `🎯  ${category}`, {
-                fontFamily: config.fonts.text,
-                fontSize: '22px',
-                fontStyle: 'bold',
-                color: '#ffd88a',
-            }).setOrigin(0.5, 0.5));
-        }
-    }
-
-    // ── item grid ─────────────────────────────────────────────────────────────
-
-    _drawItems (items) {
-        const cardsTop = this._PT + HEADER_H + 56 + 46;   // after badge + label space
-
-        // "🛒 Items to collect" label
-        const labelY = this._PT + HEADER_H + 56 + 22;
-        this.add(this.scene.add.text(0, labelY, '🛒  Items to collect', {
+        this.add(this.scene.add.text(x + LEFT_W / 2, y + 64, title || 'Mission', {
             fontFamily: config.fonts.text,
-            fontSize: '22px',
-            color: C_NAVY,
+            fontSize: '24px',
+            fontStyle: 'bold',
+            color: T_NAVY,
+            align: 'center',
+            wordWrap: { width: LEFT_W - 24 },
         }).setOrigin(0.5, 0.5));
 
-        const gridW = COLS * CW + (COLS - 1) * CGX;
-        const startX = -gridW / 2;
+        const imgTop = y + titleH + 14;
+        const imgH = this._PT + PH - PAD - imgTop;
+        this._shadowCard(x, imgTop, LEFT_W, imgH, 18, C_IMG_BG);
 
-        items.forEach((item, i) => {
-            const col = i % COLS;
-            const row = Math.floor(i / COLS);
-            const cx = startX + col * (CW + CGX) + CW / 2;
-            const cy = cardsTop + row * (CH + CGY) + CH / 2;
-            this._drawCard(cx, cy, item);
-        });
+        const cx = x + LEFT_W / 2;
+        const cy = imgTop + imgH / 2 + 8;
+        const icon = this.scene.add.graphics();
+        icon.fillStyle(C_IMG_ICON, 0.95);
+        icon.fillCircle(cx - 26, cy - 26, 16);
+        icon.fillTriangle(cx - 68, cy + 46, cx - 6, cy - 18, cx + 46, cy + 46);
+        icon.fillTriangle(cx - 10, cy + 46, cx + 34, cy - 4, cx + 78, cy + 46);
+        this.add(icon);
     }
 
-    _drawCard (cx, cy, item) {
-        const left = cx - CW / 2;
-        const top = cy - CH / 2;
-        const g = this.scene.add.graphics();
+    _drawRightColumn (x, y, { description, budget, ecoLimit, timeLimit, items }) {
+        let cy = y;
 
-        // card shadow
-        g.fillStyle(0x000000, 0.07);
-        g.fillRoundedRect(left + 3, top + 4, CW, CH, 14);
+        this.add(this.scene.add.text(x, cy, 'Description', {
+            fontFamily: config.fonts.text,
+            fontSize: '26px',
+            fontStyle: 'bold',
+            color: T_NAVY,
+        }).setOrigin(0, 0));
+        cy += 38;
 
-        // white card body
-        g.fillStyle(C_CARD, 1);
-        g.fillRoundedRect(left, top, CW, CH, 14);
+        const desc = description?.trim()
+            || 'Find everything on your list and make smart choices before time runs out!';
+        const descText = this.scene.add.text(x, cy, desc, {
+            fontFamily: config.fonts.text,
+            fontSize: '18px',
+            color: T_MUTED,
+            wordWrap: { width: RIGHT_W },
+            lineSpacing: 5,
+        }).setOrigin(0, 0);
+        this.add(descText);
+        cy += descText.height + 18;
 
-        // card border
-        g.lineStyle(1.5, C_CARD_BD, 1);
-        g.strokeRoundedRect(left, top, CW, CH, 14);
+        const statGap = 14;
+        const statW = (RIGHT_W - statGap * 2) / 3;
+        const statH = 132;
+        this._drawStatCard(x, cy, statW, statH, {
+            iconKey: UI_TEXTURE_KEYS.coinIcon,
+            label: 'BUDGET',
+            value: `AED ${budget || '-'}`,
+            sub: 'Shopping Budget',
+        });
+        this._drawStatCard(x + statW + statGap, cy, statW, statH, {
+            iconKey: UI_TEXTURE_KEYS.ecoIcon,
+            label: 'ECO LIMIT',
+            value: `${Math.round(ecoLimit)}`,
+            sub: 'Eco Impact',
+        });
+        this._drawStatCard(x + (statW + statGap) * 2, cy, statW, statH, {
+            icon: '⏱',
+            label: 'TIMER',
+            value: formatTime(timeLimit),
+            sub: 'Complete before time ends.',
+        });
+        cy += statH + 18;
 
-        // centred product circle
-        const iconY = top + 16 + IR;
-        g.fillStyle(C_ICON_BG, 1);
-        g.fillCircle(cx, iconY, IR + 5);
-        g.lineStyle(1.5, 0xd4b87a, 0.55);
-        g.strokeCircle(cx, iconY, IR + 5);
+        this.add(this.scene.add.text(x, cy, 'Shopping List', {
+            fontFamily: config.fonts.text,
+            fontSize: '26px',
+            fontStyle: 'bold',
+            color: T_NAVY,
+        }).setOrigin(0, 0));
+        cy += 40;
 
-        this.add(g);
+        const listGap = 12;
+        const maxItemW = 196;
+        const cols = Math.min(5, Math.max(1, items.length));
+        const itemW = Math.min(maxItemW, (RIGHT_W - listGap * (cols - 1)) / cols);
+        const itemH = 108;
+        items.slice(0, 5).forEach((item, i) => {
+            this._drawListItem(x + i * (itemW + listGap), cy, itemW, itemH, item);
+        });
+        cy += itemH + 16;
 
-        // product image (icon version)
+        this._drawTips(x, cy, RIGHT_W);
+        this._drawActions(x + RIGHT_W, this._PT + PH - PAD - 26);
+    }
+
+    _drawStatCard (x, y, w, h, { iconKey, icon, label, value, sub }) {
+        this._shadowCard(x, y, w, h, 16);
+
+        if (iconKey && this.scene.textures.exists(iconKey)) {
+            const img = this.scene.add.image(x + 26, y + 24, iconKey);
+            img.setDisplaySize(26, 26);
+            this.add(img);
+            this.add(this.scene.add.text(x + 46, y + 24, label, {
+                fontFamily: config.fonts.text,
+                fontSize: '15px',
+                fontStyle: 'bold',
+                color: T_ORANGE,
+            }).setOrigin(0, 0.5));
+        } else {
+            this.add(this.scene.add.text(x + 18, y + 24, `${icon ?? ''}  ${label}`, {
+                fontFamily: config.fonts.text,
+                fontSize: '15px',
+                fontStyle: 'bold',
+                color: T_ORANGE,
+            }).setOrigin(0, 0.5));
+        }
+
+        this.add(this.scene.add.text(x + w / 2, y + 68, value, {
+            fontFamily: config.fonts.text,
+            fontSize: '32px',
+            fontStyle: 'bold',
+            color: T_NAVY,
+        }).setOrigin(0.5, 0.5));
+
+        this.add(this.scene.add.text(x + w / 2, y + 104, sub, {
+            fontFamily: config.fonts.text,
+            fontSize: '14px',
+            color: T_MUTED,
+            align: 'center',
+            wordWrap: { width: w - 16 },
+        }).setOrigin(0.5, 0.5));
+    }
+
+    _drawListItem (x, y, w, h, item) {
+        this._shadowCard(x, y, w, h, 14);
+
         const resolved = resolveItem(item.sItemKey);
+        const name = item.sName
+            || resolved?.label
+            || (resolved?.key ? formatName(resolved.key) : formatName(item.sItemKey ?? 'Item'));
+
+        this.add(this.scene.add.text(x + w / 2, y + 14, name, {
+            fontFamily: config.fonts.text,
+            fontSize: '16px',
+            fontStyle: 'bold',
+            color: T_NAVY,
+            align: 'center',
+            wordWrap: { width: w - 14 },
+        }).setOrigin(0.5, 0));
+
+        const iconX = x + 26;
+        const iconY = y + h - 34;
+        const ig = this.scene.add.graphics();
+        ig.fillStyle(C_IMG_BG, 1);
+        ig.fillRoundedRect(iconX - 16, iconY - 16, 32, 32, 8);
+        this.add(ig);
+
         if (resolved?.textureKey && this.scene.textures.exists(resolved.textureKey)) {
-            const img = this.scene.add.image(cx, iconY, resolved.textureKey);
-            const isFruit = resolved.textureKey?.startsWith('product_fruits_') &&
-                !resolved.textureKey?.includes('tomato');
-            const sizeMul = isFruit ? 1.9 : 1.65;
-            img.setDisplaySize((IR + 5) * sizeMul, (IR + 5) * sizeMul);
+            const img = this.scene.add.image(iconX, iconY, resolved.textureKey);
+            img.setDisplaySize(28, 28);
             this.add(img);
         }
 
-        // item name — prefer resolved label/key (fixes API typos like icecreame → icecream)
-        const displayName = resolved?.label
-            ?? (resolved?.key ? formatName(resolved.key) : formatName(item.sItemKey));
-        this.add(this.scene.add.text(cx, iconY + IR + 14, displayName, {
+        const qty = item.nQuantity ?? 1;
+        this.add(this.scene.add.text(iconX + 24, iconY, `×${qty}`, {
             fontFamily: config.fonts.text,
-            fontSize: '19px',
+            fontSize: '18px',
             fontStyle: 'bold',
-            color: C_NAVY,
-            align: 'center',
-            wordWrap: { width: CW - 20 },
-        }).setOrigin(0.5, 0));
-
-        // bottom row: qty badge left │ price right
-        const rowY = top + CH - 26;
-        const qW = 60, qH = 28;
-
-        const qg = this.scene.add.graphics();
-        qg.fillStyle(C_QTY_BG, 1);
-        qg.fillRoundedRect(left + 14, rowY - qH / 2, qW, qH, qH / 2);
-        this.add(qg);
-
-        this.add(this.scene.add.text(left + 14 + qW / 2, rowY, `×${item.nQuantity}`, {
-            fontFamily: config.fonts.text,
-            fontSize: '17px',
-            fontStyle: 'bold',
-            color: C_WHITE,
-        }).setOrigin(0.5, 0.5));
-
-        this.add(this.scene.add.text(left + CW - 14, rowY, `AED ${item.nPrice}`, {
-            fontFamily: config.fonts.text,
-            fontSize: '20px',
-            fontStyle: 'bold',
-            color: C_GRNSTR,
-        }).setOrigin(1, 0.5));
-
-        // ── tap-to-add interaction ─────────────────────────────────────────────
-        if (this._onItemSelect) {
-            const flash = this.scene.add.graphics();
-            this.add(flash);
-
-            const hit = this.scene.add.rectangle(cx, cy, CW, CH, 0, 0);
-            hit.setInteractive({ useHandCursor: true });
-
-            hit.on('pointerover', () => {
-                if (this._addedKeys.has(item.sItemKey)) return;
-                flash.clear();
-                flash.fillStyle(C_GREEN, 0.10);
-                flash.fillRoundedRect(left, top, CW, CH, 14);
-            });
-            hit.on('pointerout', () => {
-                if (this._addedKeys.has(item.sItemKey)) return;
-                flash.clear();
-            });
-            hit.on('pointerup', () => {
-                if (this._addedKeys.has(item.sItemKey)) return;
-                this._addedKeys.add(item.sItemKey);
-                this._onItemSelect(item, this.x + cx, this.y + cy);
-
-                flash.clear();
-                flash.fillStyle(C_GREEN, 0.18);
-                flash.fillRoundedRect(left, top, CW, CH, 14);
-                flash.lineStyle(2.5, C_GREEN, 1);
-                flash.strokeRoundedRect(left, top, CW, CH, 14);
-
-                this.add(this.scene.add.text(cx + CW / 2 - 18, top + 18, '✓', {
-                    fontSize: '22px', fontStyle: 'bold', color: C_GRNSTR,
-                }).setOrigin(0.5, 0.5));
-            });
-            this.add(hit);
-        }
+            color: T_ORANGE,
+        }).setOrigin(0, 0.5));
     }
 
-    // ── footer ────────────────────────────────────────────────────────────────
-
-    _drawFooter (shoppingTotal, budget) {
-        const cardsTop = this._PT + HEADER_H + 56 + 46;
-        const gridBot = cardsTop + this._rows * (CH + CGY) - CGY;
-        const divY = gridBot + 22;
-
-        // dashed line
+    _drawTips (x, y, w) {
+        const h = 72;
         const g = this.scene.add.graphics();
-        g.fillStyle(0xd4b87a, 0.80);
-        for (let x = -PW / 2 + 52; x < PW / 2 - 52; x += 12) {
-            g.fillCircle(x, divY, 2.2);
-        }
+        g.fillStyle(C_TIPS_BG, 1);
+        g.fillRoundedRect(x, y, w, h, 12);
+        g.lineStyle(2, C_ORANGE, 0.45);
+        g.strokeRoundedRect(x, y, w, h, 12);
         this.add(g);
 
-        let ty = divY + 30;
-        const lx = -PW / 2 + 80;
-        const rx = PW / 2 - 80;
+        this.add(this.scene.add.text(x + 16, y + 16, '💡   Tips', {
+            fontFamily: config.fonts.text,
+            fontSize: '18px',
+            fontStyle: 'bold',
+            color: T_NAVY,
+        }).setOrigin(0, 0.5));
 
-        const row = (label, value, valColor) => {
-            this.add(this.scene.add.text(lx, ty, label, {
-                fontFamily: config.fonts.text, fontSize: '24px', color: C_NAVY,
-            }).setOrigin(0, 0.5));
-            this.add(this.scene.add.text(rx, ty, value, {
-                fontFamily: config.fonts.text, fontSize: '24px', fontStyle: 'bold', color: valColor,
-            }).setOrigin(1, 0.5));
-            ty += 38;
-        };
-
-        if (shoppingTotal > 0) row('Mission Cost', `AED ${shoppingTotal}`, C_ORANGE);
-        if (budget > 0) row('Your Budget', `AED ${budget}`, C_GRNSTR);
+        this.add(this.scene.add.text(x + 16, y + 46, 'Check both price and Eco impact. The cheapest choice may not always be the smartest choice!', {
+            fontFamily: config.fonts.text,
+            fontSize: '15px',
+            color: T_MUTED,
+            wordWrap: { width: w - 32 },
+        }).setOrigin(0, 0.5));
     }
 
-    // ── let's go button ───────────────────────────────────────────────────────
+    _drawActions (right, cy) {
+        const btnH = 50;
+        const gap = 14;
+        const startW = 220;
+        const otherW = 268;
+        const startX = right - startW;
+        const otherX = startX - gap - otherW;
 
-    _drawButton () {
-        const btnW = 320;
-        const btnH = 66;
-        const btnY = this._PH / 2 - 50;
+        this._pillButton(otherX + otherW / 2, cy, otherW, btnH, 'Choose Another Mission', {
+            fill: C_WHITE,
+            border: C_ORANGE,
+            color: T_ORANGE,
+            onClick: () => this._close(() => this._onChooseAnother?.()),
+        });
+        this._pillButton(startX + startW / 2, cy, startW, btnH, 'Start Shopping', {
+            fill: C_GREEN,
+            hoverFill: C_GREEN_H,
+            color: T_WHITE,
+            onClick: () => this._close(() => this._onStart?.()),
+        });
 
+        const link = this.scene.add.text(startX + startW / 2, cy + 30, 'Enter Supermarket', {
+            fontFamily: config.fonts.text,
+            fontSize: '16px',
+            fontStyle: 'bold',
+            color: T_GREEN,
+        }).setOrigin(0.5, 0);
+        const underline = this.scene.add.graphics();
+        underline.lineStyle(2, C_GREEN, 0.9);
+        underline.lineBetween(link.x - link.width / 2, link.y + link.height + 1, link.x + link.width / 2, link.y + link.height + 1);
+        this.add(underline);
+        this.add(link);
+        link.setInteractive({ useHandCursor: true });
+        link.on('pointerup', () => this._close(() => this._onStart?.()));
+    }
+
+    _pillButton (cx, cy, w, h, label, { fill, hoverFill, border, color, onClick }) {
+        const x = cx - w / 2;
+        const y = cy - h / 2;
         const g = this.scene.add.graphics();
         const draw = (hover) => {
             g.clear();
-            g.fillStyle(0x000000, 0.18);
-            g.fillRoundedRect(-btnW / 2 + 3, btnY - btnH / 2 + 4, btnW, btnH, btnH / 2);
-            g.fillStyle(hover ? 0x219a52 : C_GREEN, 1);
-            g.fillRoundedRect(-btnW / 2, btnY - btnH / 2, btnW, btnH, btnH / 2);
-            g.fillStyle(0xffffff, 0.16);
-            g.fillRoundedRect(-btnW / 2 + 4, btnY - btnH / 2 + 3, btnW - 8, btnH / 2 - 3, {
-                tl: btnH / 2, tr: btnH / 2, bl: 0, br: 0,
-            });
+            g.fillStyle(0x000000, 0.12);
+            g.fillRoundedRect(x + 2, y + 3, w, h, h / 2);
+            g.fillStyle(hover && hoverFill ? hoverFill : fill, 1);
+            g.fillRoundedRect(x, y, w, h, h / 2);
+            if (border) {
+                g.lineStyle(3, border, 1);
+                g.strokeRoundedRect(x, y, w, h, h / 2);
+            }
         };
         draw(false);
         this.add(g);
 
-        const lbl = this.scene.add.text(0, btnY, "🚀  Let's Go!", {
+        this.add(this.scene.add.text(cx, cy, label, {
             fontFamily: config.fonts.text,
-            fontSize: '32px',
+            fontSize: '18px',
             fontStyle: 'bold',
-            color: C_WHITE,
-            stroke: '#14532d',
-            strokeThickness: 2,
-        }).setOrigin(0.5, 0.5);
-        this.add(lbl);
+            color,
+        }).setOrigin(0.5, 0.5));
 
-        this.scene.tweens.add({
-            targets: lbl, scaleX: 1.04, scaleY: 1.04,
-            duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        });
-
-        const hit = this.scene.add.rectangle(0, btnY, btnW, btnH, 0, 0);
+        const hit = this.scene.add.rectangle(cx, cy, w, h, 0, 0);
         hit.setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => {
-            draw(true);
-            this.scene.tweens.killTweensOf(lbl);
-            this.scene.tweens.add({ targets: lbl, scaleX: 1.07, scaleY: 1.07, duration: 80, ease: 'Quad.easeOut' });
-        });
-        hit.on('pointerout', () => {
-            draw(false);
-            this.scene.tweens.killTweensOf(lbl);
-            this.scene.tweens.add({
-                targets: lbl, scaleX: 1.04, scaleY: 1.04,
-                duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-            });
-        });
-        hit.on('pointerup', () => this._close());
+        hit.on('pointerover', () => draw(true));
+        hit.on('pointerout', () => draw(false));
+        hit.on('pointerup', onClick);
         this.add(hit);
     }
 
-    // ── close ─────────────────────────────────────────────────────────────────
+    _shadowCard (x, y, w, h, r, fill = C_CARD) {
+        const g = this.scene.add.graphics();
+        g.fillStyle(0x000000, 0.08);
+        g.fillRoundedRect(x + 3, y + 5, w, h, r);
+        g.fillStyle(fill, 1);
+        g.fillRoundedRect(x, y, w, h, r);
+        g.lineStyle(1.5, C_CARD_BD, 1);
+        g.strokeRoundedRect(x, y, w, h, r);
+        this.add(g);
+        return g;
+    }
 
-    _close () {
+    _close (afterClose = null) {
         this.scene.tweens.add({
-            targets: this, alpha: 0, scale: 0.92,
-            duration: 200, ease: 'Quad.easeIn',
-            onComplete: () => { this.setVisible(false); this._onStart?.(); },
+            targets: this, alpha: 0, scale: 0.97,
+            duration: 180, ease: 'Quad.easeIn',
+            onComplete: () => {
+                this.setVisible(false);
+                (afterClose ?? this._onStart)?.();
+            },
         });
     }
 }

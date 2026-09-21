@@ -30,14 +30,13 @@ const DEFAULT_LAYOUT = {
 const PROD_GAP = 6;
 
 /** Price-Base.png */
-const PRICE_TAG_NATIVE_W = 85;
-const PRICE_TAG_NATIVE_H = 33;
+const PRICE_TAG_NATIVE_W = 96;
+const PRICE_TAG_NATIVE_H = 37;
 /** Default hang below shelf plank; lower = up, higher = down (per-row override in shelfLayouts.js) */
 const DEFAULT_PRICE_TAG_OFFSET_Y = 10;
 
-function formatShelfPrice (price) {
-    if (price === null || price === undefined) return '-';
-    return `AED ${Math.round(Number(price))}`;
+function shelfLabelText (product, rowCfg) {
+    return rowCfg?.label ?? product?.label ?? '-';
 }
 
 function buildGridLayout (
@@ -364,7 +363,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
     }
 
     _queueShelfRowPriceTag (centerX, shelfY, product, rowCfg = {}) {
-        if (!product && rowCfg.price == null) return;
+        if (!product && rowCfg.label == null) return;
         this._pendingShelfTags.push({ centerX, shelfY, product, rowCfg });
     }
 
@@ -375,9 +374,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
 
     /** One hanging tag per shelf row — Price-Base.png, centered (reference). */
     _createShelfRowPriceTag ({ centerX, shelfY, product, rowCfg }) {
-        // rowCfg.price: explicit override; product.price: null means not in API (show '-'); undefined means no data (use default 16)
-        const rawPrice = rowCfg.price !== undefined ? rowCfg.price : product?.price;
-        const price = rawPrice === undefined ? 16 : rawPrice;
+        const text = shelfLabelText(product, rowCfg);
         const tagOffsetY = rowCfg.priceTagOffsetY ?? DEFAULT_PRICE_TAG_OFFSET_Y;
         const tagY = shelfY + tagOffsetY;
 
@@ -388,14 +385,16 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         tag.setDisplaySize(PRICE_TAG_NATIVE_W, PRICE_TAG_NATIVE_H);
         tagContainer.add(tag);
 
-        const label = this.scene.add.text(0, -1, formatShelfPrice(price), {
+        const label = this.scene.add.text(0, -1, text, {
             fontFamily: config.fonts.text,
-            fontSize: '13px',
+            fontSize: '14px',
             fontStyle: 'bold',
             color: '#1e3a5f',
             align: 'center',
         });
         label.setOrigin(0.5, 0.5);
+        const maxTextW = PRICE_TAG_NATIVE_W - 10;
+        if (label.width > maxTextW) label.setScale(maxTextW / label.width);
         tagContainer.add(label);
 
         this._tagLayer.add(tagContainer);

@@ -7,12 +7,14 @@ export const SHOPPING_LIST_ENTRIES = Object.freeze([
     Object.freeze({
         key: 'milk',
         textureKey: 'product_beverages_milk',
+        label: 'Milk',
         required: 1,
         collected: 0,
     }),
     Object.freeze({
         key: 'tomatos',
         textureKey: 'product_fruits_tomatos',
+        label: 'Tomatos',
         required: 4,
         collected: 0,
     }),

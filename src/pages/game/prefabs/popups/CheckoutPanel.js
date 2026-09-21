@@ -5,14 +5,14 @@ import { resolveItem } from '../../../../utils/gameApi.js';
 
 const PANEL_W = 1240;
 const PANEL_H = 720;
-const HEADER_H = 78;
-const BODY_PAD = 16;
+const HEADER_H = 82;
+const BODY_PAD = 22;
 const LEFT_W = 300;
 const RIGHT_W = PANEL_W - LEFT_W - BODY_PAD * 3;
-const ICON_SIZE = 44;
-const STATUS_BTN_W = 106;
-const STATUS_BTN_H = 32;
-const STAR_SIZE = 26;
+const ICON_SIZE = 48;
+const STATUS_BTN_W = 112;
+const STATUS_BTN_H = 45;
+const STAR_SIZE = 28;
 
 const C_WHITE = '#ffffff';
 const C_NAVY = '#1e3a5f';
@@ -116,13 +116,13 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
         const pt = this._pt();
         const hCY = pt + HEADER_H / 2 + 2;
 
-        const cart = this.scene.add.image(pl + 54, hCY, CHECKOUT_TEXTURE_KEYS.cartIcon);
-        cart.setDisplaySize(32, 32);
+        const cart = this.scene.add.image(pl + 58, hCY, CHECKOUT_TEXTURE_KEYS.cartIcon);
+        cart.setDisplaySize(36, 36);
         this.add(cart);
 
-        this.add(this.scene.add.text(pl + 86, hCY, 'CHECKOUT SUMMARY', {
+        this.add(this.scene.add.text(pl + 92, hCY, 'CHECKOUT SUMMARY', {
             fontFamily: config.fonts.text,
-            fontSize: '32px',
+            fontSize: '34px',
             fontStyle: 'bold',
             color: C_WHITE,
         }).setOrigin(0, 0.5));
@@ -182,19 +182,19 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
         this._drawScorePanelShell(cardX, panelTop, panelH);
 
         const tabY = panelTop + SCORE_HDR_H / 2;
-        const trophy = this.scene.add.image(cardX - 50, tabY, CHECKOUT_TEXTURE_KEYS.trophy);
-        trophy.setDisplaySize(26, 26);
+        const trophy = this.scene.add.image(cardX - 52, tabY, CHECKOUT_TEXTURE_KEYS.trophy);
+        trophy.setDisplaySize(28, 28);
         this.add(trophy);
 
-        this.add(this.scene.add.text(cardX + 2, tabY, 'SCORE', {
+        this.add(this.scene.add.text(cardX + 4, tabY, 'SCORE', {
             fontFamily: config.fonts.text,
-            fontSize: '16px',
+            fontSize: '18px',
             fontStyle: 'bold',
             color: C_WHITE,
         }).setOrigin(0.5, 0.5));
 
-        const ringY = panelTop + SCORE_HDR_H + 70;
-        const ringSize = 112;
+        const ringY = panelTop + SCORE_HDR_H + 78;
+        const ringSize = 126;
         const ringBase = this.scene.add.image(cardX, ringY, CHECKOUT_TEXTURE_KEYS.progressBase);
         ringBase.setDisplaySize(ringSize, ringSize);
         this.add(ringBase);
@@ -220,9 +220,9 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
             },
         });
 
-        const numT = this.scene.add.text(cardX, ringY - 8, '0', {
+        const numT = this.scene.add.text(cardX, ringY - 9, '0', {
             fontFamily: config.fonts.text,
-            fontSize: '48px',
+            fontSize: '52px',
             fontStyle: 'bold',
             color: C_NAVY,
         }).setOrigin(0.5, 0.5);
@@ -237,21 +237,21 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
             onUpdate: () => numT.setText(`${Math.round(ctr.n)}`),
         });
 
-        this.add(this.scene.add.text(cardX, ringY + 20, `of ${total} items`, {
+        this.add(this.scene.add.text(cardX, ringY + 23, `of ${total} items`, {
             fontFamily: config.fonts.text,
-            fontSize: '14px',
+            fontSize: '16px',
             color: C_MUTED,
         }).setOrigin(0.5, 0.5));
 
-        const matchedY = ringY + ringSize / 2 + 16;
+        const matchedY = ringY + ringSize / 2 + 20;
         this.add(this.scene.add.text(cardX, matchedY, 'items matched', {
             fontFamily: config.fonts.text,
-            fontSize: '14px',
+            fontSize: '16px',
             color: C_MUTED,
         }).setOrigin(0.5, 0));
 
-        const starY = matchedY + 30;
-        const starGap = 32;
+        const starY = matchedY + 36;
+        const starGap = 36;
         for (let i = 0; i < 3; i++) {
             const starKey = i < starCount
                 ? CHECKOUT_TEXTURE_KEYS.starFilled
@@ -270,22 +270,22 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
         }
 
         const panelBottom = panelTop + panelH;
-        const savedY = panelBottom - 22;
-        const spentY = panelBottom - 54;
-        const totalLabelY = panelBottom - 78;
-        const sepY = panelBottom - 108;
+        const savedY = panelBottom - 26;
+        const spentY = panelBottom - 62;
+        const totalLabelY = panelBottom - 90;
+        const sepY = panelBottom - 124;
 
         const dotted = this.scene.add.image(cardX, sepY, CHECKOUT_TEXTURE_KEYS.dottedLine);
         dotted.setDisplaySize(LEFT_W - 40, 8);
         this.add(dotted);
 
-        const aed = this.scene.add.image(cardX - 64, totalLabelY, CHECKOUT_TEXTURE_KEYS.aedIcon);
-        aed.setDisplaySize(18, 18);
+        const aed = this.scene.add.image(cardX - 68, totalLabelY, CHECKOUT_TEXTURE_KEYS.aedIcon);
+        aed.setDisplaySize(20, 20);
         this.add(aed);
 
-        this.add(this.scene.add.text(cardX - 42, totalLabelY, 'TOTAL SPENT', {
+        this.add(this.scene.add.text(cardX - 44, totalLabelY, 'TOTAL SPENT', {
             fontFamily: config.fonts.text,
-            fontSize: '12px',
+            fontSize: '14px',
             fontStyle: 'bold',
             color: C_MUTED,
         }).setOrigin(0, 0.5));
@@ -293,7 +293,7 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
         const spentStr = budget > 0 ? `AED ${cartTotal} / AED ${budget}` : `AED ${cartTotal}`;
         this.add(this.scene.add.text(cardX, spentY, spentStr, {
             fontFamily: config.fonts.text,
-            fontSize: '20px',
+            fontSize: '23px',
             fontStyle: 'bold',
             color: overBudget ? C_RED : C_NAVY,
         }).setOrigin(0.5, 0.5));
@@ -305,14 +305,14 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
             const noteColor = overBudget ? C_RED : C_GREEN;
 
             if (!overBudget) {
-                const gift = this.scene.add.image(cardX - 64, savedY, CHECKOUT_TEXTURE_KEYS.giftIcon);
-                gift.setDisplaySize(20, 20);
+                const gift = this.scene.add.image(cardX - 68, savedY, CHECKOUT_TEXTURE_KEYS.giftIcon);
+                gift.setDisplaySize(22, 22);
                 this.add(gift);
             }
 
-            this.add(this.scene.add.text(cardX - (overBudget ? 0 : 42), savedY, noteStr, {
+            this.add(this.scene.add.text(cardX - (overBudget ? 0 : 44), savedY, noteStr, {
                 fontFamily: config.fonts.text,
-                fontSize: '14px',
+                fontSize: '16px',
                 fontStyle: 'bold',
                 color: noteColor,
             }).setOrigin(overBudget ? 0.5 : 0, 0.5));
@@ -329,20 +329,20 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
 
         this._drawListPanelShell(panelX, panelTop, panelH);
 
-        const innerPad = 12;
+        const innerPad = 18;
         const innerLeft = panelX - RIGHT_W / 2 + innerPad;
         const innerW = RIGHT_W - innerPad * 2;
         const hdrY = panelTop + LIST_HDR_H / 2;
 
-        const colIcon = innerLeft + 26;
-        const colName = innerLeft + 58;
-        const colReq = innerLeft + innerW * 0.56;
+        const colIcon = innerLeft + 30;
+        const colName = innerLeft + 66;
+        const colReq = innerLeft + innerW * 0.55;
         const colCart = innerLeft + innerW * 0.72;
-        const colStatus = innerLeft + innerW * 0.88;
+        const colStatus = innerLeft + innerW * 0.90;
 
         const hdrStyle = {
             fontFamily: config.fonts.text,
-            fontSize: '13px',
+            fontSize: '16px',
             fontStyle: 'bold',
             color: C_WHITE,
         };
@@ -351,13 +351,19 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
         this.add(this.scene.add.text(colCart, hdrY, 'IN CART', hdrStyle).setOrigin(1, 0.5));
         this.add(this.scene.add.text(colStatus, hdrY, 'STATUS', hdrStyle).setOrigin(0.5, 0.5));
 
-        const summaryH = 46;
-        const summaryY = panelTop + panelH - summaryH - 10;
-        const rowTop = panelTop + LIST_HDR_H + 8;
-        const rowGap = 0;
+        const summaryH = 52;
+        const summaryGap = 16;
+        const summaryY = panelTop + panelH - summaryH - summaryGap;
+        const rowsPad = 14;
+        const rowTop = panelTop + LIST_HDR_H + rowsPad;
         const rowCount = Math.max(items.length, 1);
-        const listBodyH = summaryY - 6 - rowTop;
-        const rowH = Math.min(52, listBodyH / rowCount - rowGap);
+        const listBodyH = summaryY - rowsPad - rowTop;
+
+        // Rows share the available height evenly (clamped) instead of packing to a fixed
+        // size and leaving a large dead gap above the summary box when there are few items.
+        const rowH = Phaser.Math.Clamp(listBodyH / rowCount, 50, 100);
+        const usedH = rowH * rowCount;
+        const rowsTop = rowTop + Math.max(0, (listBodyH - usedH) / 2);
 
         const listBody = this.scene.add.graphics();
         listBody.fillStyle(0xffffff, 1);
@@ -365,7 +371,7 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
         this.add(listBody);
 
         items.forEach((entry, i) => {
-            const rowCY = rowTop + i * (rowH + rowGap) + rowH / 2;
+            const rowCY = rowsTop + i * rowH + rowH / 2;
             this._drawRow(entry, rowCY, innerLeft, innerW, colIcon, colName, colReq, colCart, colStatus, rowH, i);
         });
 
@@ -392,7 +398,8 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
 
         const summaryT = this.scene.add.text(innerLeft + innerW / 2, summaryY + summaryH / 2, msg, {
             fontFamily: config.fonts.text,
-            fontSize: '16px',
+            fontSize: '18px',
+            fontStyle: 'bold',
             color: msgColor,
             align: 'center',
             wordWrap: { width: innerW - 24 },
@@ -443,14 +450,15 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
 
         const nameT = this.scene.add.text(colName, rowCY, formatItemName(entry), {
             fontFamily: config.fonts.text,
-            fontSize: '19px',
+            fontSize: '21px',
+            fontStyle: 'bold',
             color: C_NAVY,
         }).setOrigin(0, 0.5).setAlpha(0);
         this.add(nameT);
 
         const reqT = this.scene.add.text(colReq, rowCY, `x${required}`, {
             fontFamily: config.fonts.text,
-            fontSize: '19px',
+            fontSize: '21px',
             fontStyle: 'bold',
             color: C_NAVY,
         }).setOrigin(1, 0.5).setAlpha(0);
@@ -458,7 +466,7 @@ export default class CheckoutPanel extends Phaser.GameObjects.Container {
 
         const cartT = this.scene.add.text(colCart, rowCY, `x${inCart}`, {
             fontFamily: config.fonts.text,
-            fontSize: '19px',
+            fontSize: '21px',
             fontStyle: 'bold',
             color: done ? C_GREEN : C_ORANGE,
         }).setOrigin(1, 0.5).setAlpha(0);

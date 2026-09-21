@@ -388,6 +388,13 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         return [...this._items];
     }
 
+    /** Replaces the cart contents wholesale — used to sync from an authoritative API response. */
+    setItems (items) {
+        this._items = [...items];
+        this._refresh();
+        this._scrollToEnd(true);
+    }
+
     getItemCount () {
         return this._items.length;
     }

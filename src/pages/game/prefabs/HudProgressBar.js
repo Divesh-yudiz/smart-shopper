@@ -6,8 +6,8 @@ const TRACK_BORDER = 0x5a7a9a;
 const DEFAULT_FILL = 0x27ae60;
 const LABEL_COLOR = '#c8dce8';
 const VALUE_COLOR = '#ffffff';
-const LABEL_SIZE = 12;
-const LABEL_GAP = 6;
+const LABEL_SIZE = 15;
+const LABEL_GAP = 8;
 
 /** Total vertical space one meter row occupies (label + gap + bar). */
 export function hudMeterRowHeight (barH = 22) {
@@ -60,7 +60,7 @@ export default class HudProgressBar extends Phaser.GameObjects.Container {
 
         this._valueText = scene.add.text(width / 2, barY, '', {
             fontFamily: config.fonts.text,
-            fontSize: '14px',
+            fontSize: '17px',
             fontStyle: 'bold',
             color: VALUE_COLOR,
             stroke: '#0a1520',

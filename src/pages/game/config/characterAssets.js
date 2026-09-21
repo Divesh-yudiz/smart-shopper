@@ -1,9 +1,9 @@
 /**
- * Batch-imports all walk-cycle frames from assets/images/character/
+ * Batch-imports walk-cycle frames from assets/images/character/character-2/
  * via Vite's import.meta.glob so the bundler processes each PNG.
  */
 const _mods = import.meta.glob(
-    '../../../assets/images/character/*.png',
+    '../../../assets/images/character/character-2/*.png',
     { eager: true }
 );
 
@@ -11,7 +11,9 @@ const _mods = import.meta.glob(
 export const characterAssetPaths = Object.entries(_mods)
     .map(([filePath, mod]) => {
         const match = filePath.match(/(\d+)\.png$/);
-        return match ? { key: `char_walk_${match[1]}`, path: mod.default } : null;
+        return match
+            ? { key: `char_walk_${parseInt(match[1], 10)}`, path: mod.default }
+            : null;
     })
     .filter(Boolean)
     .sort((a, b) => {
@@ -21,8 +23,8 @@ export const characterAssetPaths = Object.entries(_mods)
 
 export const CHARACTER_FRAME_COUNT = characterAssetPaths.length;
 
-/** Standing / idle pose (14.png) — not part of the walk cycle. */
-export const IDLE_STAND_FRAME = 14;
+/** Standing / idle pose (walk_13.png) — not part of the walk cycle. */
+export const IDLE_STAND_FRAME = 13;
 export const IDLE_TEXTURE_KEY = `char_walk_${IDLE_STAND_FRAME}`;
 
 const WALK_ANIM_KEY = 'char_walk';
@@ -37,7 +39,7 @@ export function ensureCharacterWalkAnim (scene, frameRate = 24) {
 
     if (walkFrames.length === 0) return WALK_ANIM_KEY;
 
-    // Recreate when hot-reloading so frame 14 never stays in the cycle.
+    // Recreate when hot-reloading so frame 13 never stays in the cycle.
     if (scene.anims.exists(WALK_ANIM_KEY)) {
         scene.anims.remove(WALK_ANIM_KEY);
     }

@@ -109,7 +109,7 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         const idleKey = this._idleTextureKey();
         const firstWalkKey = characterAssetPaths.find(({ key }) => key !== idleKey)?.key ?? 'char_walk_1';
 
-        // Static idle layer (frame 14) — never tied to the walk animation system.
+        // Static idle layer (frame 13) — never tied to the walk animation system.
         this._idleImg = scene.add.image(0, 0, idleKey);
         this._idleImg.setOrigin(0.5, 1);
         this._idleImg.setScale(DISPLAY_H / this._idleImg.height);

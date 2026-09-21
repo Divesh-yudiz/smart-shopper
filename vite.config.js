@@ -9,5 +9,6 @@ export default defineConfig({
   },
   server: {
     port: 5000,
+    allowedHosts: ['verse-refurnish-dictation.ngrok-free.dev'],
   },
 })

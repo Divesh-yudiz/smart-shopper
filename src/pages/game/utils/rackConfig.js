@@ -11,7 +11,7 @@ const GRID_LAYOUT_KEYS = [
     'shelfHeightFactor', 'iconAspect', 'iconSlotFill', 'spreadFullBay', 'rowSidePad', 'rowXAdjust', 'shelfPlankOffset',
 ];
 
-function resolveGridValue (rack, grid, key) {
+function resolveGridValue(rack, grid, key) {
     return rack[key] ?? grid[key] ?? MARKET_LAYOUT[key] ?? 0;
 }
 
@@ -21,7 +21,7 @@ function resolveGridValue (rack, grid, key) {
  * @param {number} [fallback]
  * @returns {number[]}
  */
-export function normalizeRowBottomSpaces (rowBottomSpace, shelfRows, fallback = 0) {
+export function normalizeRowBottomSpaces(rowBottomSpace, shelfRows, fallback = 0) {
     if (typeof rowBottomSpace === 'number') {
         return Array.from({ length: shelfRows }, () => rowBottomSpace);
     }
@@ -36,11 +36,58 @@ export function normalizeRowBottomSpaces (rowBottomSpace, shelfRows, fallback = 
     return Array.from({ length: shelfRows }, () => fallback);
 }
 
-function resolveRowBottomSpace (rack, grid) {
+function resolveRowBottomSpace(rack, grid) {
     return rack.rowBottomSpace ?? grid.rowBottomSpace ?? MARKET_LAYOUT.rowBottomSpace ?? 0;
 }
 
-function resolveRackGridLayout (rack) {
+
+// Input: path = "a.b.c", value = 42
+// Output: { a: { b: { c: 42 } } }
+
+// function resolvePathValue(path, value) {
+//     let keys = path.split(".");
+//     let result = value;
+
+//     for (let i = keys.length - 1; i >= 0; i--) {
+//         result = { [keys[i]]: result };
+//     }
+//     return result;
+// }
+
+// console.log(resolvePathValue("a.b.c", 42));
+
+// Input: "3[a]2[bc]"
+// Output: "aaabcbc"
+
+function decodeString(s) {
+    const stack = [];
+
+    for (const ch of s) {
+        if (ch !== "]") {
+            stack.push(ch);
+        } else {
+
+            // Get the string inside []
+            let str = "";
+            while (stack[stack.length - 1] !== "[") {
+                str = stack.pop() + str;
+            }
+            stack.pop(); // Remove '['
+
+            // Get the number
+            let num = "";
+            while (stack.length && !isNaN(stack[stack.length - 1])) {
+                num = stack.pop() + num;
+            }
+            stack.push(str.repeat(Number(num)));
+        }
+    }
+    return stack.join("");
+}
+
+console.log(decodeString("3[a]2[bc]"));
+
+function resolveRackGridLayout(rack) {
     const grid = pickGridLayout(rack.layout);
     const resolved = {
         productsPerRow: 4,
@@ -70,18 +117,18 @@ function resolveRackGridLayout (rack) {
     return resolved;
 }
 
-function pickGridLayout (layout = {}) {
+function pickGridLayout(layout = {}) {
     return Object.fromEntries(
         GRID_LAYOUT_KEYS.filter((key) => layout[key] !== undefined).map((key) => [key, layout[key]])
     );
 }
 
 /** Reads ceilingHeight from rack root (preferred) or legacy placement inside layout */
-export function resolveRackCeilingHeight (rack, defaultCeilingHeight) {
+export function resolveRackCeilingHeight(rack, defaultCeilingHeight) {
     return rack.ceilingHeight ?? rack.layout?.ceilingHeight ?? defaultCeilingHeight;
 }
 
-function freezeRack (rack) {
+function freezeRack(rack) {
     const gridLayout = resolveRackGridLayout(rack);
     return Object.freeze({
         ...rack,
@@ -111,7 +158,7 @@ export { MARKET_LAYOUT, MARKET_RACKS, MARKET_RACK_ORDER } from '../config/market
 export const MARKET_LAYOUT_FROZEN = Object.freeze({ ...MARKET_LAYOUT });
 
 /** @returns {typeof MARKET_LAYOUT_FROZEN & { rackStep: number }} */
-export function getMarketLayout () {
+export function getMarketLayout() {
     const layout = MARKET_LAYOUT_FROZEN;
     return {
         ...layout,
@@ -120,35 +167,35 @@ export function getMarketLayout () {
 }
 
 /** @returns {string[]} ordered rack ids */
-export function getRackOrder () {
+export function getRackOrder() {
     return [...MARKET_CONFIG.rackOrder];
 }
 
 /** @param {string} rackId */
-export function getRack (rackId) {
+export function getRack(rackId) {
     return MARKET_CONFIG.racks[rackId] ?? null;
 }
 
 /** @param {number} index */
-export function getRackByIndex (index) {
+export function getRackByIndex(index) {
     const rackId = MARKET_CONFIG.rackOrder[index];
     return rackId ? { id: rackId, ...MARKET_CONFIG.racks[rackId] } : null;
 }
 
 /** @param {string} rackId @returns {object[]} product list */
-export function getRackProducts (rackId) {
+export function getRackProducts(rackId) {
     const rack = getRack(rackId);
     return rack ? Object.values(rack.products) : [];
 }
 
 /** @param {string} rackId @param {string} productKey */
-export function getProduct (rackId, productKey) {
+export function getProduct(rackId, productKey) {
     const rack = getRack(rackId);
     return rack?.products[productKey] ?? null;
 }
 
 /** @param {string} rackId @param {number} productId */
-export function getProductById (rackId, productId) {
+export function getProductById(rackId, productId) {
     const products = getRackProducts(rackId);
     return products.find((p) => p.id === productId) ?? null;
 }
@@ -157,7 +204,7 @@ export function getProductById (rackId, productId) {
  * Builds the rack array consumed by MarketView / ProductRack.
  * @param {string[]} [rackIds] - subset of rack ids; defaults to full rackOrder
  */
-export function getRacksForView (rackIds = getRackOrder()) {
+export function getRacksForView(rackIds = getRackOrder()) {
     return rackIds
         .map((id) => {
             const rack = getRack(id);
@@ -178,7 +225,7 @@ export function getRacksForView (rackIds = getRackOrder()) {
 }
 
 /** @param {number} ceilingHeight @param {ReturnType<getMarketLayout>} [layout] */
-export function getRackVerticalLayout (ceilingHeight, layout = getMarketLayout()) {
+export function getRackVerticalLayout(ceilingHeight, layout = getMarketLayout()) {
     const rackTopY =
         ceilingHeight + layout.labelTopPadding + layout.labelHeight + layout.labelRackGap + layout.contentOffsetY;
     const bannerOffsetY = layout.bannerOffsetY ?? 108;
@@ -195,7 +242,7 @@ export function getRackVerticalLayout (ceilingHeight, layout = getMarketLayout()
  * @param {string[]} [rackIds]
  * @returns {{ placements, contentWidth, scrollWidth, scrollStep }}
  */
-export function getRackPlacements (rackIds = getRackOrder()) {
+export function getRackPlacements(rackIds = getRackOrder()) {
     const layout = getMarketLayout();
     const racks = getRacksForView(rackIds);
     let x = layout.margin;

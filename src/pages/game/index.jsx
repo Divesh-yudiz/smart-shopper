@@ -10,10 +10,15 @@ function GamePlay() {
     const gameRef = useRef(null);
     useEffect(() => {
         let game;
+        let cancelled = false;
 
         // Wait for all @font-face fonts (including Cause) to finish loading
         // before creating the Phaser game, so canvas text uses the correct font.
+        // Guarded with `cancelled` because this resolves after React 18 StrictMode's
+        // dev-mode mount→cleanup→mount cycle — without it, two Game instances get
+        // created and stack in the same div.
         document.fonts.ready.then(() => {
+            if (cancelled) return;
             const gameConfig = {
                 type: Phaser.AUTO,
                 width: config.width,
@@ -36,6 +41,7 @@ function GamePlay() {
         });
 
         return () => {
+            cancelled = true;
             game?.destroy(true);
         };
     }, []);

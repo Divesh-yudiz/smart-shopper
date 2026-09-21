@@ -7,15 +7,40 @@ import {
 import config from '../utils/config.js';
 
 const PANEL_NATIVE_W = 455;
-const PANEL_NATIVE_H = 153;
 const PANEL_DISPLAY_W = 415;
+
+// Header (title + count badge) reserves this much native height before the item rows start.
+const HEADER_H = 56;
+const ROW_PAD_TOP = 2;
+const ROW_H = 28;
+const ROW_PAD_BOTTOM = 12;
+const LIST_COLUMNS = 2;
+const LIST_ROWS = Math.ceil(SHOPPING_LIST_SLOT_COUNT / LIST_COLUMNS);
+const PANEL_NATIVE_H = HEADER_H + ROW_PAD_TOP + LIST_ROWS * ROW_H + ROW_PAD_BOTTOM;
 
 const TITLE_COLOR = '#1e4a7a';
 const PROGRESS_COLOR = '#1e4a7a';
+const DIVIDER_COLOR = 0xd9dde3;
 
 /**
  * Top-center shopping list HUD (reference layout).
  */
+
+let array = [1, 5, 6, 7, 4, 6, 8, 1, 6, 4, 5]
+let k = 6;
+
+
+function removeItems(array, k) {
+    for (let i = 0; i < array.length; i++) {
+        if (array[i] !== k) {
+            array[i - 1] = array[i];
+        }
+    }
+    return array.slice(0, array.length - 1);
+}
+
+console.log(removeItems(array, k));
+
 export default class ShoppingListPanel extends Phaser.GameObjects.Container {
     constructor(scene, x, y, { displayWidth = PANEL_DISPLAY_W, entries = null } = {}) {
         super(scene, x, y);
@@ -45,7 +70,6 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         this.add(panel);
 
         const headerY = 26 * scale;
-        const rowY = 78 * scale;
 
         const clipIcon = this.scene.add.image(-this._panelW / 2 + 36 * scale, headerY - 4 * scale, UI_TEXTURE_KEYS.listIcon);
         clipIcon.setOrigin(0.5, 0.5);
@@ -54,7 +78,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
 
         this._titleText = this.scene.add.text(-8 * scale, headerY, 'SHOPPING LIST', {
             fontFamily: config.fonts.text,
-            fontSize: `${Math.round(19 * scale)}px`,
+            fontSize: `${Math.round(22 * scale)}px`,
             fontStyle: 'bold',
             color: TITLE_COLOR,
             align: 'center',
@@ -63,9 +87,9 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         this.add(this._titleText);
 
         // Count-Base.png is a horizontal pill — keep wide aspect (not square)
-        const badgeH = 28 * scale;
-        const badgeW = 80 * scale;
-        const badgeX = 168 * scale;
+        const badgeH = 32 * scale;
+        const badgeW = 86 * scale;
+        const badgeX = 172 * scale;
         const badgeY = headerY;
         const badge = this.scene.add.image(badgeX, badgeY, UI_TEXTURE_KEYS.countBase);
         badge.setOrigin(0.5, 0.5);
@@ -74,7 +98,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
 
         this._progressBadgeText = this.scene.add.text(badgeX, badgeY, '0/6', {
             fontFamily: config.fonts.text,
-            fontSize: `${Math.round(16 * scale)}px`,
+            fontSize: `${Math.round(18 * scale)}px`,
             fontStyle: 'bold',
             color: '#ffffff',
             align: 'center',
@@ -82,72 +106,83 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         this._progressBadgeText.setOrigin(0.5, 0.5);
         this.add(this._progressBadgeText);
 
-        const padX = 36 * scale;
-        const slotsWidth = this._panelW - padX * 2;
-        const slotGap = 10 * scale;
-        const desiredRadius = 30 * scale;
-        const maxRadius =
-            (slotsWidth - (SHOPPING_LIST_SLOT_COUNT - 1) * slotGap) /
-            (2 * SHOPPING_LIST_SLOT_COUNT);
-        const slotRadius = Math.min(desiredRadius, maxRadius);
-        const slotStep = 2 * slotRadius + slotGap;
-        const rowWidth =
-            SHOPPING_LIST_SLOT_COUNT * 2 * slotRadius +
-            (SHOPPING_LIST_SLOT_COUNT - 1) * slotGap;
-        const firstX = -rowWidth / 2 + slotRadius;
+        const padX = 26 * scale;
+        const colGap = 22 * scale;
+        const rowsStartY = (HEADER_H + ROW_PAD_TOP) * scale;
+        const rowH = ROW_H * scale;
+        const colWidth = (this._panelW - padX * 2 - colGap * (LIST_COLUMNS - 1)) / LIST_COLUMNS;
+        const bulletRadius = 6 * scale;
 
         for (let i = 0; i < SHOPPING_LIST_SLOT_COUNT; i++) {
-            const sx = firstX + i * slotStep;
-            const slotContainer = this.scene.add.container(sx, rowY);
-            this.add(slotContainer);
+            const col = Math.floor(i / LIST_ROWS);
+            const row = i % LIST_ROWS;
+            const colLeft = -this._panelW / 2 + padX + col * (colWidth + colGap);
+            const bulletX = colLeft + bulletRadius;
+            const labelX = bulletX + bulletRadius + 9 * scale;
+            const qtyX = colLeft + colWidth;
 
-            const circle = this.scene.add.graphics();
-            circle.fillStyle(0xd8dce3, 1);
-            circle.fillCircle(0, 0, slotRadius);
-            circle.lineStyle(2, 0xa8b0bc, 1);
-            circle.strokeCircle(0, 0, slotRadius);
-            slotContainer.add(circle);
+            const rowCenterY = rowsStartY + (row + 0.5) * rowH;
+            const rowContainer = this.scene.add.container(0, rowCenterY);
+            this.add(rowContainer);
 
-            const productImg = this.scene.add.image(0, 0, UI_TEXTURE_KEYS.listIcon);
-            productImg.setOrigin(0.5, 0.5);
-            productImg.setVisible(false);
-            slotContainer.add(productImg);
+            const bullet = this.scene.add.graphics();
+            bullet.setPosition(bulletX, 0);
+            rowContainer.add(bullet);
 
-            const checkGfx = this.scene.add.graphics();
-            checkGfx.setVisible(false);
-            slotContainer.add(checkGfx);
-
-            const progressText = this.scene.add.text(0, slotRadius + 8 * scale, '', {
+            const labelText = this.scene.add.text(labelX, 0, '', {
                 fontFamily: config.fonts.text,
-                fontSize: `${Math.round(16 * scale)}px`,
+                fontSize: `${Math.round(17 * scale)}px`,
+                fontStyle: 'bold',
+                color: TITLE_COLOR,
+                align: 'left',
+            });
+            labelText.setOrigin(0, 0.5);
+            rowContainer.add(labelText);
+
+            const progressText = this.scene.add.text(qtyX, 0, '', {
+                fontFamily: config.fonts.text,
+                fontSize: `${Math.round(17 * scale)}px`,
                 fontStyle: 'bold',
                 color: PROGRESS_COLOR,
-                align: 'center',
+                align: 'right',
             });
-            progressText.setOrigin(0.5, 0);
-            slotContainer.add(progressText);
+            progressText.setOrigin(1, 0.5);
+            rowContainer.add(progressText);
 
-            this._slotViews.push({
-                slotContainer,
-                circle,
-                productImg,
-                checkGfx,
-                progressText,
-                slotRadius,
-            });
+            const divider = this.scene.add.graphics();
+            if (row < LIST_ROWS - 1) {
+                divider.lineStyle(1, DIVIDER_COLOR, 1);
+                divider.beginPath();
+                divider.moveTo(colLeft, rowH / 2);
+                divider.lineTo(colLeft + colWidth, rowH / 2);
+                divider.strokePath();
+            }
+            rowContainer.add(divider);
+
+            const view = { rowContainer, bullet, labelText, progressText, bulletRadius };
+            this._drawBullet(view, false);
+            this._slotViews.push(view);
         }
     }
 
-    _drawCheckmark(graphics, radius) {
-        graphics.clear();
-        graphics.fillStyle(0x2ecc71, 1);
-        graphics.fillCircle(radius * 0.55, radius * 0.55, radius * 0.32);
-        graphics.lineStyle(Math.max(2, radius * 0.12), 0xffffff, 1);
-        graphics.beginPath();
-        graphics.moveTo(radius * 0.38, radius * 0.55);
-        graphics.lineTo(radius * 0.5, radius * 0.68);
-        graphics.lineTo(radius * 0.72, radius * 0.42);
-        graphics.strokePath();
+    _drawBullet(view, complete) {
+        const { bullet, bulletRadius } = view;
+        bullet.clear();
+        if (complete) {
+            bullet.fillStyle(0x2ecc71, 1);
+            bullet.fillCircle(0, 0, bulletRadius);
+            bullet.lineStyle(Math.max(1, bulletRadius * 0.3), 0xffffff, 1);
+            bullet.beginPath();
+            bullet.moveTo(-bulletRadius * 0.45, 0);
+            bullet.lineTo(-bulletRadius * 0.1, bulletRadius * 0.4);
+            bullet.lineTo(bulletRadius * 0.5, -bulletRadius * 0.45);
+            bullet.strokePath();
+        } else {
+            bullet.fillStyle(0xd8dce3, 1);
+            bullet.fillCircle(0, 0, bulletRadius);
+            bullet.lineStyle(1.5, 0xa8b0bc, 1);
+            bullet.strokeCircle(0, 0, bulletRadius);
+        }
     }
 
     /** Returns a shallow copy of the current entries (for checkout comparison). */
@@ -232,36 +267,20 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         this._slotViews.forEach((view, i) => {
             const entry = this._entries[i];
             if (!entry) {
-                view.productImg.setVisible(false);
-                view.checkGfx.setVisible(false);
-                view.progressText.setText('');
+                view.rowContainer.setVisible(false);
                 return;
             }
+            view.rowContainer.setVisible(true);
 
             const complete = entry.collected >= entry.required;
+            const label = entry.label ?? entry.key ?? '';
+            view.labelText.setText(label);
             view.progressText.setText(`${entry.collected}/${entry.required}`);
 
-            if (entry.textureKey && this.scene.textures.exists(entry.textureKey)) {
-                view.productImg.setTexture(entry.textureKey);
-                view.productImg.setVisible(true);
-                const isFruit = entry.textureKey?.startsWith('product_fruits_') &&
-                    !entry.textureKey?.includes('tomato');
-                const max = view.slotRadius * (isFruit ? 2.0 : 1.35);
-                const tex = view.productImg.texture.getSourceImage();
-                const tw = tex?.width ?? max;
-                const th = tex?.height ?? max;
-                const s = Math.min(max / tw, max / th);
-                view.productImg.setScale(s);
-            } else {
-                view.productImg.setVisible(false);
-            }
-
-            if (complete) {
-                this._drawCheckmark(view.checkGfx, view.slotRadius);
-                view.checkGfx.setVisible(true);
-            } else {
-                view.checkGfx.setVisible(false);
-            }
+            const textColor = complete ? '#1b7a3d' : TITLE_COLOR;
+            view.labelText.setColor(textColor);
+            view.progressText.setColor(complete ? '#1b7a3d' : PROGRESS_COLOR);
+            this._drawBullet(view, complete);
         });
     }
 }
