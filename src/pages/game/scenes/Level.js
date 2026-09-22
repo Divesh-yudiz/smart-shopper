@@ -12,7 +12,6 @@ import CheckoutPanel from "../prefabs/popups/CheckoutPanel.js";
 import { getRackByIndex, getRacksForView, getRackPlacements } from "../utils/rackConfig.js";
 import { UI_TEXTURE_KEYS } from "../config/componentAssets.js";
 import { patchRacksWithApiPrices, buildShoppingListEntries, buildCartItemsFromApi, addToCart, removeFromCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId, setItemVariants, getItemVariants, getItemId, fetchItemVariants } from "../../../utils/gameApi.js";
-import MissionPopup from "../prefabs/popups/MissionPopup.js";
 import ProductInfoPopup from "../prefabs/popups/ProductInfoPopup.js";
 import WalkingCharacter from "../prefabs/WalkingCharacter.js";
 import { buildEcoVariantPair } from "../config/ecoConfig.js";
@@ -370,24 +369,8 @@ class Level extends Phaser.Scene {
             // Saved state had no valid gameConfig (API had failed) — discard and use Preload result.
             if (saved) this._clearSavedState();
 
-            this.editorCreate(gameConfig, null, { pauseTimer: !!gameConfig });
-            if (gameConfig?.shoppingList?.length) this._showMissionPopup(gameConfig);
+            this.editorCreate(gameConfig, null);
         }
-    }
-
-    _showMissionPopup(gameConfig) {
-        this.oMissionPopup = new MissionPopup(this);
-        this.oMissionPopup.open({
-            shoppingList: gameConfig.shoppingList ?? [],
-            title: gameConfig.category ?? '',
-            description: gameConfig.description ?? '',
-            missionOrder: gameConfig.missionOrder ?? 0,
-            budget: gameConfig.budget ?? 0,
-            timeLimit: gameConfig.timeLimit ?? 0,
-            ecoLimit: gameConfig.ecoMeterMax ?? 100,
-            onStart: () => this.oTimer?.resume(),
-            onChooseAnother: () => this._chooseAnotherMission(),
-        });
     }
 
     _chooseAnotherMission() {

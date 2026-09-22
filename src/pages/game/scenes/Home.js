@@ -2,61 +2,72 @@ import Phaser from 'phaser';
 import { HOME_TEXTURE_KEYS } from '../config/homeAssets.js';
 import HomeInfoPopup from '../prefabs/HomeInfoPopup.js';
 import MissionSelectPopup from '../prefabs/popups/MissionSelectPopup.js';
+import MissionPopup from '../prefabs/popups/MissionPopup.js';
 import config from '../utils/config.js';
 import { fetchMissionBrief, buildGameConfigFromMission } from '../../../utils/gameApi.js';
 import { LOCAL_GAME_ID, LOCAL_MISSIONS } from '../config/missionsConfig.js';
 
 const SAVE_KEY = 'ss_gameState';
 
-const C_CREAM = 0xfef9e4;
-const C_ORANGE = 0xf5a623;
-const C_GREEN = 0x27ae60;
-const C_GREEN_H = 0x219a52;
-const C_WHITE = 0xffffff;
-const C_CARD = 0xffffff;
-const C_CARD_BD = 0xe8d5a0;
-const C_HOW_BG = 0xfff6df;
-
 const T_NAVY = '#1e3a5f';
-const T_MUTED = '#7c5a2e';
+const T_MUTED = '#4a6280';
 const T_WHITE = '#ffffff';
-const T_ORANGE = '#b06010';
-const T_GREEN = '#1a7a45';
+const T_CARD_SUB = '#1e3a5f';
 
 const HOW_STEPS = [
-    { n: '1', title: 'Find your items', sub: 'Check the list and hunt them down!' },
-    { n: '2', title: 'Pick the smart one', sub: 'Look at the price AND the planet.' },
-    { n: '3', title: 'Beat the clock', sub: 'Watch coins, eco, and time!' },
+    {
+        panel: 'p2',
+        dot: 'greenDot',
+        icon: 'followListIcon',
+        n: '1',
+        title: 'Follow List!',
+        sub: 'Find everything you need.',
+    },
+    {
+        panel: 'p3',
+        dot: 'bDot',
+        icon: 'productIcon',
+        n: '2',
+        title: 'Compare Products',
+        sub: 'Check price and Eco Impact.',
+    },
+    {
+        panel: 'p4',
+        dot: 'pDot',
+        icon: 'trackIcon',
+        n: '3',
+        title: 'Stay on Track',
+        sub: 'Balance Coin, Eco and Time.',
+    },
 ];
 
 /**
- * Start screen — wireframe layout with the Smart Shopper cream/orange theme.
+ * Start screen — Artboard home layout. All x / y / sizes are fractions of
+ * the current game width and height so the screen stays responsive.
  */
 export default class Home extends Phaser.Scene {
-    constructor () {
+    constructor() {
         super({ key: 'Home' });
     }
 
-    create () {
+    create() {
         this._starting = false;
         this._missionsData = null;
         sessionStorage.removeItem('ss_inGame');
         sessionStorage.removeItem(SAVE_KEY);
 
-        const bg = this.add.image(config.centerX, config.centerY, HOME_TEXTURE_KEYS.bgBlur);
-        bg.setDisplaySize(config.width, config.height);
-
-        const wash = this.add.rectangle(config.centerX, config.centerY, config.width, config.height, C_CREAM, 0.55);
-        wash.setDepth(0);
-
-        this._buildHeader();
-        this._buildHero();
-        this._buildHowItWorks();
+        this._root = this.add.container(0, 0);
+        this._paint();
 
         this._infoPopup = new HomeInfoPopup(this);
         this._missionPopup = new MissionSelectPopup(this);
+        this._briefPopup = new MissionPopup(this);
         this._setupInput();
         this._updateChallengeLink(LOCAL_MISSIONS.length);
+
+        this.scale.on('resize', this._onResize, this);
+        this.events.once('shutdown', this._teardownResize, this);
+        this.events.once('destroy', this._teardownResize, this);
 
         const canvas = this.game.canvas;
         if (canvas) {
@@ -65,248 +76,252 @@ export default class Home extends Phaser.Scene {
         }
     }
 
-    _buildHeader () {
-        this._pillButton(200, 56, 260, 48, '←  Back to Dashboard', {
-            fill: C_WHITE,
-            border: C_ORANGE,
-            color: T_ORANGE,
-            onClick: () => this._leaveToDashboard(),
-        });
-
-        const info = this.add.image(config.width - 72, 56, HOME_TEXTURE_KEYS.infoButton);
-        info.setDisplaySize(56, 56);
-        info.setInteractive({ useHandCursor: true });
-        info.on('pointerup', () => this._toggleInfo());
+    _onResize() {
+        if (!this._root) return;
+        this.tweens.killTweensOf(this._root.list);
+        this._root.removeAll(true);
+        this._paint();
+        this._updateChallengeLink(LOCAL_MISSIONS.length);
     }
 
-    _buildHero () {
-        this._drawSparkles(config.centerX, 300);
+    _teardownResize() {
+        this.scale.off('resize', this._onResize, this);
+    }
 
-        const logo = this.add.image(config.centerX, 318, HOME_TEXTURE_KEYS.logo);
-        const logoW = 600;
-        const logoScale = logoW / logo.width;
-        logo.setDisplaySize(logoW, logo.height * logoScale);
+    /** Positions and sizes as fractions of the live game width / height. */
+    _m() {
+        const W = this.scale.width;
+        const H = this.scale.height;
+        const s = Math.min(W / 1920, H / 1080);
+        return {
+            W,
+            H,
+            s,
+            cx: W * 0.5,
+            cy: H * 0.5,
+            x: (pct) => W * pct,
+            y: (pct) => H * pct,
+            fs: (px) => Math.round(px * s),
+        };
+    }
+
+    _fitW(img, displayW) {
+        img.setDisplaySize(displayW, displayW * (img.height / img.width));
+        return img;
+    }
+
+    /** Cause's space glyph is near-zero width — use an en-space so words stay readable. */
+    _copy(s) {
+        return String(s).replace(/ /g, '\u2002');
+    }
+
+    _text(x, y, message, style) {
+        return this.add.text(x, y, this._copy(message), {
+            fontFamily: config.fonts.text,
+            letterSpacing: 0.4,
+            ...style,
+        });
+    }
+
+    _add(go) {
+        this._root.add(go);
+        return go;
+    }
+
+    _paint() {
+        const m = this._m();
+
+        const bg = this.add.image(m.cx, m.cy, HOME_TEXTURE_KEYS.bgBlur);
+        bg.setDisplaySize(m.W, m.H);
+        this._add(bg);
+
+        const glow = this.add.image(m.cx, m.cy, HOME_TEXTURE_KEYS.glow);
+        glow.setDisplaySize(m.W, m.H);
+        glow.setBlendMode(Phaser.BlendModes.ADD);
+        glow.setAlpha(0.6);
+        this._add(glow);
+
+        this._buildHeader(m);
+        this._buildHero(m);
+        this._buildHowItWorks(m);
+    }
+
+    _buildHeader(m) {
+        const backH = m.H * 0.078;
+        const back = this.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
+        this._fitW(back, backH * (back.width / back.height));
+        back.setInteractive({ useHandCursor: true });
+        back.on('pointerover', () => back.setScale(back.scaleX * 1.04, back.scaleY * 1.04));
+        back.on('pointerout', () => this._fitW(back, backH * (back.width / back.height)));
+        back.on('pointerup', () => this._leaveToDashboard());
+        this._add(back);
+
+        const infoS = m.H * 0.074;
+        const info = this.add.image(m.x(0.948), m.y(0.058), HOME_TEXTURE_KEYS.infoButton);
+        info.setDisplaySize(infoS, infoS);
+        info.setInteractive({ useHandCursor: true });
+        info.on('pointerover', () => info.setDisplaySize(infoS * 1.06, infoS * 1.06));
+        info.on('pointerout', () => info.setDisplaySize(infoS, infoS));
+        info.on('pointerup', () => this._toggleInfo());
+        this._add(info);
+    }
+
+    _buildHero(m) {
+        const logoWrap = this.add.container(m.cx, m.y(0.268));
+        const logo = this.add.image(0, 0, HOME_TEXTURE_KEYS.logo);
+        this._fitW(logo, m.W * 0.30);
+        logoWrap.add(logo);
+        this._add(logoWrap);
+
         this.tweens.add({
-            targets: logo,
-            y: logo.y - 8,
+            targets: logoWrap,
+            y: logoWrap.y - m.H * 0.008,
             duration: 1400,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut',
         });
 
-        this.add.text(config.centerX, 522, 'Ready to shop like a hero?', {
-            fontFamily: config.fonts.text,
-            fontSize: '40px',
+        this._add(this._text(m.cx, m.y(0.468), 'Ready to Shop Smart?', {
+            fontSize: `${m.fs(50)}px`,
             fontStyle: 'bold',
             color: T_NAVY,
-            stroke: '#ffffff',
-            strokeThickness: 5,
-        }).setOrigin(0.5, 0.5);
-
-        this.add.text(config.centerX, 568, 'Grab your list, pick the smart stuff, and beat the clock!', {
-            fontFamily: config.fonts.text,
-            fontSize: '24px',
-            fontStyle: 'bold',
-            color: T_MUTED,
-            align: 'center',
-            wordWrap: { width: 1000 },
-        }).setOrigin(0.5, 0.5);
-
-        this._selectBtn = this._pillButton(config.centerX, 650, 420, 76, "Let's Go Shopping!  🚀", {
-            fill: C_GREEN,
-            hoverFill: C_GREEN_H,
-            color: T_WHITE,
-            fontSize: '28px',
-            bounce: true,
-            onClick: () => this._beginGame(),
-        });
-
-        this._challengeLink = this.add.text(config.centerX, 708, '5 fun missions are waiting for you!', {
-            fontFamily: config.fonts.text,
-            fontSize: '20px',
-            fontStyle: 'bold',
-            color: T_GREEN,
-        }).setOrigin(0.5, 0);
-        this._challengeUnderline = this._underline(this._challengeLink, C_GREEN);
-        this._challengeLink.setInteractive({ useHandCursor: true });
-        this._challengeLink.on('pointerup', () => this._beginGame());
-    }
-
-    _drawSparkles (cx, cy) {
-        const spots = [
-            [cx - 340, cy - 90], [cx + 350, cy - 70],
-            [cx - 300, cy + 80], [cx + 310, cy + 100],
-            [cx - 380, cy + 10], [cx + 390, cy - 10],
-        ];
-        spots.forEach(([x, y], i) => {
-            const star = this.add.text(x, y, '✦', {
-                fontSize: i % 2 ? '28px' : '22px',
-                color: '#f5a623',
-            }).setOrigin(0.5, 0.5);
-            this.tweens.add({
-                targets: star,
-                alpha: { from: 0.35, to: 1 },
-                scale: { from: 0.85, to: 1.15 },
-                duration: 700 + i * 90,
-                yoyo: true,
-                repeat: -1,
-                ease: 'Sine.easeInOut',
-            });
-        });
-    }
-
-    _buildHowItWorks () {
-        const panelW = 1640;
-        const panelH = 220;
-        const x = (config.width - panelW) / 2;
-        const y = 800;
-
-        const g = this.add.graphics();
-        g.fillStyle(0x000000, 0.08);
-        g.fillRoundedRect(x + 4, y + 6, panelW, panelH, 22);
-        g.fillStyle(C_HOW_BG, 1);
-        g.fillRoundedRect(x, y, panelW, panelH, 22);
-        g.lineStyle(2, C_ORANGE, 0.5);
-        g.strokeRoundedRect(x, y, panelW, panelH, 22);
-
-        this.add.text(x + 40, y + panelH / 2 - 22, 'How do', {
-            fontFamily: config.fonts.text,
-            fontSize: '30px',
-            fontStyle: 'bold',
-            color: T_NAVY,
-        }).setOrigin(0, 0.5);
-        this.add.text(x + 40, y + panelH / 2 + 16, 'you win?', {
-            fontFamily: config.fonts.text,
-            fontSize: '30px',
-            fontStyle: 'bold',
-            color: T_ORANGE,
-        }).setOrigin(0, 0.5);
-
-        const cardsLeft = x + 380;
-        const cardW = 380;
-        const cardH = 148;
-        const gap = 24;
-        const cardY = y + (panelH - cardH) / 2;
-
-        HOW_STEPS.forEach((step, i) => {
-            this._drawStepCard(cardsLeft + i * (cardW + gap), cardY, cardW, cardH, step);
-        });
-    }
-
-    _drawStepCard (x, y, w, h, step) {
-        const g = this.add.graphics();
-        g.fillStyle(0x000000, 0.08);
-        g.fillRoundedRect(x + 3, y + 4, w, h, 18);
-        g.fillStyle(C_CARD, 1);
-        g.fillRoundedRect(x, y, w, h, 18);
-        g.lineStyle(3, C_ORANGE, 0.55);
-        g.strokeRoundedRect(x, y, w, h, 18);
-
-        g.fillStyle(C_ORANGE, 1);
-        g.fillCircle(x + w / 2, y + 36, 22);
-        this.add.text(x + w / 2, y + 36, step.n, {
-            fontFamily: config.fonts.text,
-            fontSize: '22px',
-            fontStyle: 'bold',
-            color: T_WHITE,
-        }).setOrigin(0.5, 0.5);
-
-        this.add.text(x + w / 2, y + 78, step.title, {
-            fontFamily: config.fonts.text,
-            fontSize: '22px',
-            fontStyle: 'bold',
-            color: T_NAVY,
-            align: 'center',
-            wordWrap: { width: w - 20 },
-        }).setOrigin(0.5, 0.5);
-
-        this.add.text(x + w / 2, y + 112, step.sub, {
-            fontFamily: config.fonts.text,
-            fontSize: '16px',
-            fontStyle: 'bold',
-            color: T_MUTED,
-            align: 'center',
-            wordWrap: { width: w - 24 },
-        }).setOrigin(0.5, 0.5);
-    }
-
-    _pillButton (cx, cy, w, h, label, { fill, hoverFill, border, color, fontSize = '18px', bounce = false, onClick }) {
-        const wrap = this.add.container(cx, cy);
-        const g = this.add.graphics();
-        const r = h / 2;
-        const draw = (hover) => {
-            g.clear();
-            g.fillStyle(0x000000, 0.18);
-            g.fillRoundedRect(-w / 2 + 3, -h / 2 + 5, w, h, r);
-            g.fillStyle(hover && hoverFill ? hoverFill : fill, 1);
-            g.fillRoundedRect(-w / 2, -h / 2, w, h, r);
-            g.fillStyle(0xffffff, 0.2);
-            g.fillRoundedRect(-w / 2 + 8, -h / 2 + 4, w - 16, h * 0.4, { tl: r, tr: r, bl: 0, br: 0 });
-            if (border) {
-                g.lineStyle(4, border, 1);
-                g.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
-            }
-        };
-        draw(false);
-        wrap.add(g);
-
-        wrap.add(this.add.text(0, 0, label, {
-            fontFamily: config.fonts.text,
-            fontSize,
-            fontStyle: 'bold',
-            color,
-            stroke: color === T_WHITE ? '#14532d' : undefined,
-            strokeThickness: color === T_WHITE ? 3 : 0,
         }).setOrigin(0.5, 0.5));
 
-        const hit = this.add.rectangle(0, 0, w, h, 0, 0);
-        hit.setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => {
-            draw(true);
-            if (!bounce) wrap.setScale(1.05);
-        });
-        hit.on('pointerout', () => {
-            draw(false);
-            if (!bounce) wrap.setScale(1);
-        });
-        hit.on('pointerup', onClick);
-        wrap.add(hit);
+        this._add(this._text(
+            m.cx,
+            m.y(0.522),
+            'Pick a mission, follow your shopping list and make smart choices along the way.',
+            {
+                fontSize: `${m.fs(28)}px`,
+                color: T_MUTED,
+                align: 'center',
+                wordWrap: { width: m.W * 0.76 },
+            },
+        ).setOrigin(0.5, 0.5));
 
-        if (bounce) {
-            this.tweens.add({
-                targets: wrap,
-                scaleX: 1.06,
-                scaleY: 1.06,
-                duration: 800,
-                yoyo: true,
-                repeat: -1,
-                ease: 'Sine.easeInOut',
-            });
-        }
-        return hit;
+        const btnW = m.W * 0.248;
+        const cta = this.add.container(m.cx, m.y(0.600));
+        const btn = this.add.image(0, 0, HOME_TEXTURE_KEYS.greenButton);
+        this._fitW(btn, btnW);
+        btn.setInteractive({ useHandCursor: true });
+        cta.add(btn);
+
+        const btnLabel = this._text(0, 0, 'Select Mission', {
+            fontSize: `${m.fs(38)}px`,
+            fontStyle: 'bold',
+            color: T_WHITE,
+        }).setOrigin(0.5, 0.5);
+        cta.add(btnLabel);
+
+        btn.on('pointerover', () => cta.setScale(1.05));
+        btn.on('pointerout', () => cta.setScale(1));
+        btn.on('pointerup', () => this._beginGame());
+        this._add(cta);
+
+        this.tweens.add({
+            targets: cta,
+            scaleX: 1.045,
+            scaleY: 1.045,
+            duration: 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+        });
+
+        this._challengeLink = this._text(m.cx, m.y(0.668), 'Choose from 5 shopping challenges.', {
+            fontSize: `${m.fs(24)}px`,
+            color: T_MUTED,
+        }).setOrigin(0.5, 0.5);
+        this._challengeLink.setInteractive({ useHandCursor: true });
+        this._challengeLink.on('pointerup', () => this._beginGame());
+        this._add(this._challengeLink);
     }
 
-    _underline (text, color) {
-        const g = this.add.graphics();
-        g.lineStyle(2, color, 0.9);
-        g.lineBetween(
-            text.x - text.width / 2,
-            text.y + text.height + 2,
-            text.x + text.width / 2,
-            text.y + text.height + 2,
-        );
-        return g;
+    _buildHowItWorks(m) {
+        const panelW = m.W * 0.951;
+        const panel = this.add.image(m.cx, m.y(0.848), HOME_TEXTURE_KEYS.uiBase);
+        this._fitW(panel, panelW);
+        this._add(panel);
+
+        const panelH = panel.displayHeight;
+        const panelX = m.cx - panelW / 2;
+        const panelY = panel.y - panelH / 2;
+
+        const padX = panelW * 0.018;
+        const padY = panelH * 0.13;
+        const gap = panelW * 0.012;
+        const innerW = panelW - padX * 2;
+        const cardW = (innerW - gap * 3) / 4;
+        const cardH = panelH - padY * 2;
+        const cardY = panelY + padY + cardH / 2;
+
+        const titleCard = this.add.image(panelX + padX + cardW / 2, cardY, HOME_TEXTURE_KEYS.p1);
+        titleCard.setDisplaySize(cardW, cardH);
+        this._add(titleCard);
+
+        this._add(this._text(titleCard.x, cardY, 'How Smart Shopper\nWorks?', {
+            fontSize: `${m.fs(36)}px`,
+            fontStyle: 'bold',
+            color: T_WHITE,
+            align: 'center',
+            lineSpacing: m.H * 0.01,
+            wordWrap: { width: cardW * 0.88 },
+        }).setOrigin(0.5, 0.5));
+
+        HOW_STEPS.forEach((step, i) => {
+            const cx = panelX + padX + (i + 1) * (cardW + gap) + cardW / 2;
+            this._drawStepCard(m, cx, cardY, cardW, cardH, step);
+        });
     }
 
-    _leaveToDashboard () {
+    _drawStepCard(m, cx, cy, w, h, step) {
+        const card = this.add.image(cx, cy, HOME_TEXTURE_KEYS[step.panel]);
+        card.setDisplaySize(w, h);
+        this._add(card);
+
+        const left = cx - w / 2;
+        const top = cy - h / 2;
+        const dotS = h * 0.20;
+        const dot = this.add.image(left + w * 0.12, top + h * 0.18, HOME_TEXTURE_KEYS[step.dot]);
+        dot.setDisplaySize(dotS, dotS);
+        this._add(dot);
+
+        this._add(this._text(dot.x, dot.y, step.n, {
+            fontSize: `${m.fs(22)}px`,
+            fontStyle: 'bold',
+            color: T_WHITE,
+        }).setOrigin(0.5, 0.5));
+
+        const iconS = h * 0.40;
+        const icon = this.add.image(cx, top + h * 0.30, HOME_TEXTURE_KEYS[step.icon]);
+        icon.setDisplaySize(iconS, iconS);
+        this._add(icon);
+
+        this._add(this._text(cx, top + h * 0.62, step.title, {
+            fontSize: `${m.fs(35)}px`,
+            fontStyle: 'bold',
+            color: T_NAVY,
+            align: 'center',
+            wordWrap: { width: w * 0.90 },
+        }).setOrigin(0.5, 0.5));
+
+        this._add(this._text(cx, top + h * 0.82, step.sub, {
+            fontSize: `${m.fs(23)}px`,
+            color: T_CARD_SUB,
+            align: 'center',
+            wordWrap: { width: w * 0.90 },
+        }).setOrigin(0.5, 0.5));
+    }
+
+    _leaveToDashboard() {
         if (window.parent && window.parent !== window) {
             window.parent.postMessage({ type: 'envhero:back-to-dashboard' }, '*');
         }
         if (window.history.length > 1) window.history.back();
     }
 
-    _toggleInfo () {
+    _toggleInfo() {
         if (this._infoPopup.isOpen) {
             this._infoPopup.close();
             return;
@@ -314,11 +329,11 @@ export default class Home extends Phaser.Scene {
         this._infoPopup.open();
     }
 
-    _closeInfo () {
+    _closeInfo() {
         if (this._infoPopup?.isOpen) this._infoPopup.close();
     }
 
-    _setupInput () {
+    _setupInput() {
         this._onSpaceDown = (e) => {
             if (e.code !== 'Space' && e.key !== ' ') return;
             e.preventDefault();
@@ -327,6 +342,7 @@ export default class Home extends Phaser.Scene {
                 this._closeInfo();
                 return;
             }
+            if (this._briefPopup?.isOpen) return;
             if (this._missionPopup?.isOpen) {
                 if (this._missionPopup.isDismissible) this._missionPopup.close();
                 return;
@@ -339,29 +355,21 @@ export default class Home extends Phaser.Scene {
         this.events.once('destroy', this._teardownInput, this);
     }
 
-    _teardownInput () {
+    _teardownInput() {
         if (this._onSpaceDown) {
             window.removeEventListener('keydown', this._onSpaceDown);
             this._onSpaceDown = null;
         }
     }
 
-    _updateChallengeLink (count) {
+    _updateChallengeLink(count) {
         if (!this._challengeLink) return;
         const n = Math.max(1, count);
-        this._challengeLink.setText(`${n} fun mission${n === 1 ? '' : 's'} ${n === 1 ? 'is' : 'are'} waiting for you!`);
-        this._challengeUnderline.clear();
-        this._challengeUnderline.lineStyle(2, C_GREEN, 0.9);
-        this._challengeUnderline.lineBetween(
-            this._challengeLink.x - this._challengeLink.width / 2,
-            this._challengeLink.y + this._challengeLink.height + 2,
-            this._challengeLink.x + this._challengeLink.width / 2,
-            this._challengeLink.y + this._challengeLink.height + 2,
-        );
+        this._challengeLink.setText(this._copy(`Choose from ${n} shopping challenge${n === 1 ? '' : 's'}.`));
     }
 
-    _beginGame () {
-        if (this._starting || this._infoPopup?.isOpen || this._missionPopup?.isOpen) return;
+    _beginGame() {
+        if (this._starting || this._infoPopup?.isOpen || this._missionPopup?.isOpen || this._briefPopup?.isOpen) return;
         this._starting = false;
         sessionStorage.removeItem('ss_inGame');
         sessionStorage.removeItem(SAVE_KEY);
@@ -371,7 +379,7 @@ export default class Home extends Phaser.Scene {
         });
     }
 
-    _showMissionList (missionsData) {
+    _showMissionList(missionsData) {
         this._missionsData = missionsData;
         this._missionPopup.open({
             missions: missionsData.missions,
@@ -380,24 +388,47 @@ export default class Home extends Phaser.Scene {
         });
     }
 
-    async _viewMission (mission) {
-        this._missionPopup.open({ loading: true, animate: false });
+    async _viewMission(mission) {
+        this._missionPopup.close({ restoreHome: false });
+        const localConfig = buildGameConfigFromMission(
+            mission,
+            mission.iMiniGameId ?? this._missionsData?.gameId ?? LOCAL_GAME_ID,
+        );
+        this._openBrief(localConfig);
+
         try {
             const brief = await fetchMissionBrief(mission._id);
             const gameConfig = buildGameConfigFromMission(
                 brief.mission,
                 brief.gameId ?? this._missionsData?.gameId ?? LOCAL_GAME_ID,
             );
-            this._teardownInput();
-            this.scene.start('Preload', { gameConfig });
+            if (this._briefPopup?.isOpen) this._openBrief(gameConfig);
         } catch (err) {
             console.error('[Home] Failed to fetch mission brief, using local mission:', err);
-            const gameConfig = buildGameConfigFromMission(
-                mission,
-                mission.iMiniGameId ?? this._missionsData?.gameId ?? LOCAL_GAME_ID,
-            );
-            this._teardownInput();
-            this.scene.start('Preload', { gameConfig });
         }
+    }
+
+    _openBrief(gameConfig) {
+        this._briefPopup.open({
+            shoppingList: gameConfig.shoppingList ?? [],
+            title: gameConfig.category ?? '',
+            description: gameConfig.description ?? '',
+            missionOrder: gameConfig.missionOrder ?? 0,
+            budget: gameConfig.budget ?? 0,
+            timeLimit: gameConfig.timeLimit ?? 0,
+            ecoLimit: gameConfig.ecoMeterMax ?? 100,
+            animate: false,
+            onStart: () => {
+                this._teardownInput();
+                this.scene.start('Preload', { gameConfig });
+            },
+            onChooseAnother: () => {
+                this._briefPopup.close({ restoreHome: false });
+                this._showMissionList(this._missionsData ?? {
+                    gameId: LOCAL_GAME_ID,
+                    missions: LOCAL_MISSIONS,
+                });
+            },
+        });
     }
 }

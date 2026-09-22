@@ -66,7 +66,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
     constructor (scene) {
         super(scene, 0, 0);
         scene.add.existing(this);
-        this.setDepth(500);
+        this.setDepth(700);
         this.setVisible(false);
         this._tab = 'play';
     }
