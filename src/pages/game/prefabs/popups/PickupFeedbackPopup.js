@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import config from '../../utils/config.js';
+import { addCauseText } from '../../utils/gameText.js';
 import { POPUP_TEXTURE_KEYS } from '../../config/popupAssets.js';
 
 const PANEL_W = 720;
@@ -95,8 +96,7 @@ export default class PickupFeedbackPopup extends Phaser.GameObjects.Container {
             title.setDisplaySize(TITLE_W, TITLE_W * 0.19);
             this.add(title);
         } else if (variant === 'budget') {
-            this.add(this.scene.add.text(0, panelTop + 36, 'Over Budget!', {
-                fontFamily: config.fonts.text,
+            this.add(addCauseText(this.scene, 0, panelTop + 36, 'Over Budget!', {
                 fontSize: '42px',
                 fontStyle: 'bold',
                 color: C_RED,
@@ -145,15 +145,13 @@ export default class PickupFeedbackPopup extends Phaser.GameObjects.Container {
             contentY += PRODUCT_FRAME / 2 + 36;
         }
 
-        this.add(this.scene.add.text(0, contentY, line1, {
-            fontFamily: config.fonts.text,
+        this.add(addCauseText(this.scene, 0, contentY, line1, {
             fontSize: '30px',
             color: C_NAVY,
             align: 'center',
         }).setOrigin(0.5, 0.5));
 
-        this.add(this.scene.add.text(0, contentY + 44, line2, {
-            fontFamily: config.fonts.text,
+        this.add(addCauseText(this.scene, 0, contentY + 44, line2, {
             fontSize: '38px',
             fontStyle: 'bold',
             color: line2Color,

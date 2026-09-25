@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { UI_TEXTURE_KEYS } from '../config/componentAssets.js';
 import { getShelfRowsForRack } from '../config/shelfLayouts.js';
-import config from '../utils/config.js';
+import { addCauseText } from '../utils/gameText.js';
 import { getMarketLayout, normalizeRowBottomSpaces } from '../utils/rackConfig.js';
 
 const { rackWidth: RACK_W, rackHeight: RACK_H, productIconScale: DEFAULT_ICON_SCALE } = getMarketLayout();
@@ -385,8 +385,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         tag.setDisplaySize(PRICE_TAG_NATIVE_W, PRICE_TAG_NATIVE_H);
         tagContainer.add(tag);
 
-        const label = this.scene.add.text(0, -1, text, {
-            fontFamily: config.fonts.text,
+        const label = addCauseText(this.scene, 0, -1, text, {
             fontSize: '14px',
             fontStyle: 'bold',
             color: '#1e3a5f',

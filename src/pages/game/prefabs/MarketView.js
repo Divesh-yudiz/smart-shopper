@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { getRackBannerAsset } from '../config/bannerAssets.js';
 import config from '../utils/config.js';
+import { addCauseText } from '../utils/gameText.js';
 import { getMarketLayout, getRackPlacements, getRacksForView } from '../utils/rackConfig.js';
 import ProductRack from './ProductRack.js';
 
@@ -230,8 +231,7 @@ export default class MarketView extends Phaser.GameObjects.Container {
 
         this._inner.add(bg);
 
-        const label = this.scene.add.text(cx, cy, category, {
-            fontFamily: 'Cause',
+        const label = addCauseText(this.scene, cx, cy, category, {
             fontSize: '32px',
             fontStyle: 'bold',
             color: '#ffffff',

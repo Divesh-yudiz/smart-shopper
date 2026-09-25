@@ -4,7 +4,7 @@ import {
     SHOPPING_LIST_ENTRIES,
     SHOPPING_LIST_SLOT_COUNT,
 } from '../config/shoppingListConfig.js';
-import config from '../utils/config.js';
+import { addCauseText, setCauseText } from '../utils/gameText.js';
 
 const PANEL_NATIVE_W = 455;
 const PANEL_DISPLAY_W = 415;
@@ -76,8 +76,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         clipIcon.setDisplaySize(52 * scale, 52 * scale);
         this.add(clipIcon);
 
-        this._titleText = this.scene.add.text(-8 * scale, headerY, 'SHOPPING LIST', {
-            fontFamily: config.fonts.text,
+        this._titleText = addCauseText(this.scene, -8 * scale, headerY, 'SHOPPING LIST', {
             fontSize: `${Math.round(22 * scale)}px`,
             fontStyle: 'bold',
             color: TITLE_COLOR,
@@ -96,8 +95,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         badge.setDisplaySize(badgeW, badgeH);
         this.add(badge);
 
-        this._progressBadgeText = this.scene.add.text(badgeX, badgeY, '0/6', {
-            fontFamily: config.fonts.text,
+        this._progressBadgeText = addCauseText(this.scene, badgeX, badgeY, '0/6', {
             fontSize: `${Math.round(18 * scale)}px`,
             fontStyle: 'bold',
             color: '#ffffff',
@@ -129,8 +127,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
             bullet.setPosition(bulletX, 0);
             rowContainer.add(bullet);
 
-            const labelText = this.scene.add.text(labelX, 0, '', {
-                fontFamily: config.fonts.text,
+            const labelText = addCauseText(this.scene, labelX, 0, '', {
                 fontSize: `${Math.round(17 * scale)}px`,
                 fontStyle: 'bold',
                 color: TITLE_COLOR,
@@ -139,8 +136,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
             labelText.setOrigin(0, 0.5);
             rowContainer.add(labelText);
 
-            const progressText = this.scene.add.text(qtyX, 0, '', {
-                fontFamily: config.fonts.text,
+            const progressText = addCauseText(this.scene, qtyX, 0, '', {
                 fontSize: `${Math.round(17 * scale)}px`,
                 fontStyle: 'bold',
                 color: PROGRESS_COLOR,
@@ -262,7 +258,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
     _refresh() {
         const done = this._countCompleted();
         const total = this._countActive();
-        this._progressBadgeText.setText(`${done}/${SHOPPING_LIST_SLOT_COUNT}`);
+        setCauseText(this._progressBadgeText, `${done}/${SHOPPING_LIST_SLOT_COUNT}`);
 
         this._slotViews.forEach((view, i) => {
             const entry = this._entries[i];
@@ -274,8 +270,8 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
 
             const complete = entry.collected >= entry.required;
             const label = entry.label ?? entry.key ?? '';
-            view.labelText.setText(label);
-            view.progressText.setText(`${entry.collected}/${entry.required}`);
+            setCauseText(view.labelText, label);
+            setCauseText(view.progressText, `${entry.collected}/${entry.required}`);
 
             const textColor = complete ? '#1b7a3d' : TITLE_COLOR;
             view.labelText.setColor(textColor);

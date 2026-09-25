@@ -1,35 +1,43 @@
 import Phaser from 'phaser';
-import config from '../../utils/config.js';
 import { resolveItem } from '../../../../utils/gameApi.js';
+import { copyCause, addCauseText, wrapCause } from '../../utils/gameText.js';
 import { HOME_TEXTURE_KEYS } from '../../config/homeAssets.js';
 import { MISSION_SELECT_KEYS as MS } from '../../config/missionSelectAssets.js';
 import { MISSION_DESC_KEYS as K } from '../../config/missionDescriptionAssets.js';
 
 /** Artboard 3 type scale at 1920×1080. */
 const TYPE = Object.freeze({
-    ribbon: 20,
-    heroTitle: 40,
-    heading: 32,
-    body: 20,
-    statLabel: 17,
-    statValue: 46,
-    statSub: 15,
+    ribbon: 26,
+    heroTitle: 46,
+    heading: 38,
+    body: 22,
+    statLabel: 16,
+    statValue: 50,
+    statSub: 14,
     itemName: 24,
     itemQty: 19,
     tipsTitle: 22,
-    tipsBody: 16,
-    button: 21,
-    link: 16,
+    tipsBody: 18,
+    button: 23,
+    link: 17,
 });
 
-const C_BODY = '#111111';
-const C_NAVY = '#0F1C2E';
+const C_BODY = '#1A1408';
+const C_NAVY = '#0E1B5C';
 const C_WHITE = '#ffffff';
-const C_COIN = '#8A4A08';
-const C_ECO = '#145A24';
-const C_TIMER = '#084A9A';
-const C_LINK = '#145A32';
-const C_PURPLE = '#6B2FA0';
+const C_RIBBON = '#102040';
+const C_COIN = '#8B5A12';
+const C_COIN_VALUE = '#3D2208';
+const C_COIN_SUB = '#5A3A18';
+const C_ECO = '#1B6B28';
+const C_ECO_VALUE = '#0E4A18';
+const C_ECO_SUB = '#1A5A22';
+const C_TIMER = '#1A4A9A';
+const C_TIMER_VALUE = '#0A2870';
+const C_TIMER_SUB = '#1A3A80';
+const C_LINK = '#1B8A4A';
+const C_PURPLE = '#6B21A8';
+const C_TIP_BODY = '#0A0A0A';
 
 const WEIGHT = Object.freeze({
     heavy: '800',
@@ -161,44 +169,15 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
     }
 
     _copy (s) {
-        return String(s).replace(/ /g, '\u2002');
+        return copyCause(s);
     }
 
     _wrap (str, maxWidth, style) {
-        const words = String(str).split(/\s+/).filter(Boolean);
-        if (!words.length) return '';
-        const probe = this.scene.add.text(0, 0, '', {
-            fontFamily: config.fonts.text,
-            letterSpacing: 0.4,
-            ...style,
-        }).setVisible(false);
-        const widthOf = (s) => {
-            probe.setText(this._copy(s));
-            return probe.width;
-        };
-        const lines = [];
-        let line = '';
-        words.forEach((word) => {
-            const trial = line ? `${line} ${word}` : word;
-            if (line && widthOf(trial) > maxWidth) {
-                lines.push(line);
-                line = word;
-            } else {
-                line = trial;
-            }
-        });
-        if (line) lines.push(line);
-        probe.destroy();
-        return lines.join('\n');
+        return wrapCause(this.scene, str, maxWidth, style);
     }
 
     _text (x, y, message, style) {
-        return this.scene.add.text(x, y, this._copy(message), {
-            fontFamily: config.fonts.text,
-            letterSpacing: 0.4,
-            fontStyle: WEIGHT.bold,
-            ...style,
-        });
+        return addCauseText(this.scene, x, y, message, { fontStyle: WEIGHT.bold, ...style });
     }
 
     _fitW (img, displayW) {
@@ -280,7 +259,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         wrap.add(this._text(0, ribbon.y, `Mission ${missionOrder || 1}`, {
             fontSize: `${m.fs(TYPE.ribbon)}px`,
             fontStyle: WEIGHT.heavy,
-            color: C_NAVY,
+            color: C_RIBBON,
         }).setOrigin(0.5, 0.5));
 
         const titleStyle = {
@@ -342,7 +321,8 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             value: String(data.budget ?? 0),
             sub: 'Shopping Budget',
             labelColor: C_COIN,
-            valueColor: C_NAVY,
+            valueColor: C_COIN_VALUE,
+            subColor: C_COIN_SUB,
         });
         this._drawStat(m, x + statW + statGap, cy, statW, statH, {
             base: K.baseG,
@@ -351,7 +331,8 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             value: String(Math.round(data.ecoLimit ?? 100)),
             sub: 'Eco Impact',
             labelColor: C_ECO,
-            valueColor: C_ECO,
+            valueColor: C_ECO_VALUE,
+            subColor: C_ECO_SUB,
         });
         this._drawStat(m, x + (statW + statGap) * 2, cy, statW, statH, {
             base: K.baseB,
@@ -360,7 +341,8 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             value: formatTime(data.timeLimit),
             sub: 'Complete before time ends.',
             labelColor: C_TIMER,
-            valueColor: C_TIMER,
+            valueColor: C_TIMER_VALUE,
+            subColor: C_TIMER_SUB,
         });
         cy += statH + m.H * 0.022;
 
@@ -399,7 +381,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         return y + heading.height;
     }
 
-    _drawStat (m, x, y, w, h, { base, icon, label, value, sub, labelColor, valueColor }) {
+    _drawStat (m, x, y, w, h, { base, icon, label, value, sub, labelColor, valueColor, subColor }) {
         const card = this.scene.add.image(x + w / 2, y + h / 2, base);
         card.setDisplaySize(w, h);
         this.add(card);
@@ -432,7 +414,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         const subStyle = {
             fontSize: `${m.fs(TYPE.statSub)}px`,
             fontStyle: WEIGHT.bold,
-            color: C_BODY,
+            color: subColor || C_BODY,
             align: 'center',
         };
         this.add(this._text(x + w / 2, y + h * 0.82, this._wrap(sub, w * 0.88, subStyle), subStyle).setOrigin(0.5, 0.5));
@@ -459,6 +441,8 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             fontStyle: WEIGHT.heavy,
             color: C_PURPLE,
             align: 'center',
+            stroke: C_PURPLE,
+            strokeThickness: 1.25,
         };
         this.add(this._text(x + w / 2, y + h * 0.07, this._wrap(name, w * 0.92, nameStyle), nameStyle).setOrigin(0.5, 0));
 
@@ -473,6 +457,8 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             fontSize: `${m.fs(TYPE.itemQty)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_PURPLE,
+            stroke: C_PURPLE,
+            strokeThickness: 1.1,
         }).setOrigin(0.5, 0.5));
     }
 
@@ -499,7 +485,13 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         }).setOrigin(0, 0.5));
 
         const tip = 'Check both price and Eco impact. The cheapest choice may not always be the smartest choice!';
-        const tipStyle = { fontSize: `${m.fs(TYPE.tipsBody)}px`, fontStyle: WEIGHT.bold, color: C_BODY };
+        const tipStyle = {
+            fontSize: `${m.fs(TYPE.tipsBody)}px`,
+            fontStyle: WEIGHT.heavy,
+            color: C_TIP_BODY,
+            stroke: C_TIP_BODY,
+            strokeThickness: 1,
+        };
         this.add(this._text(x + w * 0.035, y + h * 0.70, this._wrap(tip, w * 0.93, tipStyle), tipStyle).setOrigin(0, 0.5));
     }
 

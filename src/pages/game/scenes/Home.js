@@ -4,6 +4,7 @@ import HomeInfoPopup from '../prefabs/HomeInfoPopup.js';
 import MissionSelectPopup from '../prefabs/popups/MissionSelectPopup.js';
 import MissionPopup from '../prefabs/popups/MissionPopup.js';
 import config from '../utils/config.js';
+import { addCauseText, setCauseText, wrapCause } from '../utils/gameText.js';
 import { fetchMissionBrief, buildGameConfigFromMission } from '../../../utils/gameApi.js';
 import { LOCAL_GAME_ID, LOCAL_MISSIONS } from '../config/missionsConfig.js';
 
@@ -110,17 +111,12 @@ export default class Home extends Phaser.Scene {
         return img;
     }
 
-    /** Cause's space glyph is near-zero width — use an en-space so words stay readable. */
-    _copy(s) {
-        return String(s).replace(/ /g, '\u2002');
+    _wrap(str, maxWidth, style) {
+        return wrapCause(this, str, maxWidth, style);
     }
 
     _text(x, y, message, style) {
-        return this.add.text(x, y, this._copy(message), {
-            fontFamily: config.fonts.text,
-            letterSpacing: 0.4,
-            ...style,
-        });
+        return addCauseText(this, x, y, message, style);
     }
 
     _add(go) {
@@ -188,16 +184,12 @@ export default class Home extends Phaser.Scene {
             color: T_NAVY,
         }).setOrigin(0.5, 0.5));
 
+        const taglineStyle = { fontSize: `${m.fs(28)}px`, color: T_MUTED, align: 'center' };
         this._add(this._text(
             m.cx,
             m.y(0.522),
-            'Pick a mission, follow your shopping list and make smart choices along the way.',
-            {
-                fontSize: `${m.fs(28)}px`,
-                color: T_MUTED,
-                align: 'center',
-                wordWrap: { width: m.W * 0.76 },
-            },
+            this._wrap('Pick a mission, follow your shopping list and make smart choices along the way.', m.W * 0.76, taglineStyle),
+            taglineStyle,
         ).setOrigin(0.5, 0.5));
 
         const btnW = m.W * 0.248;
@@ -260,14 +252,19 @@ export default class Home extends Phaser.Scene {
         titleCard.setDisplaySize(cardW, cardH);
         this._add(titleCard);
 
-        this._add(this._text(titleCard.x, cardY, 'How Smart Shopper\nWorks?', {
+        const howStyle = {
             fontSize: `${m.fs(36)}px`,
             fontStyle: 'bold',
             color: T_WHITE,
             align: 'center',
             lineSpacing: m.H * 0.01,
-            wordWrap: { width: cardW * 0.88 },
-        }).setOrigin(0.5, 0.5));
+        };
+        this._add(this._text(
+            titleCard.x,
+            cardY,
+            this._wrap('How Smart Shopper Works?', cardW * 0.88, howStyle),
+            howStyle,
+        ).setOrigin(0.5, 0.5));
 
         HOW_STEPS.forEach((step, i) => {
             const cx = panelX + padX + (i + 1) * (cardW + gap) + cardW / 2;
@@ -298,20 +295,20 @@ export default class Home extends Phaser.Scene {
         icon.setDisplaySize(iconS, iconS);
         this._add(icon);
 
-        this._add(this._text(cx, top + h * 0.62, step.title, {
+        const stepTitleStyle = {
             fontSize: `${m.fs(35)}px`,
             fontStyle: 'bold',
             color: T_NAVY,
             align: 'center',
-            wordWrap: { width: w * 0.90 },
-        }).setOrigin(0.5, 0.5));
+        };
+        this._add(this._text(cx, top + h * 0.62, this._wrap(step.title, w * 0.90, stepTitleStyle), stepTitleStyle).setOrigin(0.5, 0.5));
 
-        this._add(this._text(cx, top + h * 0.82, step.sub, {
+        const stepSubStyle = {
             fontSize: `${m.fs(23)}px`,
             color: T_CARD_SUB,
             align: 'center',
-            wordWrap: { width: w * 0.90 },
-        }).setOrigin(0.5, 0.5));
+        };
+        this._add(this._text(cx, top + h * 0.82, this._wrap(step.sub, w * 0.90, stepSubStyle), stepSubStyle).setOrigin(0.5, 0.5));
     }
 
     _leaveToDashboard() {
@@ -365,7 +362,7 @@ export default class Home extends Phaser.Scene {
     _updateChallengeLink(count) {
         if (!this._challengeLink) return;
         const n = Math.max(1, count);
-        this._challengeLink.setText(this._copy(`Choose from ${n} shopping challenge${n === 1 ? '' : 's'}.`));
+        setCauseText(this._challengeLink, `Choose from ${n} shopping challenge${n === 1 ? '' : 's'}.`);
     }
 
     _beginGame() {

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { UI_TEXTURE_KEYS } from '../config/componentAssets.js';
-import config from '../utils/config.js';
+import { addCauseText, setCauseText } from '../utils/gameText.js';
 
 /** Timer-and-Coin-Base.png */
 const PANEL_NATIVE_W = 268;
@@ -67,8 +67,7 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
         const stopwatch = addStopwatchIcon(scene, iconX, centerY, iconSize);
         this.add(stopwatch);
 
-        this._timeText = scene.add.text(textX, centerY, formatTime(this._remaining), {
-            fontFamily: config.fonts.text,
+        this._timeText = addCauseText(scene, textX, centerY, formatTime(this._remaining), {
             fontSize: `${fontSize}px`,
             fontStyle: 'bold',
             color: '#ffffff',
@@ -97,7 +96,7 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
         this._completed = true;
         this._tickEvent?.remove();
         this._remaining = 0;
-        this._timeText?.setText(formatTime(0));
+        if (this._timeText) setCauseText(this._timeText, formatTime(0));
         this._onComplete?.();
     }
 
@@ -115,7 +114,7 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
             return;
         }
         this._remaining -= 1;
-        this._timeText.setText(formatTime(this._remaining));
+        setCauseText(this._timeText, formatTime(this._remaining));
         this._onTick?.();
 
         if (this._remaining <= 0) {

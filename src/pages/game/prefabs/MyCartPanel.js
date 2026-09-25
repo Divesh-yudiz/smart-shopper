@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { UI_TEXTURE_KEYS } from '../config/componentAssets.js';
-import config from '../utils/config.js';
+import { addCauseText, causeStyle, setCauseText } from '../utils/gameText.js';
 
 const VISIBLE_SLOTS = 6;
 const PANEL_DISPLAY_W = 680;
@@ -23,11 +23,10 @@ function isFruitCartItem (item) {
     return key.startsWith('product_fruits_');
 }
 
-const TEXT_STYLE = {
-    fontFamily: config.fonts.text,
+const TEXT_STYLE = causeStyle({
     color: '#ffffff',
     align: 'center',
-};
+});
 
 /**
  * Bottom "MY CART" bar — unlimited items; 6 visible at a time with smooth horizontal scroll.
@@ -92,7 +91,8 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         this._slotsWidth = slotsWidth;
         this._bodyCenterY = bodyCenterY;
 
-        this._titleText = this.scene.add.text(
+        this._titleText = addCauseText(
+            this.scene,
             -this._panelW / 2 + headerPadX,
             headerY + 4 * scale,
             'MY CART',
@@ -119,7 +119,7 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         this.add(countBadge);
 
         this._countBadgeCenterX = countBadgeX - countBadgeW / 2;
-        this._countText = this.scene.add.text(this._countBadgeCenterX, headerY, '0 ITEMS', {
+        this._countText = addCauseText(this.scene, this._countBadgeCenterX, headerY, '0 ITEMS', {
             ...TEXT_STYLE,
             fontSize: `${Math.round(16 * scale)}px`,
             fontStyle: 'bold',
@@ -163,7 +163,7 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
             priceTag.setVisible(false);
             slotContainer.add(priceTag);
 
-            const priceText = this.scene.add.text(0, tagY, '', {
+            const priceText = addCauseText(this.scene, 0, tagY, '', {
                 ...TEXT_STYLE,
                 fontSize: `${priceFontSize}px`,
                 fontStyle: 'bold',
@@ -189,7 +189,8 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         totalBtn.setDisplaySize(totalW, totalH);
         this.add(totalBtn);
 
-        this._totalAmount = this.scene.add.text(
+        this._totalAmount = addCauseText(
+            this.scene,
             totalX,
             bodyCenterY + totalH * 0.22,
             'AED 0',
@@ -424,7 +425,7 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
                 return;
             }
 
-            view.priceText.setText(`AED ${item.price}`);
+            setCauseText(view.priceText, `AED ${item.price}`);
 
             if (item.textureKey && this.scene.textures.exists(item.textureKey)) {
                 view.productImg.setTexture(item.textureKey);
@@ -447,13 +448,13 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
 
     _refresh () {
         const count = this.getItemCount();
-        this._countText.setText(`${count} ITEM${count === 1 ? '' : 'S'}`);
+        setCauseText(this._countText, `${count} ITEM${count === 1 ? '' : 'S'}`);
 
         this._clampScroll();
         this._applyScrollVisual();
         this._refreshSlotContents();
 
-        this._totalAmount.setText(`AED ${this.getTotal()}`);
+        setCauseText(this._totalAmount, `AED ${this.getTotal()}`);
     }
 
     _buildCrossBtns () {

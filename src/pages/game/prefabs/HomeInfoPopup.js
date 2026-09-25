@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import config from '../utils/config.js';
+import { addCauseText, wrapCause } from '../utils/gameText.js';
 
 const C_CREAM = 0xfef9e4;
 const C_ORANGE = 0xf5a623;
@@ -69,6 +70,11 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this.setDepth(700);
         this.setVisible(false);
         this._tab = 'play';
+    }
+
+    _text (x, y, message, style, wrapW) {
+        const msg = wrapW != null ? wrapCause(this.scene, message, wrapW, style) : message;
+        return addCauseText(this.scene, x, y, msg, style);
     }
 
     open () {
@@ -158,8 +164,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this.add(g);
 
         const tab = TABS.find((t) => t.id === this._tab);
-        this.add(this.scene.add.text(config.centerX, py + HEADER_H / 2 - 2, tab.label.toUpperCase(), {
-            fontFamily: config.fonts.text,
+        this.add(this._text(config.centerX, py + HEADER_H / 2 - 2, tab.label.toUpperCase(), {
             fontSize: '34px',
             fontStyle: 'bold',
             color: T_WHITE,
@@ -250,13 +255,11 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this._accentBar(x, y, w, 8, C_ORANGE, 18);
 
         this._numberBadge(x + 22, y + 28, card.n);
-        this.add(this.scene.add.text(x + 72, y + 40, card.title, {
-            fontFamily: config.fonts.text,
+        this.add(this._text(x + 72, y + 40, card.title, {
             fontSize: '24px',
             fontStyle: 'bold',
             color: T_NAVY,
-            wordWrap: { width: w - 96 },
-        }).setOrigin(0, 0.5));
+        }, w - 96).setOrigin(0, 0.5));
 
         if (card.keys) {
             const kw = (w - 56 - 12) / 2;
@@ -269,13 +272,11 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
             return;
         }
 
-        this.add(this.scene.add.text(x + 22, y + 86, card.body, {
-            fontFamily: config.fonts.text,
+        this.add(this._text(x + 22, y + 86, card.body, {
             fontSize: '20px',
             color: T_MUTED,
-            wordWrap: { width: w - 44 },
             lineSpacing: 6,
-        }).setOrigin(0, 0));
+        }, w - 44).setOrigin(0, 0));
     }
 
     _learnCard (x, y, w, h, card) {
@@ -283,23 +284,19 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this._accentBar(x, y, w, 10, C_ORANGE, 18);
         this._numberBadge(x + w / 2 - 22, y + 36, card.n);
 
-        this.add(this.scene.add.text(x + w / 2, y + 120, card.title, {
-            fontFamily: config.fonts.text,
+        this.add(this._text(x + w / 2, y + 120, card.title, {
             fontSize: '22px',
             fontStyle: 'bold',
             color: T_NAVY,
             align: 'center',
-            wordWrap: { width: w - 24 },
-        }).setOrigin(0.5, 0));
+        }, w - 24).setOrigin(0.5, 0));
 
-        this.add(this.scene.add.text(x + w / 2, y + 200, card.body, {
-            fontFamily: config.fonts.text,
+        this.add(this._text(x + w / 2, y + 200, card.body, {
             fontSize: '18px',
             color: T_MUTED,
             align: 'center',
-            wordWrap: { width: w - 28 },
             lineSpacing: 6,
-        }).setOrigin(0.5, 0));
+        }, w - 28).setOrigin(0.5, 0));
     }
 
     _guideCard (x, y, w, h, card) {
@@ -310,20 +307,17 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         rail.fillRoundedRect(x, y, 12, h, { tl: 18, bl: 18, tr: 0, br: 0 });
         this.add(rail);
 
-        this.add(this.scene.add.text(x + 32, y + 28, card.title.toUpperCase(), {
-            fontFamily: config.fonts.text,
+        this.add(this._text(x + 32, y + 28, card.title.toUpperCase(), {
             fontSize: '22px',
             fontStyle: 'bold',
             color: T_NAVY,
         }).setOrigin(0, 0));
 
-        this.add(this.scene.add.text(x + 32, y + 72, card.body, {
-            fontFamily: config.fonts.text,
+        this.add(this._text(x + 32, y + 72, card.body, {
             fontSize: '19px',
             color: T_MUTED,
-            wordWrap: { width: w - 52 },
             lineSpacing: 6,
-        }).setOrigin(0, 0));
+        }, w - 52).setOrigin(0, 0));
     }
 
     _keyChip (x, y, w, h, key, label) {
@@ -334,15 +328,13 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         g.strokeRoundedRect(x, y, w, h, 12);
         this.add(g);
 
-        this.add(this.scene.add.text(x + 14, y + h / 2, key, {
-            fontFamily: config.fonts.text,
+        this.add(this._text(x + 14, y + h / 2, key, {
             fontSize: '16px',
             fontStyle: 'bold',
             color: T_ORANGE,
         }).setOrigin(0, 0.5));
 
-        this.add(this.scene.add.text(x + w - 14, y + h / 2, label, {
-            fontFamily: config.fonts.text,
+        this.add(this._text(x + w - 14, y + h / 2, label, {
             fontSize: '16px',
             fontStyle: 'bold',
             color: T_NAVY,
@@ -355,8 +347,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         g.fillStyle(C_ORANGE, 1);
         g.fillRoundedRect(x, y, s, s, 12);
         this.add(g);
-        this.add(this.scene.add.text(x + s / 2, y + s / 2, n, {
-            fontFamily: config.fonts.text,
+        this.add(this._text(x + s / 2, y + s / 2, n, {
             fontSize: '22px',
             fontStyle: 'bold',
             color: T_WHITE,
@@ -405,8 +396,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         };
         draw(false);
         wrap.add(g);
-        wrap.add(this.scene.add.text(0, 0, label, {
-            fontFamily: config.fonts.text,
+        wrap.add(this._text(0, 0, label, {
             fontSize,
             fontStyle: 'bold',
             color,

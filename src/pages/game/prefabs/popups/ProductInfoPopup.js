@@ -1,36 +1,63 @@
 import Phaser from 'phaser';
-import config from '../../utils/config.js';
-import { POPUP_TEXTURE_KEYS } from '../../config/popupAssets.js';
-import { UI_TEXTURE_KEYS } from '../../config/componentAssets.js';
+import { addCauseText, setCauseText, wrapCause } from '../../utils/gameText.js';
+import { HOME_TEXTURE_KEYS } from '../../config/homeAssets.js';
+import { MISSION_SELECT_KEYS as MS } from '../../config/missionSelectAssets.js';
+import { CHECKOUT_TEXTURE_KEYS } from '../../config/checkoutAssets.js';
+import { CHOOSE_PRODUCT_KEYS as CP } from '../../config/chooseProductAssets.js';
+import { MISSION_DESC_KEYS } from '../../config/missionDescriptionAssets.js';
 
-const PANEL_W = 960;
-const PANEL_PAD_X = 44;
-const PANEL_PAD_TOP = 40;
-const PANEL_PAD_BOTTOM = 36;
-const CARD_GAP = 36;
-const CARD_W = (PANEL_W - PANEL_PAD_X * 2 - CARD_GAP) / 2;
-const CARD_PAD_X = 24;
-const CARD_PAD_Y = 22;
-const CARD_FRAME = 112;
-const CARD_RADIUS = 18;
-const BTN_W = 220;
-const BTN_H = 54;
-const BTN_GAP = 18;
-const STEP_BTN = 44;
-const QTY_BOX_W = 68;
-const QTY_BOX_H = 44;
+const TYPE = Object.freeze({
+    ribbon: 36,
+    subtitle: 18,
+    requirement: 20,
+    option: 20,
+    name: 32,
+    stat: 36,
+    forOne: 22,
+    desc: 20,
+    tag: 22,
+    qty: 34,
+    footer: 22,
+    save: 16,
+    button: 22,
+});
 
-const C_NAVY = '#1e3a5f';
-const C_MUTED = '#5a718c';
-const C_GREEN = '#27ae60';
 const C_WHITE = '#ffffff';
-const C_BORDER = 0xb0c0d4;
-const C_STANDARD = 0x4a6b8a;
-const C_ECO = 0x27ae60;
+const C_NAVY = '#0E1B5C';
+const C_BODY = '#1A1408';
+const C_MUTED = '#3A4250';
+const C_COIN = '#8B5A12';
+const C_ECO = '#1B6B28';
+const C_TAG = '#0E1B5C';
 
+const WEIGHT = Object.freeze({
+    heavy: '800',
+    bold: '700',
+});
+
+function variantTitle(displayName, isEco) {
+    const name = String(displayName ?? 'Product').trim().toUpperCase();
+    return isEco ? `LOCALLY SOURCED ${name}` : `IMPORTED ${name}`;
+}
+
+function variantTagline(isEco) {
+    return isEco ? 'Higher Price • Lower Eco Impact' : 'Lower Price • Higher Eco Impact';
+}
+
+function qtyUnit(name, qty) {
+    const hay = String(name ?? '').toLowerCase();
+    if (/(banana|carrot|potato|onion|tomato|piece|apple|orange)/.test(hay)) {
+        return qty === 1 ? 'Piece' : 'Pieces';
+    }
+    return qty === 1 ? 'Pack' : 'Packs';
+}
+
+/**
+ * Choose-your-product brief — Artboard 4 layout.
+ */
 export default class ProductInfoPopup extends Phaser.GameObjects.Container {
     constructor(scene) {
-        super(scene, config.centerX, config.centerY);
+        super(scene, 0, 0);
         scene.add.existing(this);
         this.setDepth(560);
         this.setVisible(false);
@@ -39,317 +66,377 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
     open({
         displayName = 'Product',
         variants = [],
+        coinsRemaining = 0,
+        ecoRemaining = 0,
+        requirementQty = 1,
         onConfirm = () => { },
         onClose = () => { },
     } = {}) {
         this._onConfirm = onConfirm;
         this._onClose = onClose;
+        this._displayName = displayName;
         this._variants = Object.fromEntries(variants.map((v) => [v.key, v]));
         this._cardViews = {};
         this._qtyByKey = {};
         this._budgetMaxByKey = {};
-        // Both variants of a product target the same shopping-list entry — the combined
-        // quantity taken across the two cards must never exceed what's still needed.
         this._listRemaining = variants.find((v) => v.listRemaining != null)?.listRemaining ?? null;
 
         this.removeAll(true);
+        this.setScale(1);
 
-        const ov = this.scene.add.rectangle(0, 0, config.width, config.height, 0x000000, 0.55);
+        const m = this._m();
+        const shown = variants.slice(0, 2);
+
+        const bg = this.scene.add.image(m.cx, m.cy, HOME_TEXTURE_KEYS.bgBlur);
+        bg.setDisplaySize(m.W, m.H);
+        this.add(bg);
+
+        const ov = this.scene.add.rectangle(m.cx, m.cy, m.W, m.H, 0x000000, 0.12);
         ov.setInteractive();
         this.add(ov);
 
-        const panel = this.scene.add.image(0, 0, POPUP_TEXTURE_KEYS.mainBg);
-        this.add(panel);
-
-        const content = this.scene.add.container(0, 0);
-        this.add(content);
-
-        let y = 0;
-
-        const title = this.scene.add.text(0, y, displayName, {
-            fontFamily: config.fonts.text,
-            fontSize: '34px',
-            fontStyle: 'bold',
-            color: C_NAVY,
-            align: 'center',
-            wordWrap: { width: PANEL_W - 120 },
-        }).setOrigin(0.5, 0);
-        content.add(title);
-        y += title.height + 22;
-
-        const shown = variants.slice(0, 2);
-        const cardOffsetX = (CARD_W + CARD_GAP) / 2;
-        let cardH = 0;
-        shown.forEach((variant, i) => {
-            this._budgetMaxByKey[variant.key] = Math.max(0, variant.budgetMax ?? 0);
-            this._qtyByKey[variant.key] = 0;
-            const cx = i === 0 ? -cardOffsetX : cardOffsetX;
-            const h = this._buildVariantCard(content, cx, y, variant);
-            cardH = Math.max(cardH, h);
+        this._drawChrome(m);
+        this._drawPanel(m, {
+            displayName,
+            variants: shown,
+            coinsRemaining,
+            ecoRemaining,
+            requirementQty,
         });
-        Object.values(this._cardViews).forEach((view) => {
-            const extra = cardH - view.cardH;
-            if (extra > 0) view.stepperWrap.y += extra;
-            view.cardH = cardH;
-        });
-
-        y += cardH + 32;
-
-        const cancelWrap = this._makeActionButton(-BTN_W / 2 - BTN_GAP / 2, y + BTN_H / 2, {
-            label: 'CANCEL',
-            width: BTN_W,
-            height: BTN_H,
-            fill: 0x8a96a8,
-            hoverFill: 0x9aa8ba,
-            onClick: () => this._close(),
-        });
-        const addWrap = this._makeActionButton(BTN_W / 2 + BTN_GAP / 2, y + BTN_H / 2, {
-            label: 'ADD TO CART',
-            width: BTN_W,
-            height: BTN_H,
-            fill: 0x27ae60,
-            hoverFill: 0x2ecc71,
-            onClick: () => this._confirm(),
-        });
-        content.add(cancelWrap);
-        content.add(addWrap);
-        this._addWrap = addWrap;
-        y += BTN_H;
-
-        const panelH = PANEL_PAD_TOP + y + PANEL_PAD_BOTTOM;
-        panel.setDisplaySize(PANEL_W, panelH);
-        content.y = -panelH / 2 + PANEL_PAD_TOP;
-
-        const closeSize = 44;
-        const closeBtn = this.scene.add.image(
-            PANEL_W / 2 - closeSize / 2 + 2,
-            -panelH / 2 + closeSize / 2 - 4,
-            POPUP_TEXTURE_KEYS.closeButton,
-        );
-        closeBtn.setDisplaySize(closeSize, closeSize);
-        closeBtn.setInteractive({ useHandCursor: true });
-        closeBtn.on('pointerup', () => this._close());
-        this.add(closeBtn);
 
         Object.keys(this._cardViews).forEach((key) => this._refreshCardQty(key));
         this._refreshAddButton();
 
         this.setVisible(true);
         this.setAlpha(0);
-        this.setScale(0.9);
         this.scene.tweens.add({
-            targets: this,
-            alpha: 1,
-            scaleX: 1,
-            scaleY: 1,
-            duration: 320,
-            ease: 'Back.easeOut',
+            targets: this, alpha: 1, duration: 220, ease: 'Quad.easeOut',
         });
     }
 
-    _buildVariantCard(parent, cx, topY, variant) {
-        const wrap = this.scene.add.container(cx, topY);
-        parent.add(wrap);
+    _m() {
+        const W = this.scene.scale.width;
+        const H = this.scene.scale.height;
+        const s = Math.min(W / 1920, H / 1080);
+        return {
+            W, H, s,
+            cx: W * 0.5,
+            cy: H * 0.5,
+            x: (pct) => W * pct,
+            y: (pct) => H * pct,
+            fs: (px) => Math.round(px * s),
+        };
+    }
 
-        const border = this.scene.add.graphics();
-        wrap.add(border);
+    _text(x, y, message, style) {
+        return addCauseText(this.scene, x, y, message, { fontStyle: WEIGHT.bold, ...style });
+    }
 
-        const innerW = CARD_W - CARD_PAD_X * 2;
-        let y = CARD_PAD_Y;
+    _wrap(str, maxWidth, style) {
+        return wrapCause(this.scene, str, maxWidth, style);
+    }
 
-        const badgeH = 32;
-        const badgeLabel = variant.isEcoVariant ? 'ECO-FRIENDLY' : 'BUDGET PICK';
-        const badgeW = variant.isEcoVariant ? 210 : 186;
-        const badgeBg = this.scene.add.graphics();
-        badgeBg.fillStyle(variant.isEcoVariant ? C_ECO : C_STANDARD, 1);
-        badgeBg.fillRoundedRect(-badgeW / 2, y, badgeW, badgeH, badgeH / 2);
-        wrap.add(badgeBg);
+    _fitW(img, displayW) {
+        img.setDisplaySize(displayW, displayW * (img.height / img.width));
+        return img;
+    }
 
-        let badgeTextX = 0;
-        if (variant.isEcoVariant && this.scene.textures.exists(UI_TEXTURE_KEYS.ecoIcon)) {
-            const leaf = this.scene.add.image(-badgeW / 2 + 22, y + badgeH / 2, UI_TEXTURE_KEYS.ecoIcon);
-            leaf.setDisplaySize(20, 20);
-            wrap.add(leaf);
-            badgeTextX = 10;
-        }
-        wrap.add(this.scene.add.text(badgeTextX, y + badgeH / 2, badgeLabel, {
-            fontFamily: config.fonts.text,
-            fontSize: '16px',
-            fontStyle: 'bold',
+    _fitContain(img, maxW, maxH) {
+        const s = Math.min(maxW / img.width, maxH / img.height);
+        img.setDisplaySize(img.width * s, img.height * s);
+        return img;
+    }
+
+    /** Scale a rounded-rect sprite without stretching its corners or border. */
+    _slice(x, y, key, w, h, preferredCap = 64) {
+        const src = this.scene.textures.get(key)?.getSourceImage?.();
+        const tw = src?.width ?? 256;
+        const th = src?.height ?? 256;
+        const maxCap = Math.min(Math.floor(tw / 2) - 1, Math.floor(th / 2) - 1);
+        const cap = Math.max(8, Math.min(
+            preferredCap,
+            maxCap,
+            Math.floor(w / 2) - 2,
+            Math.floor(h / 2) - 2,
+        ));
+        return this.scene.add.nineslice(x, y, key, undefined, w, h, cap, cap, cap, cap);
+    }
+
+    _drawChrome(m) {
+        const backH = m.H * 0.078;
+        const back = this.scene.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
+        this._fitW(back, backH * (back.width / back.height));
+        back.setInteractive({ useHandCursor: true });
+        back.on('pointerover', () => back.setScale(back.scaleX * 1.04, back.scaleY * 1.04));
+        back.on('pointerout', () => this._fitW(back, backH * (back.width / back.height)));
+        back.on('pointerup', () => this._close());
+        this.add(back);
+
+        const infoS = m.H * 0.074;
+        const info = this.scene.add.image(m.x(0.948), m.y(0.058), HOME_TEXTURE_KEYS.infoButton);
+        info.setDisplaySize(infoS, infoS);
+        info.setInteractive({ useHandCursor: true });
+        info.on('pointerover', () => info.setDisplaySize(infoS * 1.06, infoS * 1.06));
+        info.on('pointerout', () => info.setDisplaySize(infoS, infoS));
+        info.on('pointerup', () => this.scene._toggleInfo?.());
+        this.add(info);
+    }
+
+    _drawPanel(m, { displayName, variants, coinsRemaining, ecoRemaining, requirementQty }) {
+        const panelW = m.W * 0.88;
+        const panelBottom = m.H * 0.94;
+        const panelTopAnchor = m.H * 0.11;
+        const panelH = panelBottom - panelTopAnchor;
+        const panelY = panelTopAnchor + panelH / 2;
+
+        const panel = this._slice(m.cx, panelY, MS.pop, panelW, panelH, 110);
+        this.add(panel);
+
+        const panelTop = panelY - panelH / 2;
+        const panelLeft = m.cx - panelW / 2;
+        const padX = panelW * 0.036;
+        const innerW = panelW - padX * 2;
+        const innerLeft = panelLeft + padX;
+
+        const ribbon = this.scene.add.image(m.cx, panelTop + m.H * 0.012, MS.ribbon);
+        this._fitW(ribbon, m.W * 0.42);
+        this.add(ribbon);
+
+        const ribbonStyle = {
+            fontSize: `${m.fs(TYPE.ribbon)}px`,
+            fontStyle: WEIGHT.heavy,
             color: C_WHITE,
             align: 'center',
-        }).setOrigin(0.5, 0.5));
-        y += badgeH + 16;
+        };
+        this.add(this._text(
+            m.cx,
+            ribbon.y,
+            this._wrap(`CHOOSE YOUR ${String(displayName).toUpperCase()}`, ribbon.displayWidth * 0.82, ribbonStyle),
+            ribbonStyle,
+        ).setOrigin(0.5, 0.5));
 
-        const frameY = y + CARD_FRAME / 2;
-        if (variant.product?.textureKey && this.scene.textures.exists(variant.product.textureKey)) {
-            const frame = this.scene.add.image(0, frameY, POPUP_TEXTURE_KEYS.productBg);
-            frame.setDisplaySize(CARD_FRAME, CARD_FRAME);
-            wrap.add(frame);
-
-            const img = this.scene.add.image(0, frameY, variant.product.textureKey);
-            const max = CARD_FRAME * 0.82;
-            const tex = img.texture.getSourceImage();
-            const tw = tex?.width ?? max;
-            const th = tex?.height ?? max;
-            const s = Math.min(max / tw, max / th);
-            img.setDisplaySize(tw * s, th * s);
-            wrap.add(img);
-        }
-        y = frameY + CARD_FRAME / 2 + 16;
-
-        wrap.add(this.scene.add.text(0, y, `AED ${Math.round(variant.price)}`, {
-            fontFamily: config.fonts.text,
-            fontSize: '30px',
-            fontStyle: 'bold',
-            color: C_GREEN,
-            align: 'center',
-        }).setOrigin(0.5, 0));
-        y += 38;
-
-        const impact = variant.product?.ecoImpact ?? 0;
-        const impactSign = impact > 0 ? '+' : '';
-        wrap.add(this.scene.add.text(0, y, `${impactSign}${impact} ECO METER`, {
-            fontFamily: config.fonts.text,
-            fontSize: '18px',
-            fontStyle: 'bold',
-            color: impact >= 0 ? C_GREEN : '#c0392b',
-            align: 'center',
-        }).setOrigin(0.5, 0));
-        y += 30;
-
-        const description = (variant.product?.description ?? '').trim();
-        if (description) {
-            const desc = this.scene.add.text(0, y, description, {
-                fontFamily: config.fonts.text,
-                fontSize: '17px',
-                color: C_NAVY,
-                align: 'center',
-                wordWrap: { width: innerW },
-                lineSpacing: 3,
-            }).setOrigin(0.5, 0);
-            wrap.add(desc);
-            y += desc.height + 14;
-        }
-
-        const infoLine = (variant.infoLine ?? '').trim();
-        if (infoLine) {
-            const info = this.scene.add.text(0, y, infoLine, {
-                fontFamily: config.fonts.text,
-                fontSize: '16px',
-                fontStyle: 'bold',
-                color: variant.infoColor ?? C_MUTED,
-                align: 'center',
-                wordWrap: { width: innerW },
-                lineSpacing: 2,
-            }).setOrigin(0.5, 0);
-            wrap.add(info);
-            y += info.height + 18;
-        } else {
-            y += 14;
-        }
-
-        const stepperWrap = this.scene.add.container(0, y);
-        wrap.add(stepperWrap);
-
-        stepperWrap.add(this.scene.add.text(0, 0, 'QUANTITY', {
-            fontFamily: config.fonts.text,
-            fontSize: '15px',
-            fontStyle: 'bold',
+        let cy = panelTop + m.H * 0.098;
+        const subStyle = {
+            fontSize: `${m.fs(TYPE.subtitle)}px`,
             color: C_MUTED,
             align: 'center',
-        }).setOrigin(0.5, 0));
-
-        const boxY = 26;
-        const stepperY = boxY + QTY_BOX_H / 2;
-        const stepGap = 12;
-        const minusX = -(QTY_BOX_W / 2 + stepGap + STEP_BTN / 2);
-        const plusX = QTY_BOX_W / 2 + stepGap + STEP_BTN / 2;
-
-        const qtyBg = this.scene.add.graphics();
-        qtyBg.fillStyle(0xffffff, 1);
-        qtyBg.fillRoundedRect(-QTY_BOX_W / 2, boxY, QTY_BOX_W, QTY_BOX_H, 10);
-        qtyBg.lineStyle(2, 0xb0c0d4, 1);
-        qtyBg.strokeRoundedRect(-QTY_BOX_W / 2, boxY, QTY_BOX_W, QTY_BOX_H, 10);
-        stepperWrap.add(qtyBg);
-
-        const minusBtn = this._makeStepButton(minusX, stepperY, '−', () => this._changeQtyFor(variant.key, -1), STEP_BTN);
-        const plusBtn = this._makeStepButton(plusX, stepperY, '+', () => this._changeQtyFor(variant.key, 1), STEP_BTN);
-        stepperWrap.add(minusBtn);
-        stepperWrap.add(plusBtn);
-
-        const qtyText = this.scene.add.text(0, stepperY, '0', {
-            fontFamily: config.fonts.text,
-            fontSize: '26px',
-            fontStyle: 'bold',
-            color: C_NAVY,
-            align: 'center',
-        }).setOrigin(0.5, 0.5);
-        stepperWrap.add(qtyText);
-
-        const cardH = y + boxY + QTY_BOX_H + CARD_PAD_Y;
-        this._cardViews[variant.key] = { wrap, border, minusBtn, plusBtn, qtyText, stepperWrap, cardH };
-        this._drawCardBorder(variant.key, false);
-        return cardH;
-    }
-
-    _drawCardBorder(key, active) {
-        const view = this._cardViews[key];
-        if (!view) return;
-        const variant = this._variants[key];
-        const g = view.border;
-        const h = view.cardH;
-        g.clear();
-        if (active) {
-            g.fillStyle(variant.isEcoVariant ? 0xe4f7ea : 0xe9eef5, 1);
-            g.fillRoundedRect(-CARD_W / 2, 0, CARD_W, h, CARD_RADIUS);
-            g.lineStyle(3, variant.isEcoVariant ? C_ECO : C_STANDARD, 1);
-            g.strokeRoundedRect(-CARD_W / 2, 0, CARD_W, h, CARD_RADIUS);
-        } else {
-            g.fillStyle(0xf7f4ec, 0.55);
-            g.fillRoundedRect(-CARD_W / 2, 0, CARD_W, h, CARD_RADIUS);
-            g.lineStyle(2, C_BORDER, 1);
-            g.strokeRoundedRect(-CARD_W / 2, 0, CARD_W, h, CARD_RADIUS);
-        }
-        const budgetMax = this._budgetMaxByKey[key] ?? 0;
-        const purchasable = budgetMax > 0 && (this._listRemaining == null || this._listRemaining > 0);
-        view.wrap.setAlpha(purchasable ? 1 : 0.6);
-    }
-
-    /** Quantity this card can still take on top of what the sibling variant already holds. */
-    _effectiveMax(key) {
-        const budgetMax = this._budgetMaxByKey[key] ?? 0;
-        if (this._listRemaining == null) return budgetMax;
-        const otherQty = Object.keys(this._qtyByKey)
-            .filter((k) => k !== key)
-            .reduce((sum, k) => sum + (this._qtyByKey[k] ?? 0), 0);
-        return Math.max(0, Math.min(budgetMax, this._listRemaining - otherQty));
-    }
-
-    _makeStepButton(x, y, label, onClick, size = 42) {
-        const wrap = this.scene.add.container(x, y);
-        const g = this.scene.add.graphics();
-        const draw = (hover) => {
-            g.clear();
-            g.fillStyle(hover ? 0x3d5a7a : 0x1e3a5f, 1);
-            g.fillCircle(0, 0, size / 2);
-            g.lineStyle(2, 0x8aadc8, 1);
-            g.strokeCircle(0, 0, size / 2);
         };
-        draw(false);
-        wrap.add(g);
+        this.add(this._text(
+            m.cx,
+            cy,
+            this._wrap('Compare both options before adding one to your cart.', innerW * 0.86, subStyle),
+            subStyle,
+        ).setOrigin(0.5, 0.5));
+        cy += m.H * 0.036;
 
-        wrap.add(this.scene.add.text(0, -1, label, {
-            fontFamily: config.fonts.text,
-            fontSize: `${Math.round(size * 0.58)}px`,
-            fontStyle: 'bold',
+        const pillW = Math.min(innerW * 0.46, m.W * 0.36);
+        const pillH = m.H * 0.048;
+        const pill = this._slice(m.cx, cy, MS.notPlayedBlue, pillW, pillH, 18);
+        this.add(pill);
+
+        const reqQty = Math.max(1, requirementQty ?? 1);
+        const reqLabel = `Requirement:- ${displayName} ${reqQty} ${qtyUnit(displayName, reqQty)}`;
+        this.add(this._text(m.cx, cy, reqLabel, {
+            fontSize: `${m.fs(TYPE.requirement)}px`,
+            fontStyle: WEIGHT.heavy,
+            color: C_NAVY,
+        }).setOrigin(0.5, 0.5));
+        cy += pillH / 2 + m.H * 0.004;
+
+        const footerH = m.H * 0.112;
+        const footerPadX = panelW * 0.018;
+        const footerPadBottom = m.H * 0.025;
+        const footerY = panelY + panelH / 2 - footerH - footerPadBottom;
+        const cardsBottom = footerY + m.H * 0.032;
+        const cardH = cardsBottom - cy;
+        const cardGap = innerW * 0.028;
+        const cardW = (innerW - cardGap) / 2;
+
+        variants.forEach((variant, i) => {
+            this._budgetMaxByKey[variant.key] = Math.max(0, variant.budgetMax ?? 0);
+            this._qtyByKey[variant.key] = 0;
+            const cx = innerLeft + i * (cardW + cardGap) + cardW / 2;
+            this._drawOptionCard(m, cx, cy, cardW, cardH, variant, i);
+        });
+
+        this._drawFooter(m, panelLeft + footerPadX, footerY, panelW - footerPadX * 2, footerH, {
+            variants,
+            coinsRemaining,
+            ecoRemaining,
+        });
+    }
+
+    _drawOptionCard(m, cx, top, w, h, variant, index) {
+        const wrap = this.scene.add.container(cx, top);
+        this.add(wrap);
+
+        const isEco = !!variant.isEcoVariant;
+        const card = this._slice(0, h / 2, isEco ? CP.productBaseGreen : CP.productBaseBlue, w, h, 72);
+        wrap.add(card);
+
+        const badgeW = w * 0.40;
+        const badgeH = m.H * 0.048;
+        const badgeX = -w / 2 + badgeW / 2 + w * 0.04;
+        const badgeY = m.H * 0.034;
+        const badge = this._slice(badgeX, badgeY, isEco ? CP.optionGreen : CP.optionBlue, badgeW, badgeH, 28);
+        wrap.add(badge);
+        wrap.add(this._text(badgeX, badgeY, `Option ${index + 1}`, {
+            fontSize: `${m.fs(TYPE.option)}px`,
+            fontStyle: WEIGHT.heavy,
             color: C_WHITE,
         }).setOrigin(0.5, 0.5));
+
+        const artKey = this._artKey(variant);
+        const artY = h * 0.24;
+        const art = this.scene.add.image(0, artY, artKey);
+        this._fitContain(art, w * 0.38, h * 0.22);
+        wrap.add(art);
+
+        const nameStyle = {
+            fontSize: `${m.fs(TYPE.name)}px`,
+            fontStyle: WEIGHT.heavy,
+            color: C_NAVY,
+            align: 'center',
+        };
+        const name = variantTitle(this._displayName, isEco);
+        wrap.add(this._text(0, h * 0.44, this._wrap(name, w * 0.86, nameStyle), nameStyle).setOrigin(0.5, 0.5));
+
+        const price = Math.round(variant.price ?? 0);
+        const impact = Math.abs(variant.product?.ecoImpact ?? 0);
+        const statY = h * 0.545;
+        const rowInset = w * 0.05;
+        const rowGap = w * 0.03;
+        const statW = w * 0.30;
+        const statH = Math.min(m.W * 0.026, m.H * 0.034) * 1.45 + m.H * 0.008;
+        const leftX = -(statW + rowGap) / 2;
+        const rightX = (statW + rowGap) / 2;
+        this._pill(wrap, leftX, statY, statW, statH, 0xF7FBFF);
+        this._pill(wrap, rightX, statY, statW, statH, 0xF7FBFF);
+        this._drawStatPair(wrap, m, leftX, statY, MISSION_DESC_KEYS.coinIcon, `${price}`, 'for 1', C_COIN, 1.45);
+        this._drawStatPair(wrap, m, rightX, statY, CP.leaf, `${impact}`, '', C_ECO);
+
+        const desc = (variant.product?.description ?? '').trim()
+            || (isEco
+                ? `This ${this._displayName} traveled a shorter distance to reach the store, reducing its transport impact.`
+                : `This ${this._displayName} traveled a long distance to reach the store, which increases its transport impact.`);
+        const descStyle = {
+            fontSize: `${m.fs(TYPE.desc)}px`,
+            color: C_MUTED,
+            align: 'center',
+            lineSpacing: m.fs(3),
+        };
+        wrap.add(this._text(0, h * 0.66, this._wrap(desc, w * 0.82, descStyle), descStyle).setOrigin(0.5, 0.5));
+
+        const stepSize = m.H * 0.064;
+        const stepY = h - stepSize / 2 - m.H * 0.05;
+        const tagH = m.H * 0.048;
+        const tagW = w - rowInset * 2;
+        const tagY = stepY - stepSize / 2 - tagH / 2 - m.H * 0.002;
+        this._pill(wrap, 0, tagY, tagW, tagH, isEco ? 0xC6E6C2 : 0xB9D6F6);
+        const tagStyle = {
+            fontSize: `${m.fs(TYPE.tag)}px`,
+            fontStyle: WEIGHT.heavy,
+            color: C_TAG,
+            align: 'center',
+        };
+        wrap.add(this._text(0, tagY, this._wrap(variantTagline(isEco), tagW * 0.92, tagStyle), tagStyle).setOrigin(0.5, 0.5));
+
+        const stepper = this._drawStepper(m, 0, stepY, variant.key, isEco);
+        wrap.add(stepper.wrap);
+
+        this._cardViews[variant.key] = {
+            wrap,
+            minusBtn: stepper.minusBtn,
+            plusBtn: stepper.plusBtn,
+            qtyText: stepper.qtyText,
+        };
+    }
+
+    _artKey(variant) {
+        const productKey = variant.product?.textureKey;
+        if (productKey && this.scene.textures.exists(productKey)) return productKey;
+        return variant.isEcoVariant ? CP.riceLocal : CP.riceImported;
+    }
+
+    _pill(parent, x, y, w, h, color) {
+        const g = this.scene.add.graphics();
+        g.fillStyle(color, 1);
+        g.fillRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
+        parent.add(g);
+        return g;
+    }
+
+    _drawStatPair(parent, m, x, y, iconKey, value, suffix, color, iconScale = 1) {
+        const group = this.scene.add.container(x, y);
+        parent.add(group);
+
+        const iconS = Math.min(m.W * 0.026, m.H * 0.034) * iconScale;
+        const icon = this.scene.add.image(0, 0, iconKey);
+        this._fitContain(icon, iconS, iconS);
+        group.add(icon);
+
+        const val = this._text(0, 0, value, {
+            fontSize: `${m.fs(TYPE.stat)}px`,
+            fontStyle: WEIGHT.heavy,
+            color,
+        }).setOrigin(0, 0.5);
+        group.add(val);
+
+        let suffixT = null;
+        if (suffix) {
+            suffixT = this._text(0, 2, suffix, {
+                fontSize: `${m.fs(TYPE.forOne)}px`,
+                fontStyle: WEIGHT.bold,
+                color,
+            }).setOrigin(0, 0.5);
+            group.add(suffixT);
+        }
+
+        const gap = m.W * 0.006;
+        const total = icon.displayWidth + gap + val.width + (suffixT ? gap + suffixT.width : 0);
+        let cursor = -total / 2;
+        icon.x = cursor + icon.displayWidth / 2;
+        cursor += icon.displayWidth + gap;
+        val.x = cursor;
+        if (suffixT) suffixT.x = cursor + val.width + gap;
+    }
+
+    _drawStepper(m, x, y, key, isEco) {
+        const wrap = this.scene.add.container(x, y);
+        const size = m.H * 0.064;
+        const gap = m.W * 0.05;
+        const barH = size * 0.72;
+        const barW = gap * 2 + size * 0.35;
+        const bar = this.scene.add.graphics();
+        bar.fillStyle(0xffffff, 1);
+        bar.fillRoundedRect(-barW / 2, -barH / 2, barW, barH, barH * 0.35);
+        wrap.add(bar);
+
+        const minusBtn = this._makeStepButton(-gap, 0, isEco ? CP.minusGreen : CP.minusBlue, () => this._changeQtyFor(key, -1), size);
+        const plusBtn = this._makeStepButton(gap, 0, isEco ? CP.plusGreen : CP.plusBlue, () => this._changeQtyFor(key, 1), size);
+        wrap.add(minusBtn);
+        wrap.add(plusBtn);
+
+        const qtyText = this._text(0, 0, '0', {
+            fontSize: `${m.fs(TYPE.qty)}px`,
+            fontStyle: WEIGHT.heavy,
+            color: C_NAVY,
+        }).setOrigin(0.5, 0.5);
+        wrap.add(qtyText);
+
+        return { wrap, minusBtn, plusBtn, qtyText };
+    }
+
+    _makeStepButton(x, y, textureKey, onClick, size) {
+        const wrap = this.scene.add.container(x, y);
+        const btn = this.scene.add.image(0, 0, textureKey);
+        btn.setDisplaySize(size, size);
+        wrap.add(btn);
 
         const hit = this.scene.add.circle(0, 0, size / 2, 0, 0);
         hit.setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => draw(true));
-        hit.on('pointerout', () => draw(false));
+        hit.on('pointerover', () => btn.setDisplaySize(size * 1.06, size * 1.06));
+        hit.on('pointerout', () => btn.setDisplaySize(size, size));
         hit.on('pointerup', onClick);
         wrap.add(hit);
 
@@ -361,45 +448,113 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         return wrap;
     }
 
-    _makeActionButton(x, y, { label, width, height, fill, hoverFill, onClick }) {
-        const wrap = this.scene.add.container(x, y);
-        const g = this.scene.add.graphics();
-        const r = height / 2;
+    _drawFooter(m, x, y, w, h, { variants, coinsRemaining, ecoRemaining }) {
+        const bar = this._slice(x + w / 2, y + h / 2, CP.footerBar, w, h, 56);
+        this.add(bar);
 
-        const draw = (hover) => {
-            g.clear();
-            g.fillStyle(0x000000, 0.15);
-            g.fillRoundedRect(-width / 2 + 2, -height / 2 + 3, width, height, r);
-            g.fillStyle(hover ? hoverFill : fill, 1);
-            g.fillRoundedRect(-width / 2, -height / 2, width, height, r);
-            g.fillStyle(0xffffff, 0.12);
-            g.fillRoundedRect(-width / 2 + 3, -height / 2 + 2, width - 6, height * 0.45, {
-                tl: r, tr: r, bl: 0, br: 0,
-            });
-        };
-        draw(false);
-        wrap.add(g);
+        const leftX = x + w * 0.055;
+        const midY = y + h * 0.42;
+        const leafL = this.scene.add.image(leftX, midY, CP.leaf);
+        this._fitContain(leafL, m.W * 0.028, m.H * 0.04);
+        this.add(leafL);
 
-        wrap.add(this.scene.add.text(0, 0, label, {
-            fontFamily: config.fonts.text,
-            fontSize: '20px',
-            fontStyle: 'bold',
+        const resLabel = this._text(leftX + m.W * 0.024, midY, 'Your Resources:', {
+            fontSize: `${m.fs(TYPE.footer)}px`,
+            fontStyle: WEIGHT.heavy,
             color: C_WHITE,
-        }).setOrigin(0.5, 0.5));
+        }).setOrigin(0, 0.5);
+        this.add(resLabel);
 
-        const hit = this.scene.add.rectangle(0, 0, width, height, 0, 0);
+        let rx = resLabel.x + resLabel.width + m.W * 0.016;
+        const coin = this.scene.add.image(rx, midY, MISSION_DESC_KEYS.coinIcon);
+        this._fitContain(coin, m.W * 0.034, m.H * 0.048);
+        this.add(coin);
+        rx += coin.displayWidth * 0.5 + m.W * 0.008;
+        const coinT = this._text(rx, midY, `${Math.round(coinsRemaining)}`, {
+            fontSize: `${m.fs(TYPE.footer)}px`,
+            fontStyle: WEIGHT.heavy,
+            color: C_WHITE,
+        }).setOrigin(0, 0.5);
+        this.add(coinT);
+        rx += coinT.width + m.W * 0.014;
+
+        const sep = this._text(rx, midY, '|', {
+            fontSize: `${m.fs(TYPE.footer)}px`,
+            color: C_WHITE,
+        }).setOrigin(0, 0.5);
+        this.add(sep);
+        rx += sep.width + m.W * 0.014;
+
+        const leafR = this.scene.add.image(rx, midY, CP.leaf);
+        this._fitContain(leafR, m.W * 0.024, m.H * 0.034);
+        this.add(leafR);
+        rx += m.W * 0.018;
+        this.add(this._text(rx, midY, `${Math.round(ecoRemaining)}`, {
+            fontSize: `${m.fs(TYPE.footer)}px`,
+            fontStyle: WEIGHT.heavy,
+            color: C_WHITE,
+        }).setOrigin(0, 0.5));
+
+        const std = variants.find((v) => !v.isEcoVariant);
+        const eco = variants.find((v) => v.isEcoVariant);
+        const coinSave = Math.max(0, Math.round((eco?.price ?? 0) - (std?.price ?? 0)));
+        const ecoSave = Math.max(0, Math.abs(std?.product?.ecoImpact ?? 0) - Math.abs(eco?.product?.ecoImpact ?? 0));
+        this.add(this._text(
+            leftX + m.W * 0.024,
+            y + h * 0.74,
+            `Save ${coinSave} Coins with Imported  •  Save ${ecoSave} Eco with Regional`,
+            {
+                fontSize: `${m.fs(TYPE.save)}px`,
+                fontStyle: WEIGHT.bold,
+                color: C_WHITE,
+            },
+        ).setOrigin(0, 0.5));
+
+        const btnW = w * 0.22;
+        const btnH = h * 0.48;
+        const btnX = x + w * 0.82;
+        const btnY = y + h * 0.5;
+        const btn = this.scene.add.image(btnX, btnY, HOME_TEXTURE_KEYS.greenButton);
+        btn.setDisplaySize(btnW, btnH);
+        this.add(btn);
+
+        const label = this._text(btnX - btnW * 0.04, btnY, 'Add To Cart', {
+            fontSize: `${m.fs(TYPE.button)}px`,
+            fontStyle: WEIGHT.heavy,
+            color: C_WHITE,
+        }).setOrigin(0.5, 0.5);
+        this.add(label);
+
+        if (this.scene.textures.exists(CHECKOUT_TEXTURE_KEYS.cartIcon)) {
+            const cart = this.scene.add.image(label.x + label.width / 2 + m.W * 0.014, btnY, CHECKOUT_TEXTURE_KEYS.cartIcon);
+            this._fitContain(cart, btnW * 0.16, btnH * 0.5);
+            this.add(cart);
+        }
+
+        const hit = this.scene.add.rectangle(btnX, btnY, btnW, btnH, 0, 0);
         hit.setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => draw(true));
-        hit.on('pointerout', () => draw(false));
-        hit.on('pointerup', onClick);
-        wrap.add(hit);
+        hit.on('pointerover', () => btn.setDisplaySize(btnW * 1.04, btnH * 1.04));
+        hit.on('pointerout', () => btn.setDisplaySize(btnW, btnH));
+        hit.on('pointerup', () => this._confirm());
+        this.add(hit);
 
-        wrap._setEnabled = (enabled) => {
-            hit.disableInteractive();
-            if (enabled) hit.setInteractive({ useHandCursor: true });
-            wrap.setAlpha(enabled ? 1 : 0.45);
+        this._addWrap = {
+            _setEnabled: (enabled) => {
+                hit.disableInteractive();
+                if (enabled) hit.setInteractive({ useHandCursor: true });
+                btn.setAlpha(enabled ? 1 : 0.45);
+                label.setAlpha(enabled ? 1 : 0.45);
+            },
         };
-        return wrap;
+    }
+
+    _effectiveMax(key) {
+        const budgetMax = this._budgetMaxByKey[key] ?? 0;
+        if (this._listRemaining == null) return budgetMax;
+        const otherQty = Object.keys(this._qtyByKey)
+            .filter((k) => k !== key)
+            .reduce((sum, k) => sum + (this._qtyByKey[k] ?? 0), 0);
+        return Math.max(0, Math.min(budgetMax, this._listRemaining - otherQty));
     }
 
     _changeQtyFor(key, delta) {
@@ -407,7 +562,6 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         const current = this._qtyByKey[key] ?? 0;
         if (delta > 0 && max <= 0) return;
         this._qtyByKey[key] = Phaser.Math.Clamp(current + delta, 0, max);
-        // Changing one card's quantity shifts how much the sibling card has left to give.
         Object.keys(this._cardViews).forEach((k) => this._refreshCardQty(k));
         this._refreshAddButton();
     }
@@ -417,10 +571,9 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         if (!view) return;
         const qty = this._qtyByKey[key] ?? 0;
         const max = this._effectiveMax(key);
-        view.qtyText.setText(`${qty}`);
+        setCauseText(view.qtyText, `${qty}`);
         view.minusBtn._setEnabled(qty > 0);
         view.plusBtn._setEnabled(qty < max);
-        this._drawCardBorder(key, qty > 0);
     }
 
     _refreshAddButton() {
@@ -440,13 +593,11 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         this.scene.tweens.add({
             targets: this,
             alpha: 0,
-            scaleX: 0.94,
-            scaleY: 0.94,
-            duration: 180,
+            duration: 160,
             ease: 'Quad.easeIn',
             onComplete: () => {
-                this.setScale(1);
                 this.setVisible(false);
+                this.setAlpha(1);
                 this._onClose?.();
                 afterClose?.();
             },

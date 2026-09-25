@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import config from '../../utils/config.js';
 import { HOME_TEXTURE_KEYS } from '../../config/homeAssets.js';
+import { copyCause, addCauseText, wrapCause } from '../../utils/gameText.js';
 import { MISSION_SELECT_KEYS as K } from '../../config/missionSelectAssets.js';
 
 const COLS = 3;
@@ -128,44 +128,15 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
     }
 
     _copy (s) {
-        return String(s).replace(/ /g, '\u2002');
+        return copyCause(s);
     }
 
-    /** Wrap on real spaces, then swap in en-spaces so Cause still shows gaps. */
     _wrap (str, maxWidth, style) {
-        const words = String(str).split(/\s+/).filter(Boolean);
-        if (!words.length) return '';
-        const probe = this.scene.add.text(0, 0, '', {
-            fontFamily: config.fonts.text,
-            letterSpacing: 0.4,
-            ...style,
-        }).setVisible(false);
-        const widthOf = (s) => {
-            probe.setText(this._copy(s));
-            return probe.width;
-        };
-        const lines = [];
-        let line = '';
-        words.forEach((word) => {
-            const trial = line ? `${line} ${word}` : word;
-            if (line && widthOf(trial) > maxWidth) {
-                lines.push(line);
-                line = word;
-            } else {
-                line = trial;
-            }
-        });
-        if (line) lines.push(line);
-        probe.destroy();
-        return lines.join('\n');
+        return wrapCause(this.scene, str, maxWidth, style);
     }
 
     _text (x, y, message, style) {
-        return this.scene.add.text(x, y, this._copy(message), {
-            fontFamily: config.fonts.text,
-            letterSpacing: 0.4,
-            ...style,
-        });
+        return addCauseText(this.scene, x, y, message, style);
     }
 
     _fitW (img, displayW) {
@@ -422,13 +393,13 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
     }
 
     _drawStatus (m, message) {
-        this.add(this._text(m.cx, m.y(0.55), message, {
+        const style = {
             fontSize: `${m.fs(28)}px`,
             fontStyle: 'bold',
             color: '#7c5a2e',
             align: 'center',
-            wordWrap: { width: m.W * 0.7 },
-        }).setOrigin(0.5, 0.5));
+        };
+        this.add(this._text(m.cx, m.y(0.55), this._wrap(message, m.W * 0.7, style), style).setOrigin(0.5, 0.5));
     }
 
     _statusLabel (status) {

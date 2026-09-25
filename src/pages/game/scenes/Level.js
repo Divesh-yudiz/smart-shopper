@@ -13,8 +13,12 @@ import { getRackByIndex, getRacksForView, getRackPlacements } from "../utils/rac
 import { UI_TEXTURE_KEYS } from "../config/componentAssets.js";
 import { patchRacksWithApiPrices, buildShoppingListEntries, buildCartItemsFromApi, addToCart, removeFromCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId, setItemVariants, getItemVariants, getItemId, fetchItemVariants } from "../../../utils/gameApi.js";
 import ProductInfoPopup from "../prefabs/popups/ProductInfoPopup.js";
+import SalePopup from "../prefabs/popups/SalePopup.js";
+import NotEnoughCoinsPopup from "../prefabs/popups/NotEnoughCoinsPopup.js";
+import EcoMeterEmptyPopup from "../prefabs/popups/EcoMeterEmptyPopup.js";
 import WalkingCharacter from "../prefabs/WalkingCharacter.js";
 import { buildEcoVariantPair } from "../config/ecoConfig.js";
+import { addCauseText } from "../utils/gameText.js";
 
 const SAVE_KEY = 'ss_gameState';
 
@@ -116,12 +120,72 @@ class Level extends Phaser.Scene {
 
         this.oCheckout = new CheckoutPanel(this);
         this.oProductPopup = new ProductInfoPopup(this);
+        this.oSalePopup = new SalePopup(this);
+        this.oNotEnoughCoins = new NotEnoughCoinsPopup(this);
+        this.oEcoMeterEmpty = new EcoMeterEmptyPopup(this);
         this._checkoutOpen = false;
+        this._saleOpen = false;
+        this._coinsOpen = false;
+        this._ecoEmptyOpen = false;
         this._buildCheckoutButton();
 
         if (!pauseTimer && (savedState?.timerRemaining ?? timeLimit) <= 0) {
             this.time.delayedCall(200, () => this.openCheckout());
+        } else if (!pauseTimer) {
+            this.time.delayedCall(700, () => this._showEcoMeterEmptyPopup());
         }
+    }
+
+    _showEcoMeterEmptyPopup () {
+        if (this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
+        this._ecoEmptyOpen = true;
+        this.oTimer?.pause();
+        this.oCharacter?.setInputEnabled(false);
+        const resume = () => {
+            this._ecoEmptyOpen = false;
+            this.oTimer?.resume();
+            this.oCharacter?.setInputEnabled(true);
+        };
+        this.oEcoMeterEmpty.open({
+            onClose: resume,
+            onViewCart: () => {},
+        });
+    }
+
+    _showNotEnoughCoinsPopup () {
+        if (this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
+        this._coinsOpen = true;
+        this.oTimer?.pause();
+        this.oCharacter?.setInputEnabled(false);
+        const resume = () => {
+            this._coinsOpen = false;
+            this.oTimer?.resume();
+            this.oCharacter?.setInputEnabled(true);
+        };
+        this.oNotEnoughCoins.open({
+            onClose: resume,
+            onViewCart: () => {},
+        });
+    }
+
+    _showSalePopup () {
+        if (this._ecoEmptyOpen || this._saleOpen || this._coinsOpen || this._checkoutOpen || this._productPopupOpen) return;
+        this._saleOpen = true;
+        this.oTimer?.pause();
+        this.oCharacter?.setInputEnabled(false);
+        const spent = this.oMyCart?.getTotal() ?? 0;
+        const resume = () => {
+            this._saleOpen = false;
+            this.oTimer?.resume();
+            this.oCharacter?.setInputEnabled(true);
+        };
+        this.oSalePopup.open({
+            coinsRemaining: this._budgetRemaining ?? Math.max(0, (this._budget ?? 0) - spent),
+            ecoRemaining: this._ecoValue ?? 0,
+            onClose: resume,
+            onSkip: () => {},
+            onBuy: () => {},
+        });
     }
 
     _canAfford (product) {
@@ -180,7 +244,7 @@ class Level extends Phaser.Scene {
     }
 
     async _showProductPopup (cartProduct, sItemKey) {
-        if (this._productPopupOpen) return;
+        if (this._productPopupOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
         this._productPopupOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -217,9 +281,16 @@ class Level extends Phaser.Scene {
             this.oCharacter?.setInputEnabled(true);
         };
 
+        const displayName = this._formatProductName(cartProduct, sItemKey);
+        const spent = this.oMyCart?.getTotal() ?? 0;
+        const coinsRemaining = this._budgetRemaining ?? Math.max(0, (this._budget ?? 0) - spent);
+        const listRemaining = variants.find((v) => v.listRemaining != null)?.listRemaining;
         this.oProductPopup.open({
-            displayName: this._formatProductName(cartProduct, sItemKey),
+            displayName,
             variants,
+            coinsRemaining,
+            ecoRemaining: this._ecoValue ?? 0,
+            requirementQty: listRemaining ?? 1,
             onClose,
             onConfirm: (selections) => this._addProductToCart(selections, sItemKey),
         });
@@ -327,8 +398,7 @@ class Level extends Phaser.Scene {
             .setOrigin(0.5, 0.5);
         btn.add(cartIcon);
 
-        const label = this.add.text(10, 0, 'CHECKOUT', {
-            fontFamily: config.fonts.text,
+        const label = addCauseText(this, 10, 0, 'CHECKOUT', {
             fontSize: '24px',
             fontStyle: 'bold',
             color: '#ffffff',
@@ -507,7 +577,7 @@ class Level extends Phaser.Scene {
     }
 
     async openCheckout() {
-        if (this._checkoutOpen) return;
+        if (this._checkoutOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
         this._checkoutOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -535,7 +605,7 @@ class Level extends Phaser.Scene {
     }
 
     onProductClick(product, rackId, rackIndex) {
-        if (this._productPopupOpen || this._checkoutOpen) return;
+        if (this._productPopupOpen || this._checkoutOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
 
         const rack = getRackByIndex(rackIndex);
         const sItemKey = resolveItemKeyFromProduct(product);

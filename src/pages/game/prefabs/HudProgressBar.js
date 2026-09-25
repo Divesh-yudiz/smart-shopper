@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import config from '../utils/config.js';
+import { addCauseText, setCauseText } from '../utils/gameText.js';
 
 const TRACK_BG = 0x152a42;
 const TRACK_BORDER = 0x5a7a9a;
@@ -43,8 +43,7 @@ export default class HudProgressBar extends Phaser.GameObjects.Container {
 
         const barY = LABEL_SIZE + LABEL_GAP + height / 2;
 
-        this._labelText = scene.add.text(0, 0, label, {
-            fontFamily: config.fonts.text,
+        this._labelText = addCauseText(scene, 0, 0, label, {
             fontSize: `${LABEL_SIZE}px`,
             fontStyle: 'bold',
             color: LABEL_COLOR,
@@ -58,8 +57,7 @@ export default class HudProgressBar extends Phaser.GameObjects.Container {
         this._fillGfx = scene.add.graphics();
         this.add(this._fillGfx);
 
-        this._valueText = scene.add.text(width / 2, barY, '', {
-            fontFamily: config.fonts.text,
+        this._valueText = addCauseText(scene, width / 2, barY, '', {
             fontSize: '17px',
             fontStyle: 'bold',
             color: VALUE_COLOR,
@@ -109,7 +107,7 @@ export default class HudProgressBar extends Phaser.GameObjects.Container {
             });
         }
 
-        this._valueText.setText(this._formatText(this._value, this._max));
+        setCauseText(this._valueText, this._formatText(this._value, this._max));
         this._valueText.setY(this._barY);
     }
 

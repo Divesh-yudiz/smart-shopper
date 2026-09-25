@@ -7,6 +7,10 @@ import { productAssetPaths, productAssets } from '../config/productAssets.js';
 import { characterAssetPaths } from '../config/characterAssets.js';
 import { popupAssetPaths } from '../config/popupAssets.js';
 import { checkoutAssetPaths } from '../config/checkoutAssets.js';
+import { chooseProductAssetPaths } from '../config/chooseProductAssets.js';
+import { salePopupAssetPaths } from '../config/salePopupAssets.js';
+import { notEnoughCoinAssetPaths } from '../config/notEnoughCoinAssets.js';
+import { ecoMeterEmptyAssetPaths } from '../config/ecoMeterEmptyAssets.js';
 
 //* Add the path to the assets object.
 const assetPaths = Object.freeze({
@@ -20,6 +24,10 @@ const assetPaths = Object.freeze({
         ...characterAssetPaths,
         ...popupAssetPaths,
         ...checkoutAssetPaths,
+        ...chooseProductAssetPaths,
+        ...salePopupAssetPaths,
+        ...notEnoughCoinAssetPaths,
+        ...ecoMeterEmptyAssetPaths,
     ],
     sounds: [
 
