@@ -9,19 +9,22 @@ const COLS = 3;
 const TYPE = Object.freeze({
     ribbon: 40,
     missionTag: 18,
-    notPlayed: 13,
-    title: 28,
-    items: 18,
+    notPlayed: 14,
+    title: 26,
+    stats: 17,
     desc: 17,
     rating: 16,
-    view: 16,
+    view: 17,
     score: 15,
 });
 
 const C_WHITE = '#ffffff';
 const C_BODY = '#1A1A1A';
-const C_ITEMS = '#1F2933';
+const C_STATS = '#1F2933';
 const C_RATING = '#2D3748';
+
+const TITLE_MAX_LINES = 2;
+const DESC_MAX_LINES = 4;
 
 const THEMES = [
     {
@@ -193,44 +196,69 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         if (!items.length) return;
 
         const rows = Math.max(1, Math.ceil(items.length / COLS));
-        const padX = panelW * 0.032;
-        const padTop = panelH * 0.10;
-        const padBot = panelH * 0.045;
-        const gapX = panelW * 0.012;
-        const gapY = panelH * 0.016;
+        const padX = panelW * 0.036;
+        const padTop = panelH * 0.11;
+        const padBot = panelH * 0.05;
+        const gapX = panelW * 0.018;
+        const gapY = panelH * 0.022;
         const innerW = panelW - padX * 2;
         const innerH = panelH - padTop - padBot;
-        const cellW = (innerW - gapX * (COLS - 1)) / COLS;
-        const cellH = (innerH - gapY * (rows - 1)) / rows;
-        const cardS = Math.min(cellW, cellH);
-        const gridW = COLS * cardS + (COLS - 1) * gapX;
-        const gridH = rows * cardS + (rows - 1) * gapY;
+
+        // One shared card size for every mission — width from 3-col grid,
+        // height capped so portrait art still fills without clipping the footer.
+        const cardW = (innerW - gapX * (COLS - 1)) / COLS;
+        const maxCardH = (innerH - gapY * (rows - 1)) / rows;
+        const cardH = Math.min(maxCardH, cardW * 1.42);
+
+        const gridW = COLS * cardW + (COLS - 1) * gapX;
+        const gridH = rows * cardH + (rows - 1) * gapY;
         const gridLeft = m.cx - gridW / 2;
         const gridTop = panelY - panelH / 2 + padTop + (innerH - gridH) / 2;
 
         items.forEach((mission, i) => {
             const col = i % COLS;
             const row = Math.floor(i / COLS);
-            const cx = gridLeft + col * (cardS + gapX) + cardS / 2;
-            const cy = gridTop + row * (cardS + gapY) + cardS / 2;
-            this._drawCard(m, cx, cy, cardS, cardS, mission, THEMES[i % THEMES.length]);
+            const countInRow = Math.min(COLS, items.length - row * COLS);
+            const rowOffset = ((COLS - countInRow) * (cardW + gapX)) / 2;
+            const cx = gridLeft + rowOffset + col * (cardW + gapX) + cardW / 2;
+            const cy = gridTop + row * (cardH + gapY) + cardH / 2;
+            this._drawCard(m, cx, cy, cardW, cardH, mission, THEMES[i % THEMES.length]);
         });
+    }
+
+    _clampLines (str, maxWidth, style, maxLines) {
+        const wrapped = this._wrap(str, maxWidth, style);
+        const lines = wrapped.split('\n').filter(Boolean);
+        if (lines.length <= maxLines) return wrapped;
+        const kept = lines.slice(0, maxLines);
+        const last = kept[maxLines - 1].replace(/[.…]+$/, '');
+        kept[maxLines - 1] = `${last}…`;
+        return kept.join('\n');
+    }
+
+    _missionStatsLabel (mission) {
+        const count = mission.nShoppingListCount
+            ?? (mission.aShoppingList ?? []).reduce((sum, it) => sum + (it.nQuantity ?? 0), 0);
+        if (!count) return '';
+        return `${count} item${count === 1 ? '' : 's'}`;
     }
 
     _drawCard (m, cx, cy, w, h, mission, theme) {
         const wrap = this.scene.add.container(cx, cy);
         const left = -w / 2;
         const top = -h / 2;
-        const pad = w * 0.09;
-        const innerW = w - pad * 2;
-        const gapSm = h * 0.018;
-        const gapMd = h * 0.024;
+        const padX = w * 0.085;
+        const padY = h * 0.055;
+        const innerW = w - padX * 2;
+        const gapSm = h * 0.012;
+        const gapMd = h * 0.018;
 
+        // Stretch art to the shared card box so every card is identical size.
         const card = this.scene.add.image(0, 0, theme.card);
-        this._fitContain(card, w, h);
+        card.setDisplaySize(w, h);
         wrap.add(card);
 
-        const corner = Math.min(w, h) * 0.09;
+        const corner = Math.min(w, h) * 0.085;
         const maskG = this.scene.add.graphics();
         maskG.fillStyle(0xffffff, 1);
         maskG.fillRoundedRect(cx + left, cy + top, w, h, corner);
@@ -238,10 +266,21 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         wrap.setMask(maskG.createGeometryMask());
         this.add(maskG);
 
-        let y = top + pad;
+        // Build footer from the bottom so rating + button always sit inside.
+        const btnH = Math.max(m.fs(28), h * 0.085);
+        const btnW = Math.min(w * 0.46, innerW * 0.55);
+        const starS = Math.max(m.fs(16), h * 0.048);
+        const footerPad = padY;
+        const btnCy = top + h - footerPad - btnH / 2;
+        const starCy = btnCy;
+        const ratingLabelY = starCy - starS / 2 - gapSm - m.fs(TYPE.rating);
+        const footerTop = ratingLabelY - gapMd;
+        const bodyBottom = footerTop - gapSm;
 
-        const tag = this.scene.add.image(left + pad, y, K.missionTag);
-        this._fitW(tag, w * 0.38);
+        let y = top + padY;
+
+        const tag = this.scene.add.image(left + padX, y, K.missionTag);
+        this._fitW(tag, w * 0.34);
         tag.setOrigin(0, 0);
         wrap.add(tag);
         wrap.add(this._text(tag.x + tag.displayWidth / 2, tag.y + tag.displayHeight / 2, `Mission ${mission.nOrder ?? ''}`.trim(), {
@@ -250,8 +289,8 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
             color: C_WHITE,
         }).setOrigin(0.5, 0.5));
 
-        const status = this._statusLabel(mission.eStatus);
-        const np = this.scene.add.image(left + w - pad, y, theme.notPlayed);
+        const status = this._statusLabel(mission);
+        const np = this.scene.add.image(left + w - padX, y, theme.notPlayed);
         this._fitW(np, w * 0.30);
         np.setOrigin(1, 0);
         wrap.add(np);
@@ -263,82 +302,80 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
 
         y += Math.max(tag.displayHeight, np.displayHeight) + gapMd;
 
-        const art = this.scene.add.image(0, y, theme.art);
-        this._fitContain(art, innerW * 0.62, h * 0.16);
-        art.setOrigin(0.5, 0);
-        wrap.add(art);
-        y += art.displayHeight + gapMd;
+        const artBudget = Math.min(h * 0.15, Math.max(0, bodyBottom - y - h * 0.38));
+        if (artBudget > h * 0.07) {
+            const art = this.scene.add.image(0, y, theme.art);
+            this._fitContain(art, innerW * 0.52, artBudget);
+            art.setOrigin(0.5, 0);
+            wrap.add(art);
+            y += art.displayHeight + gapMd;
+        }
 
         const titleStyle = { fontSize: `${m.fs(TYPE.title)}px`, fontStyle: 'bold' };
-        const title = this._text(left + pad, y, this._wrap(mission.sName ?? 'Mission', innerW, titleStyle), {
-            ...titleStyle,
-            color: theme.title,
-        }).setOrigin(0, 0);
+        const title = this._text(
+            left + padX,
+            y,
+            this._clampLines(mission.sName ?? 'Mission', innerW, titleStyle, TITLE_MAX_LINES),
+            { ...titleStyle, color: theme.title },
+        ).setOrigin(0, 0);
         wrap.add(title);
         y += title.height + gapSm;
 
-        const itemCount = (mission.aShoppingList ?? []).reduce((sum, it) => sum + (it.nQuantity ?? 0), 0);
-        const iconS = h * 0.048;
-        const basket = this.scene.add.image(left + pad, y + iconS / 2, K.basketIcon);
-        basket.setDisplaySize(iconS, iconS);
-        basket.setOrigin(0, 0.5);
-        wrap.add(basket);
-        const itemStyle = { fontSize: `${m.fs(TYPE.items)}px` };
-        const itemsTxt = this._text(
-            basket.x + iconS + w * 0.025,
-            y,
-            this._wrap(`${itemCount} items to pick`, innerW - iconS - w * 0.04, itemStyle),
-            { ...itemStyle, color: C_ITEMS },
-        ).setOrigin(0, 0);
-        wrap.add(itemsTxt);
-        y += Math.max(iconS, itemsTxt.height) + gapSm;
+        const statsLabel = this._missionStatsLabel(mission);
+        if (statsLabel) {
+            const statsStyle = { fontSize: `${m.fs(TYPE.stats)}px`, fontStyle: 'bold' };
+            const statsTxt = this._text(
+                left + padX,
+                y,
+                this._clampLines(statsLabel, innerW, statsStyle, 2),
+                { ...statsStyle, color: C_STATS },
+            ).setOrigin(0, 0);
+            wrap.add(statsTxt);
+            y += statsTxt.height + gapSm;
+        }
 
-        if (mission.sDescription) {
+        if (mission.sDescription && y < bodyBottom) {
             const descStyle = { fontSize: `${m.fs(TYPE.desc)}px` };
-            const wrappedDesc = this._wrap(mission.sDescription, innerW, descStyle);
-            const descLines = wrappedDesc.split('\n').length;
-            const desc = this._text(left + pad, y, wrappedDesc, {
-                ...descStyle,
-                color: C_BODY,
-                lineSpacing: m.fs(TYPE.desc) * 0.25,
-            }).setOrigin(0, 0);
-            wrap.add(desc);
-            y += descLines * m.fs(TYPE.desc) * 1.35 + h * 0.04;
-        } else {
-            y += h * 0.04;
+            const lineH = m.fs(TYPE.desc) * 1.26;
+            const availH = Math.max(lineH, bodyBottom - y);
+            const maxLines = Math.max(1, Math.min(DESC_MAX_LINES, Math.floor(availH / lineH)));
+            wrap.add(this._text(
+                left + padX,
+                y,
+                this._clampLines(mission.sDescription, innerW, descStyle, maxLines),
+                {
+                    ...descStyle,
+                    color: C_BODY,
+                    lineSpacing: m.fs(TYPE.desc) * 0.16,
+                },
+            ).setOrigin(0, 0));
         }
 
         const div = this.scene.add.graphics();
         div.lineStyle(2, 0xc8d0c8, 0.75);
-        div.lineBetween(left + pad, y, left + w - pad, y);
+        div.lineBetween(left + padX, footerTop, left + w - padX, footerTop);
         wrap.add(div);
-        y += gapSm + 6;
 
-        wrap.add(this._text(left + pad, y, 'Mission Rating', {
+        wrap.add(this._text(left + padX, ratingLabelY, 'Mission Rating', {
             fontSize: `${m.fs(TYPE.rating)}px`,
             color: C_RATING,
         }).setOrigin(0, 0));
-        y += m.fs(TYPE.rating) + gapSm;
 
         const rating = Math.max(0, Math.min(3, Number(mission.nRating) || 0));
-        const starS = h * 0.052;
-        const starY = y + starS / 2;
         for (let i = 0; i < 3; i += 1) {
             const star = this.scene.add.image(
-                left + pad + starS * 0.5 + i * (starS + w * 0.02),
-                starY,
+                left + padX + starS * 0.5 + i * (starS + w * 0.02),
+                starCy,
                 i < rating ? K.starFilled : K.starEmpty,
             );
             star.setDisplaySize(starS, starS);
             wrap.add(star);
         }
 
-        const btnH = h * 0.08;
-        const btnW = Math.min(w * 0.40, innerW * 0.48);
         wrap.add(this._drawViewButton(
             m,
-            left + w - pad - btnW / 2,
-            starY,
+            left + w - padX - btnW / 2,
+            btnCy,
             btnW,
             btnH,
             theme,
@@ -347,10 +384,12 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
 
         const score = mission.nScore;
         if (score != null && status !== 'Not Played') {
-            wrap.add(this._text(left + pad, y + starS + gapSm, this._wrap(`Your Score: ${score} out of 100`, innerW * 0.7, { fontSize: `${m.fs(TYPE.score)}px` }), {
-                fontSize: `${m.fs(TYPE.score)}px`,
-                color: C_RATING,
-            }).setOrigin(0, 0));
+            wrap.add(this._text(
+                left + padX,
+                starCy + starS / 2 + gapSm * 0.5,
+                this._clampLines(`Score: ${score}/100`, innerW * 0.5, { fontSize: `${m.fs(TYPE.score)}px` }, 1),
+                { fontSize: `${m.fs(TYPE.score)}px`, color: C_RATING },
+            ).setOrigin(0, 0));
         }
 
         this.add(wrap);
@@ -402,8 +441,9 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         this.add(this._text(m.cx, m.y(0.55), this._wrap(message, m.W * 0.7, style), style).setOrigin(0.5, 0.5));
     }
 
-    _statusLabel (status) {
-        const key = String(status ?? '').toLowerCase();
+    _statusLabel (mission) {
+        if (mission?.bPlayed === true || mission?.bPlayed === 'true') return 'Played';
+        const key = String(mission?.eStatus ?? mission ?? '').toLowerCase();
         if (key === 'played' || key === 'completed') return 'Played';
         if (key === 'in_progress' || key === 'in-progress') return 'In Progress';
         return 'Not Played';

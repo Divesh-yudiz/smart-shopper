@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { useEffect, useRef } from "react";
 import config from "./utils/config.js";
+import { waitForCauseFonts } from "./utils/loadFonts.js";
 import Boot from "./scenes/Boot.js";
 import Home from "./scenes/Home.js";
 import Preload from "./scenes/Preload.js";
@@ -12,13 +13,14 @@ function GamePlay() {
         let game;
         let cancelled = false;
 
-        // Wait for all @font-face fonts (including Cause) to finish loading
-        // before creating the Phaser game, so canvas text uses the correct font.
+        // Explicitly download every Cause weight before Phaser boots.
+        // `document.fonts.ready` alone can resolve while faces are still unused
+        // (and therefore not fetched), which makes canvas text fall back.
         // Guarded with `cancelled` because this resolves after React 18 StrictMode's
         // dev-mode mount→cleanup→mount cycle — without it, two Game instances get
         // created and stack in the same div.
-        document.fonts.ready.then(() => {
-            if (cancelled) return;
+        waitForCauseFonts().then(() => {
+            if (cancelled || !gameRef.current) return;
             const gameConfig = {
                 type: Phaser.AUTO,
                 width: config.width,

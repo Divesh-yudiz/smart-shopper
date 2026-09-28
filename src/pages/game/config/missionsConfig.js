@@ -1,6 +1,6 @@
 /**
- * Local mission catalog for the Choose Mission screen.
- * The list endpoint GET /mini-games/missions is not used.
+ * Local mission catalog — fallback if
+ * GET /mini-games/smart-shopper/missions fails.
  */
 export const LOCAL_GAME_ID = '69d8eaff08adb0ec7230b6e7';
 

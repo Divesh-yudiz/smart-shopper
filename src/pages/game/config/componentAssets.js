@@ -14,7 +14,13 @@ import countBase from '../../../assets/images/Components/Count-Base.png';
 import listIcon from '../../../assets/images/Components/List-Icon.png';
 import objectBase from '../../../assets/images/Components/Object-BAse.png';
 import shoppingListBase from '../../../assets/images/Components/Shoping-List-Ui-Base.png';
+import requiredItemBg from '../../../assets/images/gameplay/required-item-bg.png';
 import timerCoinBase from '../../../assets/images/Components/Timer-and-Coin-Base.png';
+import timerBg from '../../../assets/images/gameplay/timer-bg.png';
+import timerBaseIcon from '../../../assets/images/gameplay/timer-base-icon.png';
+import ecoGoldIcon from '../../../assets/images/gameplay/E-Gold.png';
+import ecoGreenIcon from '../../../assets/images/gameplay/E-Green.png';
+import missionTitleBg from '../../../assets/images/gameplay/gameplay-title-base.png';
 import shelfPriceBase from '../../../assets/images/Components/Price-Base.png';
 import ecoIcon from '../../../assets/images/home/eco-icon.png';
 
@@ -30,7 +36,13 @@ export const UI_TEXTURE_KEYS = Object.freeze({
     countBase: 'ui_count_base',
     listIcon: 'ui_list_icon',
     shoppingListBase: 'ui_shopping_list_base',
+    requiredItemBg: 'ui_required_item_bg',
     timerCoinBase: 'ui_timer_coin_base',
+    timerBg: 'ui_timer_bg',
+    timerBaseIcon: 'ui_timer_base_icon',
+    ecoGoldIcon: 'ui_eco_gold_icon',
+    ecoGreenIcon: 'ui_eco_green_icon',
+    missionTitleBg: 'ui_mission_title_bg',
     shelfPriceBase: 'ui_shelf_price_base',
     ecoIcon: 'ui_eco_icon',
     ecoMeterBg: 'ecoMeterBg',
@@ -49,7 +61,13 @@ export const componentAssetPaths = Object.freeze([
     { key: UI_TEXTURE_KEYS.countBase, path: countBase },
     { key: UI_TEXTURE_KEYS.listIcon, path: listIcon },
     { key: UI_TEXTURE_KEYS.shoppingListBase, path: shoppingListBase },
+    { key: UI_TEXTURE_KEYS.requiredItemBg, path: requiredItemBg },
     { key: UI_TEXTURE_KEYS.timerCoinBase, path: timerCoinBase },
+    { key: UI_TEXTURE_KEYS.timerBg, path: timerBg },
+    { key: UI_TEXTURE_KEYS.timerBaseIcon, path: timerBaseIcon },
+    { key: UI_TEXTURE_KEYS.ecoGoldIcon, path: ecoGoldIcon },
+    { key: UI_TEXTURE_KEYS.ecoGreenIcon, path: ecoGreenIcon },
+    { key: UI_TEXTURE_KEYS.missionTitleBg, path: missionTitleBg },
     { key: UI_TEXTURE_KEYS.shelfPriceBase, path: shelfPriceBase },
     { key: UI_TEXTURE_KEYS.ecoIcon, path: ecoIcon },
     { key: UI_TEXTURE_KEYS.ecoMeterBg, path: objectBase },

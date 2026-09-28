@@ -16,10 +16,10 @@ const TYPE = Object.freeze({
     alertTitle: 26,
     alertBody: 20,
     section: 20,
-    resTitle: 28,
-    resValue: 54,
-    resLabel: 22,
-    button: 24,
+    resTitle: 24,
+    resValue: 42,
+    resLabel: 18,
+    button: 32,
 });
 
 const C_WHITE = '#ffffff';
@@ -213,12 +213,13 @@ export default class EcoMeterEmptyPopup extends Phaser.GameObjects.Container {
     _drawPanel (m, data) {
         const panelW = m.W * 0.62;
         const gap = m.H * 0.012;
-        const bottomPad = m.H * 0.026;
+        const extraBottom = m.H * 0.022;
+        const bottomPad = m.H * 0.026 + extraBottom;
         const statH = m.H * 0.14;
         const alertH = m.H * 0.112;
         const sectionH = m.H * 0.042;
-        const resH = m.H * 0.205;
-        const btnH = m.H * 0.05;
+        const resH = m.H * 0.148;
+        const btnH = m.H * 0.078;
         const subStyle = {
             fontSize: `${m.fs(TYPE.subtitle)}px`,
             color: C_NAVY,
@@ -233,11 +234,12 @@ export default class EcoMeterEmptyPopup extends Phaser.GameObjects.Container {
         const ribbonSrc = this.scene.textures.get(MS.ribbon)?.getSourceImage?.();
         const ribbonW = panelW * 0.58;
         const ribbonH = ribbonW * ((ribbonSrc?.height ?? 180) / (ribbonSrc?.width ?? 900));
-        const ribbonOverlap = ribbonH * 0.42;
+        const ribbonOverlap = ribbonH * 0.18;
+        const ribbonLift = ribbonH * 0.16;
         const belowRibbon = ribbonOverlap + ribbonH * 0.5 + m.H * 0.01;
         const innerH = belowRibbon + subH + gap + statH + gap + alertH + gap + sectionH + gap + resH + gap + btnH + bottomPad;
         const panelH = innerH;
-        const panelY = m.H * 0.52;
+        const panelY = m.H * 0.52 + extraBottom / 2;
         const panel = this._slice(m.cx, panelY, MS.pop, panelW, panelH, 110);
         this.add(panel);
 
@@ -245,7 +247,7 @@ export default class EcoMeterEmptyPopup extends Phaser.GameObjects.Container {
         const panelLeft = m.cx - panelW / 2;
         this._cornerLeaves(m, panelLeft, panelTop, panelW, panelH);
 
-        const ribbon = this.scene.add.image(m.cx, panelTop + ribbonOverlap, MS.ribbon);
+        const ribbon = this.scene.add.image(m.cx, panelTop + ribbonOverlap - ribbonLift, MS.ribbon);
         this._fitW(ribbon, ribbonW);
         this.add(ribbon);
         const ribbonStyle = {
@@ -262,7 +264,7 @@ export default class EcoMeterEmptyPopup extends Phaser.GameObjects.Container {
         ).setOrigin(0.5, 0.5));
 
         const innerLeft = panelLeft + padX;
-        const contentTop = ribbon.y + ribbon.displayHeight * 0.5 + m.H * 0.01;
+        const contentTop = panelTop + belowRibbon;
 
         const subtitle = this._text(
             m.cx,
@@ -282,16 +284,18 @@ export default class EcoMeterEmptyPopup extends Phaser.GameObjects.Container {
         this._drawAlert(m, innerLeft + innerW / 2, alertY, innerW, alertH, data);
         this._drawSection(m, m.cx, sectionY, innerW * 0.92);
         this._drawResources(m, m.cx, resY, innerW, resH, data);
-        this._drawViewCart(m, m.cx, btnY, Math.min(innerW * 0.30, m.W * 0.16), btnH);
+        this._drawViewCart(m, m.cx, btnY, Math.min(innerW * 0.46, m.W * 0.24), btnH);
     }
 
     _cornerLeaves (m, left, top, w, h) {
-        const size = m.W * 0.038;
+        const size = m.W * 0.036;
+        const insetX = size * 1.25;
+        const insetY = size * 1.15;
         const spots = [
-            { x: left + w * 0.07, y: top + h * 0.16, flipX: true, alpha: 0.5, rot: -0.4 },
-            { x: left + w * 0.93, y: top + h * 0.16, flipX: false, alpha: 0.5, rot: 0.35 },
-            { x: left + w * 0.055, y: top + h * 0.9, flipX: true, alpha: 0.65, rot: -0.2 },
-            { x: left + w * 0.945, y: top + h * 0.9, flipX: false, alpha: 0.65, rot: 0.15 },
+            { x: left + insetX, y: top + insetY, flipX: true, alpha: 0.55, rot: -0.55 },
+            { x: left + w - insetX, y: top + insetY, flipX: false, alpha: 0.55, rot: 0.5 },
+            { x: left + insetX, y: top + h - insetY, flipX: true, alpha: 0.7, rot: -0.25 },
+            { x: left + w - insetX, y: top + h - insetY, flipX: false, alpha: 0.7, rot: 0.2 },
         ];
         spots.forEach((spot) => {
             const leaf = this.scene.add.image(spot.x, spot.y, EME.ecoLeaf);

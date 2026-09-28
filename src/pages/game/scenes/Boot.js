@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { homeBootAssetPaths } from '../config/homeAssets.js';
 import { missionSelectAssetPaths } from '../config/missionSelectAssets.js';
 import { missionDescriptionAssetPaths } from '../config/missionDescriptionAssets.js';
+import { howToPlayAssetPaths } from '../config/howToPlayAssets.js';
+import { whatLearnAssetPaths } from '../config/whatLearnAssets.js';
 
 class Boot extends Phaser.Scene {
     constructor () {
@@ -9,10 +11,15 @@ class Boot extends Phaser.Scene {
     }
 
     preload () {
-        [...homeBootAssetPaths, ...missionSelectAssetPaths, ...missionDescriptionAssetPaths]
-            .forEach(({ key, path }) => {
-                this.load.image(key, path);
-            });
+        [
+            ...homeBootAssetPaths,
+            ...missionSelectAssetPaths,
+            ...missionDescriptionAssetPaths,
+            ...howToPlayAssetPaths,
+            ...whatLearnAssetPaths,
+        ].forEach(({ key, path }) => {
+            this.load.image(key, path);
+        });
     }
 
     create () {

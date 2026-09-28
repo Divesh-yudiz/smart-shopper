@@ -1,13 +1,28 @@
 import { PRODUCT_CATALOG } from '../pages/game/config/productAssets.js';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2YTE2ODAwNTM1ZTA5MjQyMDgwMTg2MjgiLCJzRW1haWwiOiJyYWp2aUBnbWFpbC5jb20iLCJpYXQiOjE3ODIxMDQ5MzR9.lyBYfpYfFPNyYCwa_KkWS-KAlzWe_DyWuNm6BHwinGs';
+
+const DEFAULT_USER_ID = import.meta.env.VITE_USER_ID ?? '6aabdef802349a8149f87e42';
 
 const authHeaders = () => ({
     'Content-Type': 'application/json',
     'Authorization': AUTH_TOKEN,
 });
+
+/**
+ * Resolve the player user id for mission-list requests.
+ * Prefer `?userId=` / `?iUserId=` on the page URL, then VITE_USER_ID.
+ */
+export function getUserId () {
+    if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const fromQuery = params.get('userId') || params.get('iUserId');
+        if (fromQuery) return fromQuery;
+    }
+    return DEFAULT_USER_ID;
+}
 
 // Resolved dynamically — set by fetchGameConfig, used by addToCart / removeFromCart
 let gameId = null;
@@ -190,60 +205,85 @@ export async function removeFromCart(sItemKey) {
     return res.json();
 }
 
-function normalizeMission(m = {}) {
+function normalizeMission(m = {}, index = 0) {
+    const nCoins = m.nCoins ?? m.nBudget ?? 0;
+    const nTimeLimit = m.nTimeLimit ?? 0;
+    const sTimeLimit = m.sTimeLimit
+        ?? (nTimeLimit > 0
+            ? `${String(Math.floor(nTimeLimit / 60)).padStart(2, '0')}:${String(nTimeLimit % 60).padStart(2, '0')}`
+            : '');
+
+    const bPlayed = m.bPlayed === true || m.bPlayed === 'true';
+    const nShoppingListCount = m.nShoppingListCount
+        ?? (Array.isArray(m.aShoppingList)
+            ? m.aShoppingList.reduce((sum, it) => sum + (it.nQuantity ?? 0), 0)
+            : 0);
+
     return {
         _id: m._id,
         iMiniGameId: m.iMiniGameId,
         eAgeCategory: m.eAgeCategory,
-        nOrder: m.nOrder ?? 0,
+        nOrder: m.nOrder ?? index + 1,
         sName: m.sName ?? 'Mission',
         sDescription: m.sDescription ?? '',
-        nBudget: m.nBudget ?? 0,
-        nTimeLimit: m.nTimeLimit ?? 0,
+        nCoins,
+        nBudget: nCoins,
+        nEcoLimit: m.nEcoLimit ?? 100,
+        nTimeLimit,
+        sTimeLimit,
+        nShoppingListCount,
         aShoppingList: m.aShoppingList ?? [],
-        eStatus: m.eStatus ?? m.sStatus ?? null,
+        bPlayed,
+        eStatus: m.eStatus ?? m.sStatus ?? (bPlayed ? 'played' : 'not_played'),
         sImage: m.sImage ?? m.sThumbnail ?? null,
+        nRating: m.nRating ?? m.nStars ?? 0,
+        nScore: m.nScore ?? m.nBestScore ?? null,
     };
 }
 
 /**
- * GET /mini-games/missions — pickable missions for the player's age category.
- * Shown in the Choose Your Mission popup on Start.
+ * GET /mini-games/smart-shopper/missions — all pickable missions.
+ * Shown in Choose Your Mission.
  * @returns {Promise<{gameId: string, ageCategory: string, name: string, missions: Array}>}
  */
-export async function fetchMissions() {
-    const res = await fetch(`${BASE_URL}/missions`, { headers: authHeaders() });
+export async function fetchMissions () {
+    const res = await fetch(`${BASE_URL}/smart-shopper/missions`, { headers: authHeaders() });
     if (!res.ok) throw new Error(`Missions API ${res.status}: ${res.statusText}`);
     const json = await res.json();
-    const data = json.data ?? {};
-    const raw = data.missions ?? data.aMissions ?? [];
-    const missions = raw.map(normalizeMission).sort((a, b) => a.nOrder - b.nOrder);
+    const data = json.data ?? json ?? {};
+    const raw = Array.isArray(data)
+        ? data
+        : (data.missions ?? data.aMissions ?? data.aMissionList ?? []);
+    const missions = raw
+        .map((m, i) => normalizeMission(m, i))
+        .sort((a, b) => a.nOrder - b.nOrder);
 
     return {
-        gameId: data.iMiniGameId,
+        gameId: data.iMiniGameId ?? missions[0]?.iMiniGameId,
         ageCategory: data.eAgeCategory,
-        name: data.sMiniGameName,
+        name: data.sName ?? data.sMiniGameName,
         missions,
     };
 }
 
 /**
- * GET /mini-games/missions/:id — full brief for one mission.
- * `:id` is the mission's `_id` from the list response (not iMiniGameId —
- * that value is the shared mini-game and returns 404 here).
+ * GET /mini-games/smart-shopper/missions/:id — full detail for one mission.
+ * `:id` is the mission's `_id` from the list response.
  * @param {string} missionId
  * @returns {Promise<{gameId: string, ageCategory: string, name: string, mission: object}>}
  */
-export async function fetchMissionBrief(missionId) {
-    const res = await fetch(`${BASE_URL}/missions/${missionId}`, { headers: authHeaders() });
+export async function fetchMissionBrief (missionId) {
+    if (!missionId) throw new Error('fetchMissionBrief requires a missionId');
+    const res = await fetch(`${BASE_URL}/smart-shopper/missions/${missionId}`, { headers: authHeaders() });
     if (!res.ok) throw new Error(`Mission brief ${res.status}: ${res.statusText}`);
     const json = await res.json();
-    const data = json.data ?? {};
-    const mission = normalizeMission(data.mission ?? data);
+    const data = json.data ?? json ?? {};
+    const rawMission = data.mission ?? data.oMission ?? data;
+    const mission = normalizeMission(rawMission);
     return {
         gameId: data.iMiniGameId ?? mission.iMiniGameId,
-        ageCategory: data.eAgeCategory,
-        name: data.sMiniGameName,
+        ageCategory: data.eAgeCategory ?? mission.eAgeCategory,
+        name: data.sName ?? data.sMiniGameName ?? mission.sName,
         mission,
     };
 }
@@ -265,11 +305,12 @@ export function buildGameConfigFromMission(mission, gameId) {
         sItemKey: it.sItemKey,
         sName: it.sName,
     }));
+    const ecoMax = mission.nEcoLimit ?? 100;
 
     return {
         gameId,
         missionId: mission._id,
-        budget: mission.nBudget,
+        budget: mission.nBudget ?? mission.nCoins ?? 0,
         timeLimit: mission.nTimeLimit,
         items,
         shoppingList: mission.aShoppingList ?? [],
@@ -277,8 +318,8 @@ export function buildGameConfigFromMission(mission, gameId) {
         category: mission.sName ?? '',
         description: mission.sDescription ?? '',
         missionOrder: mission.nOrder ?? 0,
-        ecoMeter: 100,
-        ecoMeterMax: 100,
+        ecoMeter: ecoMax,
+        ecoMeterMax: ecoMax,
         badge: null,
     };
 }

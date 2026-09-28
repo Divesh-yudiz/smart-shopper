@@ -11,6 +11,8 @@ import { chooseProductAssetPaths } from '../config/chooseProductAssets.js';
 import { salePopupAssetPaths } from '../config/salePopupAssets.js';
 import { notEnoughCoinAssetPaths } from '../config/notEnoughCoinAssets.js';
 import { ecoMeterEmptyAssetPaths } from '../config/ecoMeterEmptyAssets.js';
+import { viewCartAssetPaths } from '../config/viewCartAssets.js';
+import { timesUpAssetPaths } from '../config/timesUpAssets.js';
 
 //* Add the path to the assets object.
 const assetPaths = Object.freeze({
@@ -28,6 +30,8 @@ const assetPaths = Object.freeze({
         ...salePopupAssetPaths,
         ...notEnoughCoinAssetPaths,
         ...ecoMeterEmptyAssetPaths,
+        ...viewCartAssetPaths,
+        ...timesUpAssetPaths,
     ],
     sounds: [
 

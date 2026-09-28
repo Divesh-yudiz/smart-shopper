@@ -5,7 +5,7 @@ import MissionSelectPopup from '../prefabs/popups/MissionSelectPopup.js';
 import MissionPopup from '../prefabs/popups/MissionPopup.js';
 import config from '../utils/config.js';
 import { addCauseText, setCauseText, wrapCause } from '../utils/gameText.js';
-import { fetchMissionBrief, buildGameConfigFromMission } from '../../../utils/gameApi.js';
+import { fetchMissions, fetchMissionBrief, buildGameConfigFromMission } from '../../../utils/gameApi.js';
 import { LOCAL_GAME_ID, LOCAL_MISSIONS } from '../config/missionsConfig.js';
 
 const SAVE_KEY = 'ss_gameState';
@@ -365,15 +365,31 @@ export default class Home extends Phaser.Scene {
         setCauseText(this._challengeLink, `Choose from ${n} shopping challenge${n === 1 ? '' : 's'}.`);
     }
 
-    _beginGame() {
+    async _beginGame() {
         if (this._starting || this._infoPopup?.isOpen || this._missionPopup?.isOpen || this._briefPopup?.isOpen) return;
-        this._starting = false;
+        this._starting = true;
         sessionStorage.removeItem('ss_inGame');
         sessionStorage.removeItem(SAVE_KEY);
-        this._showMissionList({
-            gameId: LOCAL_GAME_ID,
-            missions: LOCAL_MISSIONS,
+
+        this._missionPopup.open({
+            loading: true,
+            animate: false,
+            onSelect: () => {},
         });
+
+        try {
+            const missionsData = await fetchMissions();
+            this._updateChallengeLink(missionsData.missions?.length ?? 0);
+            this._showMissionList(missionsData);
+        } catch (err) {
+            console.error('[Home] Failed to fetch missions, using local list:', err);
+            this._showMissionList({
+                gameId: LOCAL_GAME_ID,
+                missions: LOCAL_MISSIONS,
+            });
+        } finally {
+            this._starting = false;
+        }
     }
 
     _showMissionList(missionsData) {

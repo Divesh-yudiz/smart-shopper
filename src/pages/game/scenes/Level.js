@@ -5,20 +5,23 @@ import GameManager from "../scripts/GameManager.js";
 import SoundManager from "../scripts/SoundManager.js";
 import MarketView from "../prefabs/MarketView.js";
 import MyCartPanel from "../prefabs/MyCartPanel.js";
-import HudProgressBar, { hudMeterRowHeight } from "../prefabs/HudProgressBar.js";
 import ShoppingListPanel from "../prefabs/ShoppingListPanel.js";
+import ShoppingListButton from "../prefabs/ShoppingListButton.js";
 import TimerPanel from "../prefabs/TimerPanel.js";
+import MissionTitlePanel from "../prefabs/MissionTitlePanel.js";
+import CoinsPanel from "../prefabs/CoinsPanel.js";
+import EcoMeterPanel from "../prefabs/EcoMeterPanel.js";
 import CheckoutPanel from "../prefabs/popups/CheckoutPanel.js";
 import { getRackByIndex, getRacksForView, getRackPlacements } from "../utils/rackConfig.js";
-import { UI_TEXTURE_KEYS } from "../config/componentAssets.js";
 import { patchRacksWithApiPrices, buildShoppingListEntries, buildCartItemsFromApi, addToCart, removeFromCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId, setItemVariants, getItemVariants, getItemId, fetchItemVariants } from "../../../utils/gameApi.js";
 import ProductInfoPopup from "../prefabs/popups/ProductInfoPopup.js";
 import SalePopup from "../prefabs/popups/SalePopup.js";
 import NotEnoughCoinsPopup from "../prefabs/popups/NotEnoughCoinsPopup.js";
 import EcoMeterEmptyPopup from "../prefabs/popups/EcoMeterEmptyPopup.js";
+import ViewCartPopup from "../prefabs/popups/ViewCartPopup.js";
+import TimesUpPopup from "../prefabs/popups/TimesUpPopup.js";
 import WalkingCharacter from "../prefabs/WalkingCharacter.js";
 import { buildEcoVariantPair } from "../config/ecoConfig.js";
-import { addCauseText } from "../utils/gameText.js";
 
 const SAVE_KEY = 'ss_gameState';
 
@@ -59,9 +62,10 @@ class Level extends Phaser.Scene {
         this.oShoppingList = new ShoppingListPanel(
             this,
             hud.shoppingListX,
-            hud.topY,
+            hud.shoppingListY,
             {
                 displayWidth: hud.shoppingListWidth,
+                onCheckout: () => this.openCheckout(),
                 ...(shoppingEntries ? { entries: shoppingEntries } : {}),
             }
         );
@@ -71,16 +75,28 @@ class Level extends Phaser.Scene {
             startSeconds: savedState?.timerRemaining ?? timeLimit,
             displayWidth: hud.timerDisplayW,
             startPaused: pauseTimer,
-            onComplete: () => this.openCheckout(),
+            onComplete: () => this._showTimesUpPopup(),
             onTick: () => { if (this.oTimer.getRemaining() % 10 === 0) this._saveState(); },
         });
 
+        this.oMissionTitle = new MissionTitlePanel(
+            this,
+            hud.missionTitleX,
+            hud.missionTitleY,
+            {
+                displayWidth: hud.missionTitleWidth,
+                missionOrder: gameConfig?.missionOrder ?? 1,
+                missionName: gameConfig?.category ?? '',
+            }
+        );
+
         // Restore cart items if resuming
-        this.oMyCart = new MyCartPanel(this, config.centerX, config.height - 10, {
+        this.oMyCart = new MyCartPanel(this, config.centerX, hud.cartY ?? config.height - 10, {
             panelWidth: hud.cartPanelWidth,
             initialItems: savedState?.cartItems ?? [],
             onItemRemoved: (product) => {
                 this.oShoppingList?.onProductRemoved(product);
+                this._syncShoppingListButton();
                 const sItemKey = resolveItemKeyFromProduct(product);
                 if (sItemKey) {
                     removeFromCart(sItemKey)
@@ -93,6 +109,19 @@ class Level extends Phaser.Scene {
                 this._updateHudMeters();
             },
         });
+
+        this.oShoppingListBtn = new ShoppingListButton(
+            this,
+            hud.shoppingListBtnX,
+            hud.shoppingListBtnY,
+            {
+                size: hud.shoppingListBtnSize,
+                expanded: true,
+                onToggle: (expanded) => this.oShoppingList?.setExpanded(expanded),
+            }
+        );
+        this.oShoppingList?.setExpandOrigin(hud.shoppingListBtnX, hud.shoppingListBtnY);
+        this._syncShoppingListButton();
 
         this._createEcoMeter({ budgetMax: budget });
 
@@ -123,21 +152,24 @@ class Level extends Phaser.Scene {
         this.oSalePopup = new SalePopup(this);
         this.oNotEnoughCoins = new NotEnoughCoinsPopup(this);
         this.oEcoMeterEmpty = new EcoMeterEmptyPopup(this);
+        this.oViewCart = new ViewCartPopup(this);
+        this.oTimesUp = new TimesUpPopup(this);
         this._checkoutOpen = false;
         this._saleOpen = false;
         this._coinsOpen = false;
         this._ecoEmptyOpen = false;
-        this._buildCheckoutButton();
+        this._viewCartOpen = false;
+        this._timesUpOpen = false;
 
         if (!pauseTimer && (savedState?.timerRemaining ?? timeLimit) <= 0) {
-            this.time.delayedCall(200, () => this.openCheckout());
+            this.time.delayedCall(200, () => this._showTimesUpPopup());
         } else if (!pauseTimer) {
-            this.time.delayedCall(700, () => this._showEcoMeterEmptyPopup());
+            this.time.delayedCall(700, () => this._showTimesUpPopup());
         }
     }
 
     _showEcoMeterEmptyPopup () {
-        if (this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
+        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
         this._ecoEmptyOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -148,12 +180,12 @@ class Level extends Phaser.Scene {
         };
         this.oEcoMeterEmpty.open({
             onClose: resume,
-            onViewCart: () => {},
+            onViewCart: () => this._showViewCartPopup(),
         });
     }
 
     _showNotEnoughCoinsPopup () {
-        if (this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
+        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
         this._coinsOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -164,12 +196,30 @@ class Level extends Phaser.Scene {
         };
         this.oNotEnoughCoins.open({
             onClose: resume,
-            onViewCart: () => {},
+            onViewCart: () => this._showViewCartPopup(),
+        });
+    }
+
+    _showViewCartPopup () {
+        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
+        this._viewCartOpen = true;
+        this.oTimer?.pause();
+        this.oCharacter?.setInputEnabled(false);
+        const resume = () => {
+            this._viewCartOpen = false;
+            this.oTimer?.resume();
+            this.oCharacter?.setInputEnabled(true);
+        };
+        this.oViewCart.open({
+            onClose: resume,
+            onContinue: () => {},
+            onFindRemaining: () => {},
+            onCheckout: () => this.openCheckout(),
         });
     }
 
     _showSalePopup () {
-        if (this._ecoEmptyOpen || this._saleOpen || this._coinsOpen || this._checkoutOpen || this._productPopupOpen) return;
+        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._saleOpen || this._coinsOpen || this._checkoutOpen || this._productPopupOpen) return;
         this._saleOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -185,6 +235,51 @@ class Level extends Phaser.Scene {
             onClose: resume,
             onSkip: () => {},
             onBuy: () => {},
+        });
+    }
+
+    _showTimesUpPopup () {
+        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
+        this._timesUpOpen = true;
+        this.oTimer?.pause();
+        this.oCharacter?.setInputEnabled(false);
+        const spent = this.oMyCart?.getTotal() ?? 0;
+        const budget = this._budget ?? 62;
+        const ecoMax = this._ecoMax ?? 32;
+        const ecoLeft = this._ecoValue ?? 0;
+        const entries = this.oShoppingList?.getEntries?.() ?? [];
+        const listItems = entries.filter(Boolean).map((entry) => {
+            const qty = entry.required ?? 1;
+            const label = entry.label ?? entry.key ?? 'Item';
+            return {
+                name: qty > 1 ? `${label} ${qty}` : `${label} 1 Pack`,
+                done: (entry.collected ?? 0) >= qty,
+                textureKey: entry.textureKey,
+            };
+        });
+        this.oTimesUp.open({
+            items: listItems.length ? listItems : undefined,
+            coinsUsed: spent,
+            coinsMax: budget,
+            ecoUsed: Math.max(0, ecoMax - ecoLeft),
+            ecoMax,
+            onClose: () => {
+                this._timesUpOpen = false;
+            },
+            onDashboard: () => {
+                this._timesUpOpen = false;
+                this._clearSavedState();
+                this.scene.start('Home');
+            },
+            onNewMission: () => {
+                this._timesUpOpen = false;
+                this._chooseAnotherMission();
+            },
+            onRetry: () => {
+                this._timesUpOpen = false;
+                this._clearSavedState();
+                this.scene.restart({ isMusic: true, isSound: true, gameConfig: this._gameConfig });
+            },
         });
     }
 
@@ -244,7 +339,7 @@ class Level extends Phaser.Scene {
     }
 
     async _showProductPopup (cartProduct, sItemKey) {
-        if (this._productPopupOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
+        if (this._productPopupOpen || this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
         this._productPopupOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -366,57 +461,7 @@ class Level extends Phaser.Scene {
 
         this._saveState();
         this._updateHudMeters();
-    }
-
-    _buildCheckoutButton() {
-        const btnW = 210;
-        const btnH = 62;
-        const btnX = config.width - 56 - btnW / 2;
-        const btnY = config.height - 56;
-
-        // Container is the single scale target — everything inside is drawn at (0,0)
-        const btn = this.add.container(btnX, btnY).setDepth(310);
-
-        const draw = (hover) => {
-            gfx.clear();
-            gfx.fillStyle(0x000000, 0.3);
-            gfx.fillRoundedRect(-btnW / 2 + 4, -btnH / 2 + 5, btnW, btnH, btnH / 2);
-            gfx.fillStyle(hover ? 0x28b864 : 0x1a9450, 1);
-            gfx.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, btnH / 2);
-            gfx.fillStyle(0xffffff, 0.12);
-            gfx.fillRoundedRect(-btnW / 2 + 4, -btnH / 2 + 3, btnW - 8, btnH / 2 - 3,
-                { tl: btnH / 2, tr: btnH / 2, bl: 0, br: 0 });
-            gfx.lineStyle(2, hover ? 0x80ffb8 : 0x50d88a, 0.9);
-            gfx.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, btnH / 2);
-        };
-
-        const gfx = this.add.graphics();
-        draw(false);
-        btn.add(gfx);
-
-        const cartIcon = this.add.text(-btnW / 2 + 30, 0, '🛒', { fontSize: '26px' })
-            .setOrigin(0.5, 0.5);
-        btn.add(cartIcon);
-
-        const label = addCauseText(this, 10, 0, 'CHECKOUT', {
-            fontSize: '24px',
-            fontStyle: 'bold',
-            color: '#ffffff',
-        }).setOrigin(0.5, 0.5);
-        btn.add(label);
-
-        const hit = this.add.rectangle(0, 0, btnW, btnH, 0, 0);
-        hit.setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => {
-            draw(true);
-            this.tweens.add({ targets: btn, scaleX: 1.05, scaleY: 1.05, duration: 80, ease: 'Quad.easeOut' });
-        });
-        hit.on('pointerout', () => {
-            draw(false);
-            this.tweens.add({ targets: btn, scaleX: 1, scaleY: 1, duration: 80, ease: 'Quad.easeOut' });
-        });
-        hit.on('pointerup', () => this.openCheckout());
-        btn.add(hit);
+        this._syncShoppingListButton();
     }
 
     create({ isMusic, isSound, gameConfig = null } = {}) {
@@ -476,61 +521,30 @@ class Level extends Phaser.Scene {
 
     _createEcoMeter ({ budgetMax = 150 } = {}) {
         const hud = HUD_LAYOUT;
-        const panelW = 330;
-        const coinColW = 56;
-        const padRight = 22;
-        const barH = 24;
-        const rowH = hudMeterRowHeight(barH);
-        const rowGap = 18;
-        const padY = 24;
-        const panelH = padY * 2 + rowH * 2 + rowGap;
-        const barW = panelW - coinColW - padRight - 10;
-        const barLeft = -panelW / 2 + coinColW + 10;
+        const cardW = hud.meterCardW;
+        const cardH = cardW * (376 / 663);
+        const cy = hud.topY + cardH / 2;
 
         this._budgetMax = budgetMax;
-        this.oEcoMeter = this.add.container(hud.budgetX, hud.topY + panelH / 2 + 4).setDepth(300);
-
-        const panel = this.add.image(0, 0, UI_TEXTURE_KEYS.timerCoinBase);
-        panel.setDisplaySize(panelW, panelH);
-        this.oEcoMeter.add(panel);
-
-        const coinSize = 36;
-        const coinX = -panelW / 2 + coinColW / 2 + 4;
-        const barCenterOffset = 12 + 6 + barH / 2;
-
-        const ecoY = -panelH / 2 + padY;
-        const budgetY = ecoY + rowH + rowGap;
-
-        const ecoIcon = this.add.image(coinX, ecoY + barCenterOffset, UI_TEXTURE_KEYS.ecoIcon);
-        ecoIcon.setDisplaySize(coinSize, coinSize);
-        this.oEcoMeter.add(ecoIcon);
-
-        const coin = this.add.image(coinX, budgetY + barCenterOffset, UI_TEXTURE_KEYS.coinIcon);
-        coin.setDisplaySize(coinSize, coinSize);
-        this.oEcoMeter.add(coin);
-
-        this.oEcoBar = new HudProgressBar(this, barLeft, ecoY, {
-            width: barW,
-            height: barH,
-            label: 'ECO METER',
-            max: this._ecoMax,
-            value: this._ecoValue,
-            fillColor: 0x3ddc84,
-            formatText: (v, max) => `${Math.round(v)} / ${Math.round(max)}`,
-        });
-        this.oEcoMeter.add(this.oEcoBar);
-
         const spent = this.oMyCart?.getTotal() ?? 0;
-        this.oBudgetBar = new HudProgressBar(this, barLeft, budgetY, {
-            width: barW,
-            height: barH,
-            label: 'BUDGET',
+        const remaining = this._budgetRemaining ?? Math.max(0, budgetMax - spent);
+
+        this.oCoinsPanel = new CoinsPanel(this, hud.coinsX, cy, {
+            amount: remaining,
             max: budgetMax,
-            value: Math.max(0, budgetMax - spent),
-            fillColor: 0x2ecc71,
-            formatText: (remaining, max) => `AED ${Math.round(remaining)} / ${Math.round(max)}`,
+            displayWidth: cardW,
         });
-        this.oEcoMeter.add(this.oBudgetBar);
+
+        this.oEcoPanel = new EcoMeterPanel(this, hud.ecoX, cy, {
+            value: this._ecoValue,
+            max: this._ecoMax,
+            displayWidth: cardW,
+        });
+
+        // Keep legacy refs pointed at the new panels for any callers.
+        this.oEcoMeter = this.oEcoPanel;
+        this.oBudgetBar = this.oCoinsPanel;
+        this.oEcoBar = this.oEcoPanel;
 
         this._updateHudMeters();
     }
@@ -540,13 +554,14 @@ class Level extends Phaser.Scene {
         const budgetMax = Math.max(1, this._budgetMax ?? 1);
         const remaining = this._budgetRemaining ?? Math.max(0, budgetMax - spent);
 
-        this.oBudgetBar?.setProgress(remaining, budgetMax);
+        this.oCoinsPanel?.setAmount(remaining, budgetMax);
+        this.oEcoPanel?.setProgress(this._ecoValue ?? 0, this._ecoMax ?? 1);
+        this._syncShoppingListButton();
+    }
 
-        const budgetRatio = remaining / budgetMax;
-        const budgetFill = budgetRatio <= 0.2 ? 0xe74c3c : (budgetRatio <= 0.45 ? 0xf39c12 : 0x27ae60);
-        this.oBudgetBar?.setFillColor(budgetFill);
-
-        this.oEcoBar?.setProgress(this._ecoValue ?? 0, this._ecoMax ?? 1);
+    _syncShoppingListButton () {
+        const { done, total } = this.oShoppingList?.getProgress?.() ?? { done: 0, total: 0 };
+        this.oShoppingListBtn?.setProgress(done, total);
     }
 
     /** Reconciles the cart contents / eco meter / remaining budget with the authoritative values from a cart add/remove API response. */
@@ -577,7 +592,7 @@ class Level extends Phaser.Scene {
     }
 
     async openCheckout() {
-        if (this._checkoutOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
+        if (this._checkoutOpen || this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
         this._checkoutOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -605,7 +620,7 @@ class Level extends Phaser.Scene {
     }
 
     onProductClick(product, rackId, rackIndex) {
-        if (this._productPopupOpen || this._checkoutOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
+        if (this._productPopupOpen || this._checkoutOpen || this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
 
         const rack = getRackByIndex(rackIndex);
         const sItemKey = resolveItemKeyFromProduct(product);

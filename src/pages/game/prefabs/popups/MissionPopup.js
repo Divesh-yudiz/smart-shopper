@@ -8,7 +8,7 @@ import { MISSION_DESC_KEYS as K } from '../../config/missionDescriptionAssets.js
 /** Artboard 3 type scale at 1920×1080. */
 const TYPE = Object.freeze({
     ribbon: 26,
-    heroTitle: 46,
+    heroTitle: 34,
     heading: 38,
     body: 22,
     statLabel: 16,
@@ -54,7 +54,7 @@ const ITEM_ICON_FALLBACKS = [
     K.bananaIcon,
 ];
 
-function formatName (key) {
+function formatName(key) {
     return String(key ?? 'Item')
         .replace(/([A-Z])/g, ' $1')
         .replace(/_/g, ' ')
@@ -62,14 +62,14 @@ function formatName (key) {
         .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function formatTime (seconds) {
+function formatTime(seconds) {
     const s = Math.max(0, Math.floor(seconds || 0));
     const m = Math.floor(s / 60);
     const r = s % 60;
     return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
 }
 
-function qtyLabel (item) {
+function qtyLabel(item) {
     const q = item.nQuantity ?? 1;
     const hay = `${item.sItemKey ?? ''} ${item.sName ?? ''}`.toLowerCase();
     if (/(banana|carrot|potato|onion|tomato|piece|apple|orange)/.test(hay)) {
@@ -78,7 +78,7 @@ function qtyLabel (item) {
     return `${q} Pack`;
 }
 
-function itemIconKey (item, index) {
+function itemIconKey(item, index) {
     const hay = `${item.sItemKey ?? ''} ${item.sName ?? ''}`.toLowerCase();
     if (/(rice|grain|bowl|cereal)/.test(hay)) return K.bowlIcon;
     if (/(bread)/.test(hay)) return K.breadIcon;
@@ -95,14 +95,14 @@ function itemIconKey (item, index) {
  * Positions and sizes are fractions of the live game width / height.
  */
 export default class MissionPopup extends Phaser.GameObjects.Container {
-    constructor (scene) {
+    constructor(scene) {
         super(scene, 0, 0);
         scene.add.existing(this);
         this.setDepth(620);
         this.setVisible(false);
     }
 
-    open ({
+    open({
         shoppingList = [],
         title = '',
         description = '',
@@ -154,7 +154,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         }
     }
 
-    _m () {
+    _m() {
         const W = this.scene.scale.width;
         const H = this.scene.scale.height;
         const s = Math.min(W / 1920, H / 1080);
@@ -168,30 +168,30 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         };
     }
 
-    _copy (s) {
+    _copy(s) {
         return copyCause(s);
     }
 
-    _wrap (str, maxWidth, style) {
+    _wrap(str, maxWidth, style) {
         return wrapCause(this.scene, str, maxWidth, style);
     }
 
-    _text (x, y, message, style) {
+    _text(x, y, message, style) {
         return addCauseText(this.scene, x, y, message, { fontStyle: WEIGHT.bold, ...style });
     }
 
-    _fitW (img, displayW) {
+    _fitW(img, displayW) {
         img.setDisplaySize(displayW, displayW * (img.height / img.width));
         return img;
     }
 
-    _fitContain (img, maxW, maxH) {
+    _fitContain(img, maxW, maxH) {
         const s = Math.min(maxW / img.width, maxH / img.height);
         img.setDisplaySize(img.width * s, img.height * s);
         return img;
     }
 
-    _drawChrome (m) {
+    _drawChrome(m) {
         const backH = m.H * 0.078;
         const back = this.scene.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
         this._fitW(back, backH * (back.width / back.height));
@@ -211,7 +211,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this.add(info);
     }
 
-    _drawPanel (m, data) {
+    _drawPanel(m, data) {
         const panelW = m.W * 0.88;
         const panelH = m.H * 0.84;
         const panelY = m.y(0.54);
@@ -239,7 +239,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this._drawActions(m, rightX, innerTop + innerH - m.H * 0.008, rightW);
     }
 
-    _drawHero (m, cx, cy, w, h, { title, missionOrder }) {
+    _drawHero(m, cx, cy, w, h, { title, missionOrder }) {
         const wrap = this.scene.add.container(cx, cy);
         this.add(wrap);
 
@@ -252,15 +252,23 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         const top = -hh / 2;
 
         const headerH = hh * 0.235;
-        const ribbon = this.scene.add.image(0, top + hh * 0.012, K.yellowRibbon);
+        const ribbon = this.scene.add.image(0, top, K.yellowRibbon);
         this._fitW(ribbon, hw * 0.94);
+        // Sit on the purple header edge with a clear overlap (not floating above).
+        ribbon.y = top + ribbon.displayHeight * 0.1;
         wrap.add(ribbon);
 
-        wrap.add(this._text(0, ribbon.y, `Mission ${missionOrder || 1}`, {
-            fontSize: `${m.fs(TYPE.ribbon)}px`,
-            fontStyle: WEIGHT.heavy,
-            color: C_RIBBON,
-        }).setOrigin(0.5, 0.5));
+        // Ribbon art folds are slightly asymmetric — nudge text left to look centered.
+        wrap.add(this._text(
+            ribbon.x - ribbon.displayWidth * 0.012,
+            ribbon.y - ribbon.displayHeight * 0.14,
+            `Mission ${missionOrder || 1}`,
+            {
+                fontSize: `${m.fs(TYPE.ribbon)}px`,
+                fontStyle: WEIGHT.heavy,
+                color: C_RIBBON,
+            },
+        ).setOrigin(0.5, 0.5));
 
         const titleStyle = {
             fontSize: `${m.fs(TYPE.heroTitle)}px`,
@@ -270,7 +278,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             lineSpacing: m.fs(4),
         };
         const wrappedTitle = this._wrap(title || 'Shopping Mission', hw * 0.82, titleStyle);
-        wrap.add(this._text(0, top + headerH * 0.62, wrappedTitle, titleStyle).setOrigin(0.5, 0.5));
+        wrap.add(this._text(0, top + headerH * 0.52, wrappedTitle, titleStyle).setOrigin(0.5, 0.5));
 
         const artKey = HERO_ARTS[Math.max(0, (missionOrder || 1) - 1) % HERO_ARTS.length];
         const artTop = top + headerH + hh * 0.02;
@@ -298,7 +306,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         wrap.add(art);
     }
 
-    _drawRight (m, x, y, w, h, data) {
+    _drawRight(m, x, y, w, h, data) {
         let cy = y;
 
         cy = this._drawHeading(m, x, cy, w, 'Description');
@@ -362,7 +370,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this._drawTips(m, x, cy, w, m.H * 0.088);
     }
 
-    _drawHeading (m, x, y, w, label) {
+    _drawHeading(m, x, y, w, label) {
         const heading = this._text(x, y, label, {
             fontSize: `${m.fs(TYPE.heading)}px`,
             fontStyle: WEIGHT.heavy,
@@ -381,7 +389,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         return y + heading.height;
     }
 
-    _drawStat (m, x, y, w, h, { base, icon, label, value, sub, labelColor, valueColor, subColor }) {
+    _drawStat(m, x, y, w, h, { base, icon, label, value, sub, labelColor, valueColor, subColor }) {
         const card = this.scene.add.image(x + w / 2, y + h / 2, base);
         card.setDisplaySize(w, h);
         this.add(card);
@@ -420,7 +428,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this.add(this._text(x + w / 2, y + h * 0.82, this._wrap(sub, w * 0.88, subStyle), subStyle).setOrigin(0.5, 0.5));
     }
 
-    _drawListItem (m, x, y, w, h, item, index) {
+    _drawListItem(m, x, y, w, h, item, index) {
         const r = Math.min(w, h) * 0.16;
         const g = this.scene.add.graphics();
         g.fillStyle(0x000000, 0.06);
@@ -462,7 +470,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         }).setOrigin(0.5, 0.5));
     }
 
-    _drawTips (m, x, y, w, h) {
+    _drawTips(m, x, y, w, h) {
         const cap = Math.max(12, Math.min(36, Math.floor(h / 2) - 2));
         const bar = this.scene.add.nineslice(
             x + w / 2,
@@ -495,7 +503,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this.add(this._text(x + w * 0.035, y + h * 0.70, this._wrap(tip, w * 0.93, tipStyle), tipStyle).setOrigin(0, 0.5));
     }
 
-    _drawActions (m, x, bottom, w) {
+    _drawActions(m, x, bottom, w) {
         const btnH = m.H * 0.072;
         const otherW = w * 0.42;
         const startW = w * 0.36;
@@ -526,7 +534,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this.add(link);
     }
 
-    _imageButton (m, cx, cy, w, h, key, label, { color, icon, onClick }) {
+    _imageButton(m, cx, cy, w, h, key, label, { color, icon, onClick }) {
         const img = this.scene.add.image(cx, cy, key);
         img.setDisplaySize(w, h);
         this.add(img);
@@ -557,25 +565,25 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this.add(hit);
     }
 
-    _start () {
+    _start() {
         this.close({ restoreHome: false });
         this._onStart?.();
     }
 
-    _chooseAnother () {
+    _chooseAnother() {
         this.close({ restoreHome: false });
         if (this._onChooseAnother) this._onChooseAnother();
         else this._onStart?.();
     }
 
-    close ({ restoreHome = true } = {}) {
+    close({ restoreHome = true } = {}) {
         if (restoreHome && this.scene._root) this.scene._root.setVisible(true);
         this.setVisible(false);
         this.setAlpha(1);
         this.setScale(1);
     }
 
-    get isOpen () {
+    get isOpen() {
         return this.visible;
     }
 }
