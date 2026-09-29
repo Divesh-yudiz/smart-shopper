@@ -13,13 +13,14 @@ import CoinsPanel from "../prefabs/CoinsPanel.js";
 import EcoMeterPanel from "../prefabs/EcoMeterPanel.js";
 import CheckoutPanel from "../prefabs/popups/CheckoutPanel.js";
 import { getRackByIndex, getRacksForView, getRackPlacements } from "../utils/rackConfig.js";
-import { patchRacksWithApiPrices, buildShoppingListEntries, buildCartItemsFromApi, addToCart, removeFromCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId, setItemVariants, getItemVariants, getItemId, fetchItemVariants } from "../../../utils/gameApi.js";
+import { patchRacksWithApiPrices, buildShoppingListEntries, buildCartItemsFromApi, buildViewCartRowsFromApi, applyCartCollectedToEntries, addToCart, removeFromCart, fetchCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId, setSessionId, setMissionId, setItemVariants, getItemVariants, getItemId, fetchItemVariants, startMission, mergeStartSessionIntoConfig } from "../../../utils/gameApi.js";
 import ProductInfoPopup from "../prefabs/popups/ProductInfoPopup.js";
 import SalePopup from "../prefabs/popups/SalePopup.js";
 import NotEnoughCoinsPopup from "../prefabs/popups/NotEnoughCoinsPopup.js";
 import EcoMeterEmptyPopup from "../prefabs/popups/EcoMeterEmptyPopup.js";
 import ViewCartPopup from "../prefabs/popups/ViewCartPopup.js";
 import TimesUpPopup from "../prefabs/popups/TimesUpPopup.js";
+import MissionSuccessPopup from "../prefabs/popups/MissionSuccessPopup.js";
 import WalkingCharacter from "../prefabs/WalkingCharacter.js";
 import { buildEcoVariantPair } from "../config/ecoConfig.js";
 
@@ -39,7 +40,10 @@ class Level extends Phaser.Scene {
         this._budget = budget;
         this._ecoMax = Math.max(1, gameConfig?.ecoMeterMax ?? 100);
         this._ecoValue = gameConfig?.ecoMeter ?? this._ecoMax;
-        this._budgetRemaining = null;
+        this._budgetRemaining = savedState ? null : (gameConfig?.coinsRemaining ?? null);
+        if (gameConfig?.sessionId) setSessionId(gameConfig.sessionId);
+        if (gameConfig?.gameId) setGameId(gameConfig.gameId);
+        if (gameConfig?.missionId) setMissionId(gameConfig.missionId);
 
         let racksData = getRacksForView();
         if (gameConfig?.items?.length) {
@@ -47,11 +51,32 @@ class Level extends Phaser.Scene {
         }
         // Rebuilt every time (not just on fresh load) — a page-refresh resume starts
         // from an empty module-level cache in gameApi.js, so this must run unconditionally.
-        setItemVariants(gameConfig?.items ?? []);
+        const variantSeed = [
+            ...(gameConfig?.items ?? []),
+            ...(gameConfig?.shoppingList ?? []).map((it) => ({
+                _id: it.iItemId,
+                sItemKey: it.sItemKey,
+                sName: it.sName,
+            })),
+            ...(gameConfig?.initialCartItems ?? []).map((it) => ({
+                _id: it.iItemId,
+                sItemKey: it.sItemKey,
+                sName: it.sName,
+            })),
+        ];
+        setItemVariants(variantSeed);
 
         // Use saved entries (with collected counts) on restore, fresh entries otherwise
-        const shoppingEntries = savedState?.shoppingEntries
+        let shoppingEntries = savedState?.shoppingEntries
             ?? (gameConfig?.shoppingList ? buildShoppingListEntries(gameConfig.shoppingList) : null);
+        if (!savedState && shoppingEntries && gameConfig?.initialCartItems?.length) {
+            shoppingEntries = applyCartCollectedToEntries(shoppingEntries, gameConfig.initialCartItems);
+        }
+
+        const initialCartItems = savedState?.cartItems
+            ?? (gameConfig?.initialCartItems?.length
+                ? buildCartItemsFromApi(gameConfig.initialCartItems)
+                : []);
 
         this.oMarketView = new MarketView(
             this,
@@ -90,16 +115,21 @@ class Level extends Phaser.Scene {
             }
         );
 
-        // Restore cart items if resuming
+        // Restore cart items if resuming / hydrating from start session
         this.oMyCart = new MyCartPanel(this, config.centerX, hud.cartY ?? config.height - 10, {
             panelWidth: hud.cartPanelWidth,
-            initialItems: savedState?.cartItems ?? [],
+            initialItems: initialCartItems,
+            onViewCart: () => this._showViewCartPopup(),
             onItemRemoved: (product) => {
                 this.oShoppingList?.onProductRemoved(product);
                 this._syncShoppingListButton();
                 const sItemKey = resolveItemKeyFromProduct(product);
-                if (sItemKey) {
-                    removeFromCart(sItemKey)
+                const iItemId = product?.iItemId ?? (sItemKey ? getItemId(sItemKey) : null);
+                if (iItemId) {
+                    removeFromCart({
+                        iItemId,
+                        eVariant: product?.isEcoVariant ? 'eco' : 'normal',
+                    })
                         .then((result) => this._applyCartMutationResult(result))
                         .catch(err => console.error('[Cart remove]', err));
                 }
@@ -148,6 +178,7 @@ class Level extends Phaser.Scene {
         this.oCharacter.setCartItems(this.oMyCart?.getItems() ?? []);
 
         this.oCheckout = new CheckoutPanel(this);
+        this.oMissionSuccess = new MissionSuccessPopup(this);
         this.oProductPopup = new ProductInfoPopup(this);
         this.oSalePopup = new SalePopup(this);
         this.oNotEnoughCoins = new NotEnoughCoinsPopup(this);
@@ -155,6 +186,7 @@ class Level extends Phaser.Scene {
         this.oViewCart = new ViewCartPopup(this);
         this.oTimesUp = new TimesUpPopup(this);
         this._checkoutOpen = false;
+        this._missionSuccessOpen = false;
         this._saleOpen = false;
         this._coinsOpen = false;
         this._ecoEmptyOpen = false;
@@ -163,13 +195,11 @@ class Level extends Phaser.Scene {
 
         if (!pauseTimer && (savedState?.timerRemaining ?? timeLimit) <= 0) {
             this.time.delayedCall(200, () => this._showTimesUpPopup());
-        } else if (!pauseTimer) {
-            this.time.delayedCall(700, () => this._showTimesUpPopup());
         }
     }
 
     _showEcoMeterEmptyPopup () {
-        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
+        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._missionSuccessOpen || this._productPopupOpen) return;
         this._ecoEmptyOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -185,7 +215,7 @@ class Level extends Phaser.Scene {
     }
 
     _showNotEnoughCoinsPopup () {
-        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
+        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._missionSuccessOpen || this._productPopupOpen) return;
         this._coinsOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -200,8 +230,8 @@ class Level extends Phaser.Scene {
         });
     }
 
-    _showViewCartPopup () {
-        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
+    async _showViewCartPopup () {
+        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._missionSuccessOpen || this._productPopupOpen) return;
         this._viewCartOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -210,7 +240,64 @@ class Level extends Phaser.Scene {
             this.oTimer?.resume();
             this.oCharacter?.setInputEnabled(true);
         };
+
+        const requiredKeys = new Set(
+            (this.oShoppingList?.getEntries?.() ?? [])
+                .filter(Boolean)
+                .flatMap((e) => [e.sItemKey, e.key].filter(Boolean)),
+        );
+        const stillNeeded = this._buildStillNeededItems();
+        const { done, total } = this.oShoppingList?.getProgress?.() ?? { done: 0, total: 0 };
+        const spent = this.oMyCart?.getTotal() ?? 0;
+        let coinsRemaining = this._budgetRemaining ?? Math.max(0, (this._budget ?? 0) - spent);
+        let ecoRemaining = this._ecoValue ?? 0;
+        let cartItems = this._buildViewCartRowsFromLocal(requiredKeys);
+
+        try {
+            const json = await fetchCart(this._gameConfig?.missionId);
+            const data = json?.data ?? json ?? {};
+            const session = data.session ?? data;
+            const payload = {
+                data: {
+                    ...data,
+                    ...session,
+                    aCartItems: data.aCartItems ?? session.aCartItems,
+                },
+            };
+            this._applyCartMutationResult(payload);
+            const aCartItems = payload.data.aCartItems ?? [];
+            if (Array.isArray(aCartItems)) {
+                cartItems = buildViewCartRowsFromApi(aCartItems, requiredKeys);
+            }
+            if (payload.data.nCoinsRemaining != null) {
+                coinsRemaining = payload.data.nCoinsRemaining;
+                this._budgetRemaining = payload.data.nCoinsRemaining;
+            } else if (payload.data.nSessionBudget != null) {
+                coinsRemaining = payload.data.nSessionBudget;
+                this._budgetRemaining = payload.data.nSessionBudget;
+            }
+            const ecoLeft = payload.data.nEcoRemaining
+                ?? payload.data.nEcoMeter
+                ?? payload.data.nCurrentEcoMeter;
+            if (ecoLeft != null) {
+                ecoRemaining = ecoLeft;
+                this.setEcoMeter(
+                    ecoLeft,
+                    payload.data.nEcoMeterMax ?? payload.data.nMaxEcoMeter ?? this._ecoMax,
+                );
+            }
+            this._updateHudMeters();
+        } catch (err) {
+            console.error('[View cart]', err);
+        }
+
         this.oViewCart.open({
+            itemsFound: `${done}/${Math.max(total, done)}`,
+            coinsRemaining,
+            ecoRemaining,
+            timerRemaining: this.oTimer?.getRemaining() ?? 0,
+            cartItems,
+            stillNeeded,
             onClose: resume,
             onContinue: () => {},
             onFindRemaining: () => {},
@@ -218,8 +305,52 @@ class Level extends Phaser.Scene {
         });
     }
 
+    _buildStillNeededItems () {
+        const entries = this.oShoppingList?.getEntries?.() ?? [];
+        return entries.filter(Boolean)
+            .filter((e) => (e.collected ?? 0) < (e.required ?? 1))
+            .map((e) => {
+                const rem = Math.max(1, (e.required ?? 1) - (e.collected ?? 0));
+                const label = e.label ?? e.key ?? 'Item';
+                return {
+                    name: rem > 1 ? `${label} ${rem}` : `${label} 1 Pack`,
+                    textureKey: e.textureKey,
+                };
+            });
+    }
+
+    _buildViewCartRowsFromLocal (requiredKeys = null) {
+        const grouped = new Map();
+        for (const product of this.oMyCart?.getItems() ?? []) {
+            const sItemKey = resolveItemKeyFromProduct(product);
+            const variant = product?.isEcoVariant ? 'eco' : 'normal';
+            const mapKey = `${sItemKey ?? product?.key ?? product?.textureKey}|${variant}`;
+            const existing = grouped.get(mapKey);
+            if (existing) {
+                existing.qty += 1;
+                continue;
+            }
+            const required = requiredKeys
+                ? (requiredKeys.has(sItemKey) || requiredKeys.has(product?.key))
+                : !!(this.oShoppingList?.isProductOnList?.(product));
+            grouped.set(mapKey, {
+                name: product?.label ?? product?.key ?? 'Item',
+                pack: '1 Pack',
+                price: product?.price ?? 0,
+                eco: product?.ecoImpact ?? 0,
+                qty: 1,
+                required,
+                textureKey: product?.textureKey,
+                isEcoVariant: !!product?.isEcoVariant,
+                sItemKey,
+                iItemId: product?.iItemId ?? (sItemKey ? getItemId(sItemKey) : null),
+            });
+        }
+        return [...grouped.values()];
+    }
+
     _showSalePopup () {
-        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._saleOpen || this._coinsOpen || this._checkoutOpen || this._productPopupOpen) return;
+        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._saleOpen || this._coinsOpen || this._checkoutOpen || this._missionSuccessOpen || this._productPopupOpen) return;
         this._saleOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -239,7 +370,7 @@ class Level extends Phaser.Scene {
     }
 
     _showTimesUpPopup () {
-        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._productPopupOpen) return;
+        if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._missionSuccessOpen || this._productPopupOpen) return;
         this._timesUpOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -277,8 +408,7 @@ class Level extends Phaser.Scene {
             },
             onRetry: () => {
                 this._timesUpOpen = false;
-                this._clearSavedState();
-                this.scene.restart({ isMusic: true, isSound: true, gameConfig: this._gameConfig });
+                this._restartMission();
             },
         });
     }
@@ -339,7 +469,7 @@ class Level extends Phaser.Scene {
     }
 
     async _showProductPopup (cartProduct, sItemKey) {
-        if (this._productPopupOpen || this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
+        if (this._productPopupOpen || this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._missionSuccessOpen) return;
         this._productPopupOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
@@ -428,16 +558,20 @@ class Level extends Phaser.Scene {
 
         if (!batches.length) return;
 
-        // Both variants (standard/eco) resolve to the same sItemKey server-side, so a
-        // single call carrying their combined quantity is all the API needs — never one
-        // call per variant. The cart/add response's aCartItems is the sole source of
-        // truth for what ends up in the cart.
-        const totalQty = batches.reduce((sum, b) => sum + b.qty, 0);
-
-        if (sItemKey) {
+        // POST /cart/add expects { iMissionId, iItemId, eVariant } — one unit per call.
+        // Call once per selected unit so eco vs normal stay distinct; last response's
+        // aCartItems is the sole source of truth for the cart panel.
+        const iItemId = sItemKey ? getItemId(sItemKey) : null;
+        if (iItemId) {
             try {
-                const result = await addToCart(sItemKey, totalQty);
-                this._applyCartMutationResult(result);
+                let result = null;
+                for (const { product, qty } of batches) {
+                    const eVariant = product?.isEcoVariant ? 'eco' : 'normal';
+                    for (let i = 0; i < qty; i++) {
+                        result = await addToCart({ iItemId, eVariant });
+                    }
+                }
+                if (result) this._applyCartMutationResult(result);
             } catch (err) {
                 console.error('[Cart add]', err);
                 return;
@@ -474,6 +608,8 @@ class Level extends Phaser.Scene {
         const resuming = sessionStorage.getItem('ss_inGame') === '1' && !!saved?.gameConfig;
         if (resuming) {
             setGameId(saved.gameConfig.gameId);
+            if (saved.gameConfig.sessionId) setSessionId(saved.gameConfig.sessionId);
+            if (saved.gameConfig.missionId) setMissionId(saved.gameConfig.missionId);
             this.editorCreate(saved.gameConfig, saved);
             // On refresh the canvas has no keyboard focus (user never clicked it).
             // Grab focus so arrow keys work immediately without a manual click.
@@ -485,12 +621,32 @@ class Level extends Phaser.Scene {
             if (saved) this._clearSavedState();
 
             this.editorCreate(gameConfig, null);
+            if (gameConfig?.gameId) setGameId(gameConfig.gameId);
+            if (gameConfig?.missionId) setMissionId(gameConfig.missionId);
         }
     }
 
     _chooseAnotherMission() {
         this._clearSavedState();
         this.scene.start('Home');
+    }
+
+    async _restartMission () {
+        this._clearSavedState();
+        const pending = this._gameConfig;
+        const missionId = pending?.missionId;
+        if (!missionId) {
+            console.error('[Level] Missing missionId — cannot restart mission');
+            return;
+        }
+        try {
+            if (pending?.gameId) setGameId(pending.gameId);
+            const startJson = await startMission(missionId);
+            const gameConfig = mergeStartSessionIntoConfig(pending, startJson);
+            this.scene.restart({ isMusic: true, isSound: true, gameConfig });
+        } catch (err) {
+            console.error('[Level] Mission start API failed:', err);
+        }
     }
 
     _loadSavedState() {
@@ -509,6 +665,9 @@ class Level extends Phaser.Scene {
                 cartItems: this.oMyCart?.getItems() ?? [],
                 timerRemaining: this.oTimer?.getRemaining() ?? 0,
                 shoppingEntries: this.oShoppingList?.getEntries() ?? [],
+                ecoValue: this._ecoValue ?? this._gameConfig?.ecoMeter ?? 0,
+                budgetRemaining: this._budgetRemaining
+                    ?? Math.max(0, (this._budget ?? 0) - (this.oMyCart?.getTotal() ?? 0)),
             };
             sessionStorage.setItem(SAVE_KEY, JSON.stringify(state));
         } catch { /* storage full or unavailable */ }
@@ -592,35 +751,81 @@ class Level extends Phaser.Scene {
     }
 
     async openCheckout() {
-        if (this._checkoutOpen || this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
-        this._checkoutOpen = true;
+        if (this._checkoutOpen || this._missionSuccessOpen || this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
+        this._missionSuccessOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
 
-        let cartTotal = this.oMyCart?.getTotal() ?? 0;
-        let budget = this._budget ?? 0;
+        const spent = this.oMyCart?.getTotal() ?? 0;
+        const budget = this._budget ?? 0;
+        const ecoMax = this._ecoMax ?? 32;
+        const ecoLeft = this._ecoValue ?? 0;
+        const ecoUsed = Math.max(0, ecoMax - ecoLeft);
+        const entries = this.oShoppingList?.getEntries?.() ?? [];
+        const listItems = entries.filter(Boolean).map((entry) => {
+            const qty = entry.required ?? 1;
+            const label = entry.label ?? entry.key ?? 'Item';
+            return {
+                name: qty > 1 ? `${label} ${qty}` : `${label} 1 Pack`,
+                done: (entry.collected ?? 0) >= qty,
+                textureKey: entry.textureKey,
+            };
+        });
+        const matched = listItems.filter((item) => item.done).length;
+        const total = Math.max(1, listItems.length);
+        const overBudget = budget > 0 && spent > budget;
+        const pct = matched / total;
+        const stars = (pct >= 1 && !overBudget) ? 3 : (pct >= 1 ? 2 : (pct >= 0.5 ? 1 : 0));
+        const score = Math.round(pct * 70 + (1 - ecoUsed / Math.max(1, ecoMax)) * 20 + (overBudget ? 0 : 10));
+        const sustainability = Math.max(0, Math.min(total, Math.round((1 - ecoUsed / Math.max(1, ecoMax)) * total)));
+        const missionName = this._gameConfig?.category || this._gameConfig?.sName || 'Family Grocery Basket';
 
-        this.oCheckout?.open({
-            entries: this.oShoppingList?.getEntries() ?? [],
-            cartTotal,
-            budget,
+        this.oMissionSuccess?.open({
+            subtitle: `You completed ${missionName} Mission.`,
+            missionName,
+            items: listItems.length ? listItems : undefined,
+            stars,
+            score: Math.min(100, Math.max(0, score)),
+            scoreMax: 100,
+            accuracyMatched: matched,
+            accuracyTotal: total,
+            sustainabilityMatched: sustainability,
+            sustainabilityTotal: total,
+            coinsUsed: spent,
+            coinsMax: budget,
+            ecoUsed,
+            ecoMax,
+            timeRemaining: this.oTimer?.getRemaining() ?? 0,
             onClose: () => {
-                this._checkoutOpen = false;
+                this._missionSuccessOpen = false;
                 this._clearSavedState();
+            },
+            onDashboard: () => {
+                this._missionSuccessOpen = false;
+                this._clearSavedState();
+                this.scene.start('Home');
+            },
+            onNewMission: () => {
+                this._missionSuccessOpen = false;
+                this._chooseAnotherMission();
+            },
+            onPlayAgain: () => {
+                this._missionSuccessOpen = false;
+                this._restartMission();
             },
         });
 
         try {
-            const result = await checkoutGame();
-            cartTotal = result.data?.nCartTotal ?? cartTotal;
-            budget = result.data?.nSessionBudget ?? budget;
+            await checkoutGame({
+                nTimeRemaining: this.oTimer?.getRemaining() ?? 0,
+            });
         } catch (err) {
             console.error('[Checkout] API error, using local values:', err);
         }
     }
 
     onProductClick(product, rackId, rackIndex) {
-        if (this._productPopupOpen || this._checkoutOpen || this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
+        if (this._productPopupOpen || this._checkoutOpen || this._missionSuccessOpen || this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
 
         const rack = getRackByIndex(rackIndex);
         const sItemKey = resolveItemKeyFromProduct(product);

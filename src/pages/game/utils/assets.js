@@ -13,6 +13,8 @@ import { notEnoughCoinAssetPaths } from '../config/notEnoughCoinAssets.js';
 import { ecoMeterEmptyAssetPaths } from '../config/ecoMeterEmptyAssets.js';
 import { viewCartAssetPaths } from '../config/viewCartAssets.js';
 import { timesUpAssetPaths } from '../config/timesUpAssets.js';
+import { missionSuccessAssetPaths } from '../config/missionSuccessAssets.js';
+import { welcomeBackAssetPaths } from '../config/welcomeBackAssets.js';
 
 //* Add the path to the assets object.
 const assetPaths = Object.freeze({
@@ -32,6 +34,8 @@ const assetPaths = Object.freeze({
         ...ecoMeterEmptyAssetPaths,
         ...viewCartAssetPaths,
         ...timesUpAssetPaths,
+        ...missionSuccessAssetPaths,
+        ...welcomeBackAssetPaths,
     ],
     sounds: [
 

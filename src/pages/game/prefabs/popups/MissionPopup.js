@@ -191,6 +191,15 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         return img;
     }
 
+    _shrinkToWidth(text, maxW) {
+        let size = parseInt(text.style.fontSize, 10) || 16;
+        while (text.width > maxW && size > 11) {
+            size -= 1;
+            text.setFontSize(size);
+        }
+        return text;
+    }
+
     _drawChrome(m) {
         const backH = m.H * 0.078;
         const back = this.scene.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
@@ -201,14 +210,6 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         back.on('pointerup', () => this._chooseAnother());
         this.add(back);
 
-        const infoS = m.H * 0.074;
-        const info = this.scene.add.image(m.x(0.948), m.y(0.058), HOME_TEXTURE_KEYS.infoButton);
-        info.setDisplaySize(infoS, infoS);
-        info.setInteractive({ useHandCursor: true });
-        info.on('pointerover', () => info.setDisplaySize(infoS * 1.06, infoS * 1.06));
-        info.on('pointerout', () => info.setDisplaySize(infoS, infoS));
-        info.on('pointerup', () => this.scene._toggleInfo?.());
-        this.add(info);
     }
 
     _drawPanel(m, data) {
@@ -234,9 +235,9 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         const rightX = innerLeft + leftW + colGap;
 
         this._drawHero(m, innerLeft + leftW / 2, innerTop + innerH / 2, leftW, innerH, data);
-        const actionH = m.H * 0.125;
+        const actionH = m.H * 0.12;
         this._drawRight(m, rightX, innerTop, rightW, innerH - actionH, data);
-        this._drawActions(m, rightX, innerTop + innerH - m.H * 0.008, rightW);
+        this._drawActions(m, rightX, innerTop + innerH - actionH, rightW, actionH);
     }
 
     _drawHero(m, cx, cy, w, h, { title, missionOrder }) {
@@ -357,17 +358,21 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         cy = this._drawHeading(m, x, cy, w, 'Shopping List');
         cy += m.H * 0.01;
 
+        const tipsH = m.H * 0.082;
+        const tipsGap = m.H * 0.014;
+        const tipsY = y + h - tipsH;
+        const listAvail = Math.max(m.H * 0.12, tipsY - tipsGap - cy);
+
         const items = data.items.slice(0, 5);
         const listSlots = 5;
         const listGap = w * 0.012;
         const itemW = (w - listGap * (listSlots - 1)) / listSlots;
-        const itemH = m.H * 0.198;
+        const itemH = Math.min(m.H * 0.175, listAvail);
         items.forEach((item, i) => {
             this._drawListItem(m, x + i * (itemW + listGap), cy, itemW, itemH, item, i);
         });
-        cy += itemH + m.H * 0.012;
 
-        this._drawTips(m, x, cy, w, m.H * 0.088);
+        this._drawTips(m, x, tipsY, w, tipsH);
     }
 
     _drawHeading(m, x, y, w, label) {
@@ -503,14 +508,26 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this.add(this._text(x + w * 0.035, y + h * 0.70, this._wrap(tip, w * 0.93, tipStyle), tipStyle).setOrigin(0, 0.5));
     }
 
-    _drawActions(m, x, bottom, w) {
-        const btnH = m.H * 0.072;
-        const otherW = w * 0.42;
-        const startW = w * 0.36;
-        const gap = w * 0.028;
+    _drawActions(m, x, top, w, h) {
+        const btnH = Math.min(m.H * 0.062, h * 0.62);
+        const gap = w * 0.03;
+
+        // Size from height using native aspect so buttons stay pill-shaped.
+        const blueSrc = this.scene.textures.get(K.blueButton)?.getSourceImage?.();
+        const greenSrc = this.scene.textures.get(HOME_TEXTURE_KEYS.greenButton)?.getSourceImage?.();
+        const blueRatio = (blueSrc?.width ?? 565) / Math.max(1, blueSrc?.height ?? 123);
+        const greenRatio = (greenSrc?.width ?? 568) / Math.max(1, greenSrc?.height ?? 128);
+        let otherW = btnH * blueRatio;
+        let startW = btnH * greenRatio;
+        const maxPair = w * 0.92;
+        if (otherW + gap + startW > maxPair) {
+            const scale = maxPair / (otherW + gap + startW);
+            otherW *= scale;
+            startW *= scale;
+        }
         const pairW = otherW + gap + startW;
         const pairLeft = x + (w - pairW) / 2;
-        const rowY = bottom - btnH * 0.82;
+        const rowY = top + h * 0.52;
         const otherX = pairLeft + otherW / 2;
         const startX = pairLeft + otherW + gap + startW / 2;
 
@@ -523,19 +540,17 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             icon: MS.basketIcon,
             onClick: () => this._start(),
         });
-
-        const link = this._text(pairLeft + pairW / 2, rowY + btnH * 0.72, 'Enter Supermarket', {
-            fontSize: `${m.fs(TYPE.link)}px`,
-            fontStyle: WEIGHT.heavy,
-            color: C_LINK,
-        }).setOrigin(0.5, 0);
-        link.setInteractive({ useHandCursor: true });
-        link.on('pointerup', () => this._start());
-        this.add(link);
     }
 
-    _imageButton(m, cx, cy, w, h, key, label, { color, icon, onClick }) {
+    _imageButton(m, cx, cy, maxW, maxH, key, label, { color, icon, onClick }) {
         const img = this.scene.add.image(cx, cy, key);
+        const ratio = img.width / Math.max(1, img.height);
+        let h = maxH;
+        let w = h * ratio;
+        if (w > maxW) {
+            w = maxW;
+            h = w / ratio;
+        }
         img.setDisplaySize(w, h);
         this.add(img);
 
@@ -544,7 +559,9 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             fontSize: `${m.fs(TYPE.button)}px`,
             fontStyle: WEIGHT.heavy,
             color,
+            letterSpacing: 0,
         }).setOrigin(0.5, 0.5);
+        this._shrinkToWidth(txt, w * 0.78);
         this.add(txt);
 
         if (icon && this.scene.textures.exists(icon)) {
@@ -557,17 +574,24 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         hit.setInteractive({ useHandCursor: true });
         hit.on('pointerover', () => {
             img.setDisplaySize(w * 1.03, h * 1.03);
+            txt.setScale(1.03);
         });
         hit.on('pointerout', () => {
             img.setDisplaySize(w, h);
+            txt.setScale(1);
         });
         hit.on('pointerup', onClick);
         this.add(hit);
     }
 
-    _start() {
-        this.close({ restoreHome: false });
-        this._onStart?.();
+    async _start() {
+        if (this._starting) return;
+        this._starting = true;
+        try {
+            await this._onStart?.();
+        } finally {
+            this._starting = false;
+        }
     }
 
     _chooseAnother() {

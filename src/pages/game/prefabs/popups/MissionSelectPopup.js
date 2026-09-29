@@ -163,14 +163,6 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         back.on('pointerup', () => this.close());
         this.add(back);
 
-        const infoS = m.H * 0.074;
-        const info = this.scene.add.image(m.x(0.948), m.y(0.058), HOME_TEXTURE_KEYS.infoButton);
-        info.setDisplaySize(infoS, infoS);
-        info.setInteractive({ useHandCursor: true });
-        info.on('pointerover', () => info.setDisplaySize(infoS * 1.06, infoS * 1.06));
-        info.on('pointerout', () => info.setDisplaySize(infoS, infoS));
-        info.on('pointerup', () => this.scene._toggleInfo?.());
-        this.add(info);
     }
 
     _drawPanel (m, items) {
@@ -266,13 +258,21 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         wrap.setMask(maskG.createGeometryMask());
         this.add(maskG);
 
-        // Build footer from the bottom so rating + button always sit inside.
+        // Build footer from the bottom so rating + score + button always sit inside.
+        const status = this._statusLabel(mission);
+        const score = mission.nScore;
+        const showScore = score != null && status !== 'Not Played';
+        const scoreFs = m.fs(TYPE.score);
         const btnH = Math.max(m.fs(28), h * 0.085);
         const btnW = Math.min(w * 0.46, innerW * 0.55);
         const starS = Math.max(m.fs(16), h * 0.048);
         const footerPad = padY;
-        const btnCy = top + h - footerPad - btnH / 2;
-        const starCy = btnCy;
+        const contentBottom = top + h - footerPad;
+        const scoreGap = gapSm * 0.75;
+        const scoreBlockH = showScore ? scoreFs + scoreGap : 0;
+        // Stars + button share a row above the score; keep button vertically centered on that row.
+        const starCy = contentBottom - scoreBlockH - Math.max(starS, btnH) / 2;
+        const btnCy = starCy;
         const ratingLabelY = starCy - starS / 2 - gapSm - m.fs(TYPE.rating);
         const footerTop = ratingLabelY - gapMd;
         const bodyBottom = footerTop - gapSm;
@@ -289,7 +289,6 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
             color: C_WHITE,
         }).setOrigin(0.5, 0.5));
 
-        const status = this._statusLabel(mission);
         const np = this.scene.add.image(left + w - padX, y, theme.notPlayed);
         this._fitW(np, w * 0.30);
         np.setOrigin(1, 0);
@@ -382,13 +381,12 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
             mission,
         ));
 
-        const score = mission.nScore;
-        if (score != null && status !== 'Not Played') {
+        if (showScore) {
             wrap.add(this._text(
                 left + padX,
-                starCy + starS / 2 + gapSm * 0.5,
-                this._clampLines(`Score: ${score}/100`, innerW * 0.5, { fontSize: `${m.fs(TYPE.score)}px` }, 1),
-                { fontSize: `${m.fs(TYPE.score)}px`, color: C_RATING },
+                contentBottom - scoreFs,
+                this._clampLines(`Score: ${score}/100`, innerW * 0.5, { fontSize: `${scoreFs}px` }, 1),
+                { fontSize: `${scoreFs}px`, color: C_RATING },
             ).setOrigin(0, 0));
         }
 

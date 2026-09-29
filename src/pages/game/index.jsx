@@ -7,11 +7,19 @@ import Home from "./scenes/Home.js";
 import Preload from "./scenes/Preload.js";
 import Level from "./scenes/Level.js";
 
+/** Keep --vh in sync for mobile browser chrome (used as 100vh fallback). */
+function syncViewportUnit() {
+    const h = window.visualViewport?.height ?? window.innerHeight;
+    document.documentElement.style.setProperty("--vh", `${h * 0.01}px`);
+}
+
 function GamePlay() {
     const gameRef = useRef(null);
     useEffect(() => {
         let game;
         let cancelled = false;
+
+        syncViewportUnit();
 
         // Explicitly download every Cause weight before Phaser boots.
         // `document.fonts.ready` alone can resolve while faces are still unused
@@ -32,10 +40,23 @@ function GamePlay() {
                 scale: {
                     mode: Phaser.Scale.FIT,
                     autoCenter: Phaser.Scale.CENTER_BOTH,
+                    width: config.width,
+                    height: config.height,
                 },
             };
 
             game = new Phaser.Game(gameConfig);
+
+            const refreshScale = () => {
+                syncViewportUnit();
+                // Defer so layout has applied new viewport metrics first.
+                requestAnimationFrame(() => game?.scale?.refresh());
+            };
+            window.addEventListener('resize', refreshScale);
+            window.addEventListener('orientationchange', refreshScale);
+            window.visualViewport?.addEventListener('resize', refreshScale);
+            game._ssRefreshScale = refreshScale;
+
             game.scene.add("Boot", Boot, true);
             game.scene.add("Home", Home);
             game.scene.add("Preload", Preload);
@@ -44,12 +65,17 @@ function GamePlay() {
 
         return () => {
             cancelled = true;
+            if (game?._ssRefreshScale) {
+                window.removeEventListener('resize', game._ssRefreshScale);
+                window.removeEventListener('orientationchange', game._ssRefreshScale);
+                window.visualViewport?.removeEventListener('resize', game._ssRefreshScale);
+            }
             game?.destroy(true);
         };
     }, []);
 
 
-    return <div id="game-division" ref={gameRef} style={{ width: config.width, height: config.height }} />;
+    return <div id="game-division" ref={gameRef} />;
 }
 
 export default GamePlay;

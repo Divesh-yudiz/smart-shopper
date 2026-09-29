@@ -6,15 +6,15 @@ import { WHAT_LEARN_KEYS as WL } from '../config/whatLearnAssets.js';
 
 const TYPE = Object.freeze({
     title: 28,
-    tab: 20,
-    stepTitle: 28,
-    stepBody: 20,
-    control: 17,
-    learnTitle: 20,
-    learnBody: 15,
-    guideTitle: 22,
-    guideBody: 17,
-    badge: 20,
+    tab: 26,
+    stepTitle: 30,
+    stepBody: 22,
+    control: 18,
+    learnTitle: 24,
+    learnBody: 24,
+    guideTitle: 24,
+    guideBody: 18,
+    badge: 28,
 });
 
 const WEIGHT = Object.freeze({
@@ -26,12 +26,33 @@ const WEIGHT = Object.freeze({
 const C_WHITE = '#ffffff';
 const C_NAVY = '#1A2744';
 const C_MUTED = '#3F3A34';
-const C_TAB_IDLE = '#8B5A2B';
+
+/** Native Base-brown / base-purple tab plate size. */
+const TAB_BASE_NATIVE_W = 414;
+const TAB_BASE_NATIVE_H = 136;
 
 const TABS = Object.freeze([
-    Object.freeze({ id: 'play', label: 'How to Play', icon: HTP.tabPlay, active: 0x7B3FE4 }),
-    Object.freeze({ id: 'learn', label: "What you'll Learn", icon: HTP.tabLearn, active: 0xE07020 }),
-    Object.freeze({ id: 'guide', label: 'Game Guide', icon: HTP.tabGuide, active: 0x2F6FE0 }),
+    Object.freeze({
+        id: 'play',
+        label: 'How to Play',
+        icon: HTP.tabPlay,
+        idleColor: '#5B3FC9',
+        idleTint: 0x5B3FC9,
+    }),
+    Object.freeze({
+        id: 'learn',
+        label: "What you'll Learn",
+        icon: HTP.tabLearn,
+        idleColor: '#C47A12',
+        idleTint: 0xC47A12,
+    }),
+    Object.freeze({
+        id: 'guide',
+        label: 'Game Guide',
+        icon: HTP.tabGuide,
+        idleColor: '#8B5A2B',
+        idleTint: 0x8B5A2B,
+    }),
 ]);
 
 const PLAY_CARDS = Object.freeze([
@@ -289,10 +310,6 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         back.on('pointerup', () => this.close());
         this.add(back);
 
-        const infoS = m.H * 0.074;
-        const info = this.scene.add.image(m.x(0.948), m.y(0.058), HOME_TEXTURE_KEYS.infoButton);
-        info.setDisplaySize(infoS, infoS);
-        this.add(info);
     }
 
     _drawPanel (m) {
@@ -303,17 +320,27 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this._round(m.cx, panelY, panelW, panelH, 0xFFFEFB, Math.min(panelW, panelH) * 0.035, 0x3B7DE8, Math.max(8, Math.round(10 * m.s)));
 
         const panelTop = panelY - panelH / 2;
-        this.add(this._text(m.cx, panelTop + m.H * 0.042, 'Find what you need, compare your choices and shop wisely.', {
-            fontSize: `${m.fs(TYPE.title)}px`,
-            fontStyle: WEIGHT.heavy,
-            color: C_NAVY,
-            align: 'center',
-        }, panelW * 0.82).setOrigin(0.5, 0.5));
+        const title = this._text(
+            m.cx,
+            panelTop + m.H * 0.038,
+            'Find what you need, compare your choices and shop wisely.',
+            {
+                fontSize: `${m.fs(TYPE.title)}px`,
+                fontStyle: WEIGHT.heavy,
+                color: C_NAVY,
+                align: 'center',
+            },
+            panelW * 0.82,
+        ).setOrigin(0.5, 0.5);
+        this.add(title);
 
-        const tabY = panelTop + m.H * 0.1;
-        this._drawTabs(m, tabY);
+        // Height-led size keeps plates compact; width follows native aspect (no stretch).
+        const tabH = m.H * 0.072;
+        const tabW = tabH * (TAB_BASE_NATIVE_W / TAB_BASE_NATIVE_H) * 1.08;
+        const tabY = title.y + title.height / 2 + tabH / 2 + m.H * 0.014;
+        this._drawTabs(m, tabY, tabW, tabH);
 
-        const bodyTop = tabY + m.H * 0.065;
+        const bodyTop = tabY + tabH / 2 + m.H * 0.022;
         const bodyBottom = panelY + panelH / 2 - m.H * 0.032;
         const padX = panelW * 0.028;
         const box = {
@@ -328,35 +355,39 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         else this._drawGuide(m, box);
     }
 
-    _drawTabs (m, y) {
-        const tabW = m.W * 0.2;
-        const tabH = m.H * 0.055;
-        const gap = m.W * 0.014;
+    _drawTabs (m, y, tabW, tabH) {
+        const gap = m.W * 0.01;
         const total = TABS.length * tabW + (TABS.length - 1) * gap;
         let x = m.cx - total / 2 + tabW / 2;
 
         TABS.forEach((tab) => {
             const active = tab.id === this._tab;
-            this._round(
-                x, y, tabW, tabH,
-                active ? tab.active : 0xFFF6E8,
-                tabH * 0.45,
-                active ? tab.active : 0xE8D0B0,
-                Math.max(2, Math.round(2 * m.s)),
-            );
+            const baseKey = active ? HTP.tabBasePurple : HTP.tabBaseBrown;
+            const base = this.scene.add.image(x, y, baseKey);
+            base.setDisplaySize(tabW, tabH);
+            this.add(base);
 
-            const iconS = tabH * 0.48;
-            const icon = this.scene.add.image(x - tabW * 0.32, y, tab.icon);
-            this._fitContain(icon, iconS, iconS);
-            icon.setTint(active ? 0xffffff : 0x8B5A2B);
-            this.add(icon);
-
-            const label = this._text(x + tabW * 0.04, y, tab.label, {
+            const iconS = tabH * 0.52;
+            const contentGap = tabW * 0.04;
+            const sidePad = tabW * 0.1;
+            const label = this._text(0, 0, tab.label, {
                 fontSize: `${m.fs(TYPE.tab)}px`,
                 fontStyle: WEIGHT.heavy,
-                color: active ? C_WHITE : C_TAB_IDLE,
-            }).setOrigin(0.5, 0.5);
-            this._shrinkToWidth(label, tabW * 0.58);
+                color: active ? C_WHITE : tab.idleColor,
+            }).setOrigin(0, 0.5);
+            this._shrinkToWidth(label, tabW - sidePad * 2 - iconS - contentGap);
+
+            const rowW = iconS + contentGap + label.width;
+            const iconX = x - rowW / 2 + iconS / 2;
+            const labelX = iconX + iconS / 2 + contentGap;
+
+            const icon = this.scene.add.image(iconX, y, tab.icon);
+            this._fitContain(icon, iconS, iconS);
+            if (active) icon.setTint(0xffffff);
+            else icon.setTint(tab.idleTint);
+            this.add(icon);
+
+            label.setPosition(labelX, y);
             this.add(label);
 
             const hit = this.scene.add.rectangle(x, y, tabW, tabH, 0, 0);
@@ -419,7 +450,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
             const rowH = Math.min(h * 0.115, (h - padY * 2 - titleH - gap * 2) * 0.2);
             const listH = rows * rowH;
             const iconMax = h - padY * 2 - titleH - gap * 2 - listH;
-            const iconS = Math.min(w * 0.58, Math.max(h * 0.28, iconMax * 0.95));
+            const iconS = Math.min(w * 0.66, Math.max(h * 0.32, iconMax * 0.95));
             const blockH = iconS + gap + titleH + gap + listH;
             let y = cy - blockH / 2;
 
@@ -459,7 +490,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
 
         const footerH = titleH + gap + hrH + gap + bodyH;
         const iconMax = h - padY * 2 - footerH - gap;
-        const iconS = Math.min(w * 0.74, Math.max(h * 0.36, iconMax * 0.98));
+        const iconS = Math.min(w * 0.84, Math.max(h * 0.4, iconMax * 0.98));
         const blockH = iconS + gap + footerH;
         let y = cy - blockH / 2;
 
@@ -529,17 +560,29 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this._round(cx, cy, w, h, card.fill, Math.min(w, h) * 0.08, card.stroke, Math.max(2, Math.round(2.5 * m.s)));
 
         const top = cy - h / 2;
-        const badgeS = Math.min(w, h) * 0.12;
-        this._round(cx, top + badgeS * 0.75, badgeS, badgeS, card.badge, badgeS * 0.5);
-        this.add(this._text(cx, top + badgeS * 0.75, card.n, {
+        const bottom = cy + h / 2;
+        const padY = h * 0.028;
+        const gap = h * 0.014;
+        const textW = w * 0.9;
+
+        const badgeS = Math.min(w, h) * 0.14;
+        const badgeY = top + badgeS * 0.7;
+        this._round(cx, badgeY, badgeS, badgeS, card.badge, badgeS * 0.5);
+        this.add(this._text(cx, badgeY, card.n, {
             fontSize: `${m.fs(TYPE.badge)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_WHITE,
         }).setOrigin(0.5, 0.5));
 
-        const padY = h * 0.04;
-        const gap = h * 0.02;
-        const textW = w * 0.88;
+        // Fixed icon bands so every card's upper/lower art shares the same baseline.
+        const iconS = Math.min(w * 0.94, h * 0.32);
+        const footerS = Math.min(w * 0.82, h * 0.2);
+        const iconY = badgeY + badgeS * 0.55 + gap + iconS / 2;
+        const footerY = bottom - padY - footerS / 2;
+
+        const icon = this.scene.add.image(cx, iconY, card.icon);
+        this._fitContain(icon, iconS, iconS);
+        this.add(icon);
 
         const titleStyle = {
             fontSize: `${m.fs(TYPE.learnTitle)}px`,
@@ -552,37 +595,24 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
             fontStyle: WEIGHT.heavy,
             color: card.bodyColor,
             align: 'center',
-            lineSpacing: m.fs(2),
+            lineSpacing: m.fs(3),
         };
         const title = this._text(0, 0, this._wrap(card.title, textW, titleStyle), titleStyle).setOrigin(0.5, 0);
         const body = this._text(0, 0, this._wrap(card.body, textW, bodyStyle), bodyStyle).setOrigin(0.5, 0);
-        const titleH = title.height;
-        const bodyH = body.height;
 
-        const footerMax = h * 0.2;
-        const iconMax = h - padY * 2 - badgeS - gap * 4 - titleH - bodyH - footerMax;
-        const iconS = Math.min(w * 0.72, Math.max(h * 0.22, iconMax));
-        const footerS = Math.min(w * 0.55, footerMax);
-        const blockH = badgeS + gap + iconS + gap + titleH + gap + bodyH + gap + footerS;
-        let y = Math.max(top + padY, cy - blockH / 2);
+        const textTop = iconY + iconS / 2 + gap;
+        const textBottom = footerY - footerS / 2 - gap;
+        const textBlockH = title.height + gap + body.height;
+        let textY = textTop + Math.max(0, (textBottom - textTop - textBlockH) / 2);
 
-        // Keep badge above the stacked block.
-        y = top + badgeS * 1.35 + gap;
-
-        const icon = this.scene.add.image(cx, y + iconS / 2, card.icon);
-        this._fitContain(icon, iconS, iconS);
-        this.add(icon);
-        y += iconS + gap;
-
-        title.setPosition(cx, y);
+        title.setPosition(cx, textY);
         this.add(title);
-        y += titleH + gap;
+        textY += title.height + gap;
 
-        body.setPosition(cx, y);
+        body.setPosition(cx, textY);
         this.add(body);
-        y += bodyH + gap;
 
-        const footer = this.scene.add.image(cx, Math.min(y + footerS / 2, cy + h / 2 - padY - footerS / 2), card.footer);
+        const footer = this.scene.add.image(cx, footerY, card.footer);
         this._fitContain(footer, footerS, footerS);
         this.add(footer);
     }

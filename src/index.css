@@ -42,31 +42,53 @@
     font-display: block;
 }
 
-body {
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+    width: 100%;
+    height: 100%;
     margin: 0;
     padding: 0;
     overflow: hidden;
     background-color: #000;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile chrome-safe height: --vh is set from JS; 100dvh when supported. */
+html,
+body,
+#root {
+    height: calc(var(--vh, 1vh) * 100);
+}
+
+@supports (height: 100dvh) {
+    html,
+    body,
+    #root {
+        height: 100dvh;
+    }
+}
+
+body {
     font-family: 'Cause', sans-serif;
 }
 
-#root {
+#game-division {
+    position: relative;
     width: 100%;
     height: 100%;
+    overflow: hidden;
+    background-color: #000;
 }
 
+/* Phaser Scale.FIT + CENTER_BOTH owns canvas size/margins — do not override. */
 #game-division canvas {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    margin: 0 !important;
-}
-
-#game-division {
-    max-height: calc(var(--vh, 1vh) * 100);
-}
-
-:root {
-    --vh: 1vh;
+    display: block;
 }

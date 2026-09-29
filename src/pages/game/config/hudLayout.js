@@ -12,9 +12,11 @@ const ECO_X = COINS_X + METER_CARD_W + METER_GAP;
 const BUDGET_X = (COINS_X + ECO_X) / 2;
 
 const SHOPPING_LIST_W = 400;
-const CART_PANEL_W = 680;
-const CART_PANEL_NATIVE_W = 860;
-const CART_PANEL_NATIVE_H = 178;
+const CART_PANEL_W = 540;
+const CART_PANEL_NATIVE_W = 414;
+const CART_PANEL_NATIVE_H = 136;
+/** Keep in sync with MyCartPanel PANEL_HEIGHT_SCALE. */
+const CART_PANEL_HEIGHT_SCALE = 0.76;
 const TIMER_DISPLAY_W = 240;
 const SHOPPING_LIST_BTN_SIZE = 96;
 
@@ -25,7 +27,7 @@ const SHOPPING_LIST_X = config.width - RIGHT_MARGIN - SHOPPING_LIST_W / 2;
 const SHOPPING_LIST_Y = config.centerY - 36;
 
 const CART_Y = config.height - 10;
-const CART_H = CART_PANEL_NATIVE_H * (CART_PANEL_W / CART_PANEL_NATIVE_W);
+const CART_H = CART_PANEL_NATIVE_H * (CART_PANEL_W / CART_PANEL_NATIVE_W) * CART_PANEL_HEIGHT_SCALE;
 /** Right of MY CART bar, vertically centered with the cart body. */
 const SHOPPING_LIST_BTN_X = config.centerX + CART_PANEL_W / 2 + 18 + SHOPPING_LIST_BTN_SIZE / 2;
 const SHOPPING_LIST_BTN_Y = CART_Y - CART_H / 2;

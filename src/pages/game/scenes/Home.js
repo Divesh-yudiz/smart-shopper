@@ -3,9 +3,10 @@ import { HOME_TEXTURE_KEYS } from '../config/homeAssets.js';
 import HomeInfoPopup from '../prefabs/HomeInfoPopup.js';
 import MissionSelectPopup from '../prefabs/popups/MissionSelectPopup.js';
 import MissionPopup from '../prefabs/popups/MissionPopup.js';
+import WelcomeBackPopup from '../prefabs/popups/WelcomeBackPopup.js';
 import config from '../utils/config.js';
 import { addCauseText, setCauseText, wrapCause } from '../utils/gameText.js';
-import { fetchMissions, fetchMissionBrief, buildGameConfigFromMission } from '../../../utils/gameApi.js';
+import { fetchMissions, fetchMissionBrief, buildGameConfigFromMission, startMission, setGameId, mergeStartSessionIntoConfig } from '../../../utils/gameApi.js';
 import { LOCAL_GAME_ID, LOCAL_MISSIONS } from '../config/missionsConfig.js';
 
 const SAVE_KEY = 'ss_gameState';
@@ -54,8 +55,13 @@ export default class Home extends Phaser.Scene {
     create() {
         this._starting = false;
         this._missionsData = null;
-        sessionStorage.removeItem('ss_inGame');
-        sessionStorage.removeItem(SAVE_KEY);
+
+        const saved = this._loadSavedState();
+        const resuming = sessionStorage.getItem('ss_inGame') === '1' && !!saved?.gameConfig;
+        if (!resuming) {
+            sessionStorage.removeItem('ss_inGame');
+            sessionStorage.removeItem(SAVE_KEY);
+        }
 
         this._root = this.add.container(0, 0);
         this._paint();
@@ -63,6 +69,7 @@ export default class Home extends Phaser.Scene {
         this._infoPopup = new HomeInfoPopup(this);
         this._missionPopup = new MissionSelectPopup(this);
         this._briefPopup = new MissionPopup(this);
+        this._welcomeBack = new WelcomeBackPopup(this);
         this._setupInput();
         this._updateChallengeLink(LOCAL_MISSIONS.length);
 
@@ -75,6 +82,75 @@ export default class Home extends Phaser.Scene {
             canvas.setAttribute('tabindex', '1');
             canvas.focus();
         }
+
+        if (resuming) {
+            this._showWelcomeBack(saved);
+        }
+    }
+
+    _loadSavedState () {
+        try {
+            const raw = sessionStorage.getItem(SAVE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    _showWelcomeBack (saved) {
+        const cfg = saved?.gameConfig ?? {};
+        const entries = (saved?.shoppingEntries ?? []).filter(Boolean);
+        const itemsFound = entries.filter((e) => (e.collected ?? 0) >= (e.required ?? 1)).length;
+        const itemsTotal = Math.max(1, entries.length);
+        const cartItems = saved?.cartItems ?? [];
+        const spent = cartItems.reduce((sum, it) => sum + (it?.price ?? 0), 0);
+        const coinsMax = cfg.budget ?? 62;
+        const coinsLeft = saved?.budgetRemaining
+            ?? cfg.coinsRemaining
+            ?? Math.max(0, coinsMax - spent);
+        const ecoMax = cfg.ecoMeterMax ?? 32;
+        const ecoLeft = saved?.ecoValue ?? cfg.ecoMeter ?? ecoMax;
+        const timeMax = cfg.timeLimit ?? 240;
+        const timeLeft = saved?.timerRemaining ?? timeMax;
+
+        const items = entries.length
+            ? entries.map((e) => ({
+                name: e.label ?? e.key ?? 'Item',
+                done: (e.collected ?? 0) >= (e.required ?? 1),
+                textureKey: e.textureKey,
+                sItemKey: e.sItemKey,
+            }))
+            : undefined;
+
+        this._welcomeBack.open({
+            missionOrder: cfg.missionOrder ?? 1,
+            missionName: cfg.category || cfg.sName || 'Family Grocery Basket',
+            missionDescription: cfg.description
+                || 'Buy the everyday groceries on your shopping list while staying within your Shop Coin and Eco limits.',
+            items,
+            itemsFound,
+            itemsTotal,
+            timeLeft,
+            timeMax,
+            coinsLeft,
+            coinsMax,
+            ecoLeft,
+            ecoMax,
+            onInfo: () => this._toggleInfo(),
+            onResume: () => this._resumeMission(saved),
+            onClose: () => {},
+        });
+    }
+
+    _resumeMission (saved) {
+        const gameConfig = saved?.gameConfig;
+        if (!gameConfig) {
+            sessionStorage.removeItem('ss_inGame');
+            sessionStorage.removeItem(SAVE_KEY);
+            return;
+        }
+        // Keep ss_inGame so Level restores cart/timer from sessionStorage.
+        this.scene.start('Preload', { gameConfig });
     }
 
     _onResize() {
@@ -143,15 +219,6 @@ export default class Home extends Phaser.Scene {
     }
 
     _buildHeader(m) {
-        const backH = m.H * 0.078;
-        const back = this.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
-        this._fitW(back, backH * (back.width / back.height));
-        back.setInteractive({ useHandCursor: true });
-        back.on('pointerover', () => back.setScale(back.scaleX * 1.04, back.scaleY * 1.04));
-        back.on('pointerout', () => this._fitW(back, backH * (back.width / back.height)));
-        back.on('pointerup', () => this._leaveToDashboard());
-        this._add(back);
-
         const infoS = m.H * 0.074;
         const info = this.add.image(m.x(0.948), m.y(0.058), HOME_TEXTURE_KEYS.infoButton);
         info.setDisplaySize(infoS, infoS);
@@ -311,13 +378,6 @@ export default class Home extends Phaser.Scene {
         this._add(this._text(cx, top + h * 0.82, this._wrap(step.sub, w * 0.90, stepSubStyle), stepSubStyle).setOrigin(0.5, 0.5));
     }
 
-    _leaveToDashboard() {
-        if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'envhero:back-to-dashboard' }, '*');
-        }
-        if (window.history.length > 1) window.history.back();
-    }
-
     _toggleInfo() {
         if (this._infoPopup.isOpen) {
             this._infoPopup.close();
@@ -335,6 +395,7 @@ export default class Home extends Phaser.Scene {
             if (e.code !== 'Space' && e.key !== ' ') return;
             e.preventDefault();
 
+            if (this._welcomeBack?.isOpen) return;
             if (this._infoPopup?.isOpen) {
                 this._closeInfo();
                 return;
@@ -366,7 +427,13 @@ export default class Home extends Phaser.Scene {
     }
 
     async _beginGame() {
-        if (this._starting || this._infoPopup?.isOpen || this._missionPopup?.isOpen || this._briefPopup?.isOpen) return;
+        if (
+            this._starting
+            || this._welcomeBack?.isOpen
+            || this._infoPopup?.isOpen
+            || this._missionPopup?.isOpen
+            || this._briefPopup?.isOpen
+        ) return;
         this._starting = true;
         sessionStorage.removeItem('ss_inGame');
         sessionStorage.removeItem(SAVE_KEY);
@@ -403,16 +470,20 @@ export default class Home extends Phaser.Scene {
 
     async _viewMission(mission) {
         this._missionPopup.close({ restoreHome: false });
+        const missionId = mission?._id ?? mission?.iMissionId ?? mission?.id ?? null;
         const localConfig = buildGameConfigFromMission(
-            mission,
+            { ...mission, _id: missionId },
             mission.iMiniGameId ?? this._missionsData?.gameId ?? LOCAL_GAME_ID,
         );
         this._openBrief(localConfig);
 
         try {
-            const brief = await fetchMissionBrief(mission._id);
+            const brief = await fetchMissionBrief(missionId);
             const gameConfig = buildGameConfigFromMission(
-                brief.mission,
+                {
+                    ...brief.mission,
+                    _id: brief.mission?._id ?? missionId,
+                },
                 brief.gameId ?? this._missionsData?.gameId ?? LOCAL_GAME_ID,
             );
             if (this._briefPopup?.isOpen) this._openBrief(gameConfig);
@@ -422,6 +493,7 @@ export default class Home extends Phaser.Scene {
     }
 
     _openBrief(gameConfig) {
+        this._pendingGameConfig = gameConfig;
         this._briefPopup.open({
             shoppingList: gameConfig.shoppingList ?? [],
             title: gameConfig.category ?? '',
@@ -431,10 +503,7 @@ export default class Home extends Phaser.Scene {
             timeLimit: gameConfig.timeLimit ?? 0,
             ecoLimit: gameConfig.ecoMeterMax ?? 100,
             animate: false,
-            onStart: () => {
-                this._teardownInput();
-                this.scene.start('Preload', { gameConfig });
-            },
+            onStart: () => this._startShopping(),
             onChooseAnother: () => {
                 this._briefPopup.close({ restoreHome: false });
                 this._showMissionList(this._missionsData ?? {
@@ -443,5 +512,30 @@ export default class Home extends Phaser.Scene {
                 });
             },
         });
+    }
+
+    async _startShopping () {
+        if (this._startingMission) return;
+        const pending = this._pendingGameConfig;
+        const missionId = pending?.missionId;
+        if (!missionId) {
+            console.error('[Home] Missing missionId — cannot call start API');
+            return;
+        }
+
+        this._startingMission = true;
+        try {
+            if (pending?.gameId) setGameId(pending.gameId);
+            const startJson = await startMission(missionId);
+            const gameConfig = mergeStartSessionIntoConfig(pending, startJson);
+            this._pendingGameConfig = gameConfig;
+            this._teardownInput();
+            this._briefPopup?.close({ restoreHome: false });
+            this.scene.start('Preload', { gameConfig });
+        } catch (err) {
+            console.error('[Home] Mission start API failed:', err);
+        } finally {
+            this._startingMission = false;
+        }
     }
 }

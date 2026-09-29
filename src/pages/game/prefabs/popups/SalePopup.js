@@ -187,14 +187,6 @@ export default class SalePopup extends Phaser.GameObjects.Container {
         back.on('pointerup', () => this._skip());
         this.add(back);
 
-        const infoS = m.H * 0.074;
-        const info = this.scene.add.image(m.x(0.948), m.y(0.058), HOME_TEXTURE_KEYS.infoButton);
-        info.setDisplaySize(infoS, infoS);
-        info.setInteractive({ useHandCursor: true });
-        info.on('pointerover', () => info.setDisplaySize(infoS * 1.06, infoS * 1.06));
-        info.on('pointerout', () => info.setDisplaySize(infoS, infoS));
-        info.on('pointerup', () => this.scene._toggleInfo?.());
-        this.add(info);
     }
 
     _drawPanel(m, { title, name, description, coinsRemaining, ecoRemaining, textureKey }) {

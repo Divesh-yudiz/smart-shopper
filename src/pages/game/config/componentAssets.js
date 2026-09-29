@@ -21,6 +21,11 @@ import timerBaseIcon from '../../../assets/images/gameplay/timer-base-icon.png';
 import ecoGoldIcon from '../../../assets/images/gameplay/E-Gold.png';
 import ecoGreenIcon from '../../../assets/images/gameplay/E-Green.png';
 import missionTitleBg from '../../../assets/images/gameplay/gameplay-title-base.png';
+import ecoLoadingBar from '../../../assets/images/gameplay/lOADING-bAR.png';
+import cartBase from '../../../assets/images/gameplay/Base.png';
+import cartFillBox from '../../../assets/images/gameplay/Fill-Box.png';
+import cartIcon from '../../../assets/images/gameplay/Cart.png';
+import cartBarBase from '../../../assets/images/gameplay/BaR-bASE.png';
 import shelfPriceBase from '../../../assets/images/Components/Price-Base.png';
 import ecoIcon from '../../../assets/images/home/eco-icon.png';
 
@@ -31,6 +36,10 @@ export const UI_TEXTURE_KEYS = Object.freeze({
     cartPriceTag: 'ui_cart_price_tag',
     cartTotalBtn: 'ui_cart_total_btn',
     cartLockIcon: 'ui_cart_lock_icon',
+    cartBase: 'ui_cart_base',
+    cartFillBox: 'ui_cart_fill_box',
+    cartIcon: 'ui_cart_icon',
+    cartBarBase: 'ui_cart_bar_base',
     budgetGreenBase: 'ui_budget_green_base',
     coinIcon: 'ui_coin_icon',
     countBase: 'ui_count_base',
@@ -43,6 +52,7 @@ export const UI_TEXTURE_KEYS = Object.freeze({
     ecoGoldIcon: 'ui_eco_gold_icon',
     ecoGreenIcon: 'ui_eco_green_icon',
     missionTitleBg: 'ui_mission_title_bg',
+    ecoLoadingBar: 'ui_eco_loading_bar',
     shelfPriceBase: 'ui_shelf_price_base',
     ecoIcon: 'ui_eco_icon',
     ecoMeterBg: 'ecoMeterBg',
@@ -56,6 +66,10 @@ export const componentAssetPaths = Object.freeze([
     { key: UI_TEXTURE_KEYS.cartPriceTag, path: cartPriceTag },
     { key: UI_TEXTURE_KEYS.cartTotalBtn, path: cartTotalBtn },
     { key: UI_TEXTURE_KEYS.cartLockIcon, path: cartLockIcon },
+    { key: UI_TEXTURE_KEYS.cartBase, path: cartBase },
+    { key: UI_TEXTURE_KEYS.cartFillBox, path: cartFillBox },
+    { key: UI_TEXTURE_KEYS.cartIcon, path: cartIcon },
+    { key: UI_TEXTURE_KEYS.cartBarBase, path: cartBarBase },
     { key: UI_TEXTURE_KEYS.budgetGreenBase, path: budgetGreenBase },
     { key: UI_TEXTURE_KEYS.coinIcon, path: coinIcon },
     { key: UI_TEXTURE_KEYS.countBase, path: countBase },
@@ -68,6 +82,7 @@ export const componentAssetPaths = Object.freeze([
     { key: UI_TEXTURE_KEYS.ecoGoldIcon, path: ecoGoldIcon },
     { key: UI_TEXTURE_KEYS.ecoGreenIcon, path: ecoGreenIcon },
     { key: UI_TEXTURE_KEYS.missionTitleBg, path: missionTitleBg },
+    { key: UI_TEXTURE_KEYS.ecoLoadingBar, path: ecoLoadingBar },
     { key: UI_TEXTURE_KEYS.shelfPriceBase, path: shelfPriceBase },
     { key: UI_TEXTURE_KEYS.ecoIcon, path: ecoIcon },
     { key: UI_TEXTURE_KEYS.ecoMeterBg, path: objectBase },

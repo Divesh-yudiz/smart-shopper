@@ -7,6 +7,8 @@ import step6 from '../../../assets/images/how-to-play/6.png';
 import tabPlay from '../../../assets/images/how-to-play/gAME-rEMOTE.png';
 import tabLearn from '../../../assets/images/how-to-play/bULB-iCON.png';
 import tabGuide from '../../../assets/images/how-to-play/bOOK-iCON.png';
+import tabBaseBrown from '../../../assets/images/how-to-play/Base-brown.png';
+import tabBasePurple from '../../../assets/images/how-to-play/base-purple.png';
 
 export const HOW_TO_PLAY_KEYS = Object.freeze({
     step1: 'htp_step_1',
@@ -18,6 +20,8 @@ export const HOW_TO_PLAY_KEYS = Object.freeze({
     tabPlay: 'htp_tab_play',
     tabLearn: 'htp_tab_learn',
     tabGuide: 'htp_tab_guide',
+    tabBaseBrown: 'htp_tab_base_brown',
+    tabBasePurple: 'htp_tab_base_purple',
 });
 
 export const howToPlayAssetPaths = Object.freeze([
@@ -30,4 +34,6 @@ export const howToPlayAssetPaths = Object.freeze([
     { key: HOW_TO_PLAY_KEYS.tabPlay, path: tabPlay },
     { key: HOW_TO_PLAY_KEYS.tabLearn, path: tabLearn },
     { key: HOW_TO_PLAY_KEYS.tabGuide, path: tabGuide },
+    { key: HOW_TO_PLAY_KEYS.tabBaseBrown, path: tabBaseBrown },
+    { key: HOW_TO_PLAY_KEYS.tabBasePurple, path: tabBasePurple },
 ]);

@@ -119,7 +119,8 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         this._titleText.setStroke('#1a5c28', Math.max(2, 3 * scale));
         this.add(this._titleText);
 
-        const padX = Math.round(20 * scale);
+        const padLeft = Math.round(20 * scale);
+        const padRight = Math.round(32 * scale);
         const rowsStartY = -halfH + headerH + listPadTop;
         const checkR = Math.max(7, 8.5 * scale);
         const iconSize = Math.round(32 * scale);
@@ -129,7 +130,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
             const rowContainer = this.scene.add.container(0, rowCenterY);
             this.add(rowContainer);
 
-            const checkX = -halfW + padX + checkR;
+            const checkX = -halfW + padLeft + checkR;
             const bullet = this.scene.add.graphics();
             bullet.setPosition(checkX, 0);
             rowContainer.add(bullet);
@@ -141,6 +142,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
             rowContainer.add(icon);
 
             const labelX = iconX + iconSize / 2 + 7 * scale;
+            const labelMaxW = Math.max(40, halfW - padRight - labelX);
             const labelText = addCauseText(this.scene, labelX, 0, '', {
                 fontSize: `${Math.round(16 * scale)}px`,
                 fontStyle: 'bold',
@@ -157,13 +159,15 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
                 labelText,
                 bulletRadius: checkR,
                 iconSize,
+                labelMaxW,
+                labelBaseSize: Math.round(16 * scale),
             };
             this._drawBullet(view, false);
             this._slotViews.push(view);
         }
 
         const checkoutY = halfH - bottomPad - checkoutH / 2;
-        this._buildCheckoutButton(0, checkoutY, this._panelW - padX * 2, checkoutH, scale);
+        this._buildCheckoutButton(0, checkoutY, this._panelW - padLeft * 2, checkoutH, scale);
     }
 
 
@@ -348,9 +352,20 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
             const complete = entry.collected >= entry.required;
             setCauseText(view.labelText, this._formatLabel(entry));
             view.labelText.setColor(complete ? LABEL_DONE : LABEL_COLOR);
+            view.labelText.setFontSize(view.labelBaseSize);
+            this._fitLabelWidth(view.labelText, view.labelMaxW);
             this._fitIcon(view.icon, entry.textureKey, view.iconSize);
             this._drawBullet(view, complete);
         });
+    }
+
+    _fitLabelWidth (text, maxW) {
+        let size = parseInt(text.style.fontSize, 10) || 16;
+        while (text.width > maxW && size > 11) {
+            size -= 1;
+            text.setFontSize(size);
+        }
+        return text;
     }
 
     getProgress () {
