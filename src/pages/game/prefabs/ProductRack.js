@@ -161,6 +161,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         this._rackId = rackId;
         this._onProductClick = onProductClick;
         this._pendingShelfTags = [];
+        this._productCards = [];
 
         const productMap = normalizeProductMap(products, category, this._layout.shelfRows * this._layout.productsPerRow);
         const shelfRows = layoutConfig.rows?.length
@@ -261,9 +262,10 @@ export default class ProductRack extends Phaser.GameObjects.Container {
     }
 
     _buildMixedShelfRow (catalog, stacks, shelfY, sectionH, usableW, rowStartX, gap = PROD_GAP, rowOverrides = {}) {
-        const count = stacks.length;
-        const slotW = count > 1 ? (usableW - gap * (count - 1)) / count : usableW;
-        const startX = rowStartX + slotW / 2;
+        const slotCount = Math.max(stacks.length, rowOverrides.slotCount ?? stacks.length);
+        const slotW = slotCount > 1 ? (usableW - gap * (slotCount - 1)) / slotCount : usableW;
+        const usedW = stacks.length * slotW + Math.max(0, stacks.length - 1) * gap;
+        const startX = rowStartX + (usableW - usedW) / 2 + slotW / 2;
         const perItemTags =
             rowOverrides.priceTagPerItem === true ||
             this._rackId === 'fruits';
@@ -359,7 +361,25 @@ export default class ProductRack extends Phaser.GameObjects.Container {
             }
         });
 
+        this._productCards.push({ product, container });
         return container;
+    }
+
+    /**
+     * World-space center of the first shelf card matching this product.
+     * @returns {{x:number,y:number}|null}
+     */
+    getProductWorldPosition (product) {
+        if (!product) return null;
+        const match = this._productCards.find(({ product: p }) => (
+            p === product
+            || (p.key && p.key === product.key)
+            || (p.textureKey && p.textureKey === product.textureKey)
+        ));
+        if (!match?.container) return null;
+        const matrix = match.container.getWorldTransformMatrix();
+        // Cards use origin at shelf floor; lift to roughly icon center.
+        return { x: matrix.tx, y: matrix.ty - 40 };
     }
 
     _queueShelfRowPriceTag (centerX, shelfY, product, rowCfg = {}) {

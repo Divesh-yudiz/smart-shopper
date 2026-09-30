@@ -6,9 +6,17 @@ const PANEL_NATIVE_W = 663;
 const PANEL_NATIVE_H = 376;
 const DEFAULT_W = 300;
 
-const BAR_NATIVE_W = 236;
-const BAR_NATIVE_H = 21;
-const SEGMENTS = 6;
+const BAR_CHUNK_KEYS = [
+    UI_TEXTURE_KEYS.ecoBar1,
+    UI_TEXTURE_KEYS.ecoBar2,
+    UI_TEXTURE_KEYS.ecoBar3,
+    UI_TEXTURE_KEYS.ecoBar4,
+    UI_TEXTURE_KEYS.ecoBar5,
+    UI_TEXTURE_KEYS.ecoBar6,
+];
+/** Native widths so the six chunks keep their art proportions when tiled. */
+const BAR_CHUNK_WIDTHS = [36, 36, 37, 35, 42, 49];
+const BAR_CHUNK_TOTAL_W = BAR_CHUNK_WIDTHS.reduce((sum, w) => sum + w, 0);
 
 const C_TITLE = '#1F6B28';
 const C_BODY = '#2A7A32';
@@ -88,16 +96,24 @@ export default class EcoMeterPanel extends Phaser.GameObjects.Container {
         this._barH = barH;
         this._barY = barY;
 
-        // Dim track behind the colorful fill.
+        // Dim track behind the chunked fill.
         const track = scene.add.graphics();
         const r = barH / 2;
         track.fillStyle(TRACK_FILL, 1);
         track.fillRoundedRect(this._barLeft, barY - barH / 2, barW, barH, r);
         this.add(track);
 
-        this._barImg = scene.add.image(this._barLeft, barY, UI_TEXTURE_KEYS.ecoLoadingBar);
-        this._barImg.setOrigin(0, 0.5);
-        this.add(this._barImg);
+        this._barChunks = [];
+        let chunkX = this._barLeft;
+        BAR_CHUNK_KEYS.forEach((key, index) => {
+            const chunkW = barW * (BAR_CHUNK_WIDTHS[index] / BAR_CHUNK_TOTAL_W);
+            const chunk = scene.add.image(chunkX, barY, key);
+            chunk.setOrigin(0, 0.5);
+            chunk.setDisplaySize(chunkW, barH);
+            this.add(chunk);
+            this._barChunks.push(chunk);
+            chunkX += chunkW;
+        });
 
         this._drawBar();
     }
@@ -117,29 +133,21 @@ export default class EcoMeterPanel extends Phaser.GameObjects.Container {
         }
     }
 
-    _progressRatio () {
-        // Snap to the 6 painted segments so crop lines up with the dividers.
-        const lit = Math.max(0, Math.min(
-            SEGMENTS,
-            Math.ceil((this._value / this._max) * SEGMENTS),
-        ));
-        return lit / SEGMENTS;
+    _litSegments () {
+        if (this._value <= 0) return 0;
+        const parts = BAR_CHUNK_KEYS.length;
+        return Phaser.Math.Clamp(
+            Math.ceil((this._value / this._max) * parts),
+            0,
+            parts,
+        );
     }
 
     _drawBar () {
-        const ratio = this._progressRatio();
-        if (ratio <= 0) {
-            this._barImg.setVisible(false);
-            return;
-        }
-
-        this._barImg.setVisible(true);
-        const cropW = Math.max(1, Math.round(BAR_NATIVE_W * ratio));
-        this._barImg.setCrop(0, 0, cropW, BAR_NATIVE_H);
-        this._barImg.setDisplaySize(
-            Math.max(1, this._barW * ratio),
-            this._barH,
-        );
+        const lit = this._litSegments();
+        this._barChunks.forEach((chunk, index) => {
+            chunk.setVisible(index < lit);
+        });
     }
 
     setProgress (value, max = this._max) {

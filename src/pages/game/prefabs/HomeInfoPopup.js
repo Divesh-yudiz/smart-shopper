@@ -3,6 +3,8 @@ import { addCauseText, wrapCause } from '../utils/gameText.js';
 import { HOME_TEXTURE_KEYS } from '../config/homeAssets.js';
 import { HOW_TO_PLAY_KEYS as HTP } from '../config/howToPlayAssets.js';
 import { WHAT_LEARN_KEYS as WL } from '../config/whatLearnAssets.js';
+import { GAME_GUIDE_KEYS as GG } from '../config/gameGuideAssets.js';
+import { MISSION_DESC_KEYS as MD } from '../config/missionDescriptionAssets.js';
 
 const TYPE = Object.freeze({
     title: 28,
@@ -186,19 +188,91 @@ const LEARN_CARDS = Object.freeze([
 ]);
 
 const GUIDE_CARDS = Object.freeze([
-    Object.freeze({ title: 'Coins', body: 'Your mission budget. Every product you buy uses Shop Coins.', fill: 0xFFF9E6, stroke: 0xFCDA8B, accent: 0xC47A12 }),
-    Object.freeze({ title: 'Eco Meter', body: 'Greener choices use fewer Eco Points. Watch this bar as you shop.', fill: 0xEEF9E8, stroke: 0xBCE4A8, accent: 0x1F8A3A }),
-    Object.freeze({ title: 'Timer', body: 'How much time is left to finish your shopping mission.', fill: 0xFFF3E6, stroke: 0xF0B878, accent: 0xE07020 }),
-    Object.freeze({ title: 'Cart', body: 'Holds what you pick. Review, remove, or swap items before checkout.', fill: 0xEAF4FF, stroke: 0x9BC4F5, accent: 0x2F6FE0 }),
-    Object.freeze({ title: 'Shopping List', body: 'Shows what you still need and what you have already collected.', fill: 0xEEF9E8, stroke: 0x9DD89A, accent: 0x2AA9A1 }),
-    Object.freeze({ title: 'Sale / Extras', body: 'Not everything on the shelves is needed. Extras still cost coins and eco.', fill: 0xFFECEF, stroke: 0xF0A0B0, accent: 0xD63439 }),
+    Object.freeze({
+        title: 'COINS',
+        body: 'Your mission budget. Every product you buy uses Shop Coins.',
+        icon: GG.coins,
+        frame: GG.yellowLarge,
+        titleBar: GG.yellowSmall,
+        titleIcon: MD.coinIcon,
+        fill: 0xFFF9E6,
+        stroke: 0xF0C84A,
+        titleColor: '#A81E28',
+        bodyColor: '#5A3A20',
+        wide: false,
+    }),
+    Object.freeze({
+        title: 'ECO METER',
+        body: 'Shows the environmental impact available for your mission. Lower-impact choices use fewer Eco Points.',
+        icon: GG.ecoMeter,
+        frame: GG.greenLarge,
+        titleBar: GG.greenSmall,
+        titleIcon: MD.leafIcon,
+        fill: 0xEEF9E8,
+        stroke: 0x7DCC7A,
+        titleColor: '#146B2C',
+        bodyColor: '#1A5A30',
+        wide: false,
+    }),
+    Object.freeze({
+        title: 'TIMER',
+        body: 'Shows how much time remains to complete your shopping.',
+        icon: GG.timer,
+        frame: GG.blueLarge,
+        titleBar: GG.blueSmall,
+        titleIcon: MD.timerIcon,
+        fill: 0xEAF4FF,
+        stroke: 0x7AB0E8,
+        titleColor: '#1A4FB8',
+        bodyColor: '#1A3F7A',
+        wide: false,
+    }),
+    Object.freeze({
+        title: 'CART',
+        body: 'Stores everything you select. Review, remove, or swap products before checkout.',
+        icon: GG.shoppingCart,
+        frame: GG.pinkLarge,
+        titleBar: GG.pinkSmall,
+        titleIcon: GG.shoppingCart,
+        fill: 0xFFECEF,
+        stroke: 0xF0A0B0,
+        titleColor: '#A81E28',
+        bodyColor: '#7A1A28',
+        wide: false,
+    }),
+    Object.freeze({
+        title: 'SHOPPING LIST',
+        body: 'Shows what you need to buy and what you have already collected.',
+        icon: GG.shoppingList,
+        frame: GG.purpleLarge,
+        titleBar: GG.purpleSmall,
+        titleIcon: GG.shoppingList,
+        fill: 0xF6EEFF,
+        stroke: 0xC9A8F5,
+        titleColor: '#5A24C4',
+        bodyColor: '#3A2A7A',
+        wide: true,
+    }),
+    Object.freeze({
+        title: 'SALE / EXTRA ITEMS',
+        body: 'Not everything on the shelves is needed. Extras still use your Shop Coins and Eco Meter.',
+        icon: GG.discount,
+        frame: GG.orangeLarge,
+        titleBar: GG.orangeSmall,
+        titleIcon: GG.discount,
+        fill: 0xFFF3E6,
+        stroke: 0xF0B878,
+        titleColor: '#B84F10',
+        bodyColor: '#7A3A10',
+        wide: true,
+    }),
 ]);
 
 /**
  * How to Play / Learn / Guide popup — Artboard 12 layout.
  */
 export default class HomeInfoPopup extends Phaser.GameObjects.Container {
-    constructor (scene) {
+    constructor(scene) {
         super(scene, 0, 0);
         scene.add.existing(this);
         this.setDepth(700);
@@ -206,7 +280,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this._tab = 'play';
     }
 
-    open () {
+    open() {
         this._tab = 'play';
         this._rebuild();
         this.setVisible(true);
@@ -221,7 +295,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         });
     }
 
-    close () {
+    close() {
         this.scene.tweens.add({
             targets: this,
             alpha: 0,
@@ -235,11 +309,11 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         });
     }
 
-    get isOpen () {
+    get isOpen() {
         return this.visible;
     }
 
-    _m () {
+    _m() {
         const W = this.scene.scale.width;
         const H = this.scene.scale.height;
         const s = Math.min(W / 1920, H / 1080);
@@ -255,23 +329,58 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         };
     }
 
-    _text (x, y, message, style, wrapW) {
+    _text(x, y, message, style, wrapW) {
         const msg = wrapW != null ? wrapCause(this.scene, message, wrapW, style) : message;
         return addCauseText(this.scene, x, y, msg, style);
     }
 
-    _fitContain (img, maxW, maxH) {
+    _fitContain(img, maxW, maxH) {
         const s = Math.min(maxW / img.width, maxH / img.height);
         img.setDisplaySize(img.width * s, img.height * s);
         return img;
     }
 
-    _fitW (img, displayW) {
+    _fitW(img, displayW) {
         img.setDisplaySize(displayW, displayW * (img.height / img.width));
         return img;
     }
 
-    _round (x, y, w, h, fill, radius, stroke = null, strokeW = 2) {
+    _slice(x, y, key, w, h, preferredCap = 48) {
+        const src = this.scene.textures.get(key)?.getSourceImage?.();
+        const tw = src?.width ?? 256;
+        const th = src?.height ?? 256;
+        const maxCap = Math.min(Math.floor(tw / 2) - 1, Math.floor(th / 2) - 1);
+        const cap = Math.max(8, Math.min(
+            preferredCap,
+            maxCap,
+            Math.floor(w / 2) - 2,
+            Math.floor(h / 2) - 2,
+        ));
+        return this.scene.add.nineslice(x, y, key, undefined, w, h, cap, cap, cap, cap);
+    }
+
+    /**
+     * Capsule title bar sized to the label.
+     * Uses 3-slice at fixed height so width can grow with text without
+     * stretching the round ends, and without changing title font size.
+     */
+    _titlePill(x, y, key, innerW, targetH) {
+        const src = this.scene.textures.get(key)?.getSourceImage?.();
+        const tw = Math.max(1, src?.width ?? 530);
+        const th = Math.max(1, src?.height ?? 233);
+        // Round end width in source pixels (~half the capsule height).
+        const side = Math.max(8, Math.min(Math.floor(th * 0.48), Math.floor(tw / 2) - 1));
+        // Tight side padding past the round caps (keeps text inside, less empty space).
+        const padFactor = 0.78;
+        const dispW = Math.max(targetH * 2.0, innerW + targetH * padFactor);
+        // Build slices in source space, then scale to the target display size.
+        const srcW = Math.max(side * 2 + 8, Math.round(dispW * (th / targetH)));
+        const pill = this.scene.add.nineslice(x, y, key, undefined, srcW, th, side, side, 0, 0);
+        pill.setDisplaySize(dispW, targetH);
+        return { pill, pillW: dispW, pillH: targetH };
+    }
+
+    _round(x, y, w, h, fill, radius, stroke = null, strokeW = 2) {
         const g = this.scene.add.graphics();
         const r = radius ?? Math.min(w, h) * 0.12;
         g.fillStyle(fill, 1);
@@ -284,7 +393,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         return g;
     }
 
-    _rebuild () {
+    _rebuild() {
         this.removeAll(true);
         const m = this._m();
 
@@ -300,7 +409,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this._drawPanel(m);
     }
 
-    _drawChrome (m) {
+    _drawChrome(m) {
         const backH = m.H * 0.078;
         const back = this.scene.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
         this._fitW(back, backH * (back.width / back.height));
@@ -312,7 +421,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
 
     }
 
-    _drawPanel (m) {
+    _drawPanel(m) {
         const panelW = m.W * 0.78;
         const panelH = m.H * 0.84;
         const panelY = m.cy + m.H * 0.02;
@@ -355,7 +464,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         else this._drawGuide(m, box);
     }
 
-    _drawTabs (m, y, tabW, tabH) {
+    _drawTabs(m, y, tabW, tabH) {
         const gap = m.W * 0.01;
         const total = TABS.length * tabW + (TABS.length - 1) * gap;
         let x = m.cx - total / 2 + tabW / 2;
@@ -399,13 +508,13 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         });
     }
 
-    _setTab (id) {
+    _setTab(id) {
         if (this._tab === id) return;
         this._tab = id;
         this._rebuild();
     }
 
-    _drawPlay (m, box) {
+    _drawPlay(m, box) {
         const gapX = box.w * 0.01;
         const gapY = box.h * 0.022;
         const cols = 3;
@@ -422,7 +531,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         });
     }
 
-    _stepCard (m, cx, cy, w, h, card) {
+    _stepCard(m, cx, cy, w, h, card) {
         this._round(cx, cy, w, h, card.fill, Math.min(w, h) * 0.1, card.stroke, Math.max(2, Math.round(2.5 * m.s)));
 
         const left = cx - w / 2;
@@ -513,7 +622,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this.add(body);
     }
 
-    _controlRow (m, cx, y, w, h, row) {
+    _controlRow(m, cx, y, w, h, row) {
         const iconW = h * 1.4;
         const iconX = cx - w / 2 + iconW / 2;
         this._drawControlIcon(m, iconX, y, h, row.kind);
@@ -524,7 +633,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         }).setOrigin(0, 0.5));
     }
 
-    _drawControlIcon (m, x, y, size, kind) {
+    _drawControlIcon(m, x, y, size, kind) {
         const g = this.scene.add.graphics();
         const s = size * 0.9;
         if (kind === 'arrows') {
@@ -545,7 +654,7 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this.add(g);
     }
 
-    _drawLearn (m, box) {
+    _drawLearn(m, box) {
         const gap = box.w * 0.012;
         const n = LEARN_CARDS.length;
         const cw = (box.w - gap * (n - 1)) / n;
@@ -556,14 +665,14 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         });
     }
 
-    _learnCard (m, cx, cy, w, h, card) {
+    _learnCard(m, cx, cy, w, h, card) {
         this._round(cx, cy, w, h, card.fill, Math.min(w, h) * 0.08, card.stroke, Math.max(2, Math.round(2.5 * m.s)));
 
         const top = cy - h / 2;
         const bottom = cy + h / 2;
         const padY = h * 0.028;
-        const gap = h * 0.014;
-        const textW = w * 0.9;
+        const gap = Math.max(m.H * 0.008, h * 0.016);
+        const textW = w * 0.88;
 
         const badgeS = Math.min(w, h) * 0.14;
         const badgeY = top + badgeS * 0.7;
@@ -575,8 +684,8 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         }).setOrigin(0.5, 0.5));
 
         // Fixed icon bands so every card's upper/lower art shares the same baseline.
-        const iconS = Math.min(w * 0.94, h * 0.32);
-        const footerS = Math.min(w * 0.82, h * 0.2);
+        const iconS = Math.min(w * 0.94, h * 0.30);
+        const footerS = Math.min(w * 0.88, h * 0.22);
         const iconY = badgeY + badgeS * 0.55 + gap + iconS / 2;
         const footerY = bottom - padY - footerS / 2;
 
@@ -584,89 +693,173 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         this._fitContain(icon, iconS, iconS);
         this.add(icon);
 
+        const footer = this.scene.add.image(cx, footerY, card.footer);
+        this._fitContain(footer, footerS, footerS);
+        this.add(footer);
+
+        // Text sits strictly between top icon and bottom footer — never overlapping either.
+        const textTop = iconY + icon.displayHeight / 2 + gap;
+        const textBottom = footerY - footer.displayHeight / 2 - gap;
+        const availH = Math.max(0, textBottom - textTop);
+
         const titleStyle = {
             fontSize: `${m.fs(TYPE.learnTitle)}px`,
             fontStyle: WEIGHT.black,
             color: card.titleColor,
             align: 'center',
         };
-        const bodyStyle = {
-            fontSize: `${m.fs(TYPE.learnBody)}px`,
+        let bodyFs = m.fs(TYPE.learnBody);
+        const makeBodyStyle = (fs) => ({
+            fontSize: `${fs}px`,
             fontStyle: WEIGHT.heavy,
             color: card.bodyColor,
             align: 'center',
-            lineSpacing: m.fs(3),
-        };
-        const title = this._text(0, 0, this._wrap(card.title, textW, titleStyle), titleStyle).setOrigin(0.5, 0);
-        const body = this._text(0, 0, this._wrap(card.body, textW, bodyStyle), bodyStyle).setOrigin(0.5, 0);
+            lineSpacing: Math.max(1, Math.round(fs * 0.12)),
+        });
 
-        const textTop = iconY + iconS / 2 + gap;
-        const textBottom = footerY - footerS / 2 - gap;
+        const title = this._text(0, 0, this._wrap(card.title, textW, titleStyle), titleStyle).setOrigin(0.5, 0);
+        let bodyStyle = makeBodyStyle(bodyFs);
+        let body = this._text(0, 0, this._wrap(card.body, textW, bodyStyle), bodyStyle).setOrigin(0.5, 0);
+
+        // Shrink body type if the block can't fit in the mid band.
+        while ((title.height + gap + body.height) > availH && bodyFs > m.fs(14)) {
+            body.destroy();
+            bodyFs -= 1;
+            bodyStyle = makeBodyStyle(bodyFs);
+            body = this._text(0, 0, this._wrap(card.body, textW, bodyStyle), bodyStyle).setOrigin(0.5, 0);
+        }
+
         const textBlockH = title.height + gap + body.height;
-        let textY = textTop + Math.max(0, (textBottom - textTop - textBlockH) / 2);
+        // Bias upward from center so body clears the footer; keep clear of the top icon.
+        let textY = textTop;
+        if (textBlockH < availH) {
+            textY = textTop + (availH - textBlockH) * 0.2;
+        }
+        if (textY + textBlockH > textBottom) {
+            textY = Math.max(textTop, textBottom - textBlockH);
+        }
 
         title.setPosition(cx, textY);
         this.add(title);
-        textY += title.height + gap;
-
-        body.setPosition(cx, textY);
+        body.setPosition(cx, textY + title.height + gap);
         this.add(body);
-
-        const footer = this.scene.add.image(cx, footerY, card.footer);
-        this._fitContain(footer, footerS, footerS);
-        this.add(footer);
     }
 
-    _drawGuide (m, box) {
-        const gapX = box.w * 0.01;
-        const gapY = box.h * 0.022;
-        const cols = 3;
-        const cw = (box.w - gapX * (cols - 1)) / cols;
-        const ch = (box.h - gapY) / 2;
+    _drawGuide(m, box) {
+        const gapX = box.w * 0.012;
+        const gapY = box.h * 0.02;
+        const topCards = GUIDE_CARDS.filter((c) => !c.wide);
+        const wideCards = GUIDE_CARDS.filter((c) => c.wide);
+        const topCols = topCards.length;
+        const topH = box.h * 0.58;
+        const botH = box.h - topH - gapY;
+        const topW = (box.w - gapX * (topCols - 1)) / topCols;
+        const botCols = wideCards.length;
+        const botW = (box.w - gapX * (botCols - 1)) / botCols;
 
-        GUIDE_CARDS.forEach((card, i) => {
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            const cx = box.x + cw / 2 + col * (cw + gapX);
-            const cy = box.y + ch / 2 + row * (ch + gapY);
-            this._round(cx, cy, cw, ch, card.fill, Math.min(cw, ch) * 0.1, card.stroke, Math.max(2, Math.round(2.5 * m.s)));
+        topCards.forEach((card, i) => {
+            const cx = box.x + topW / 2 + i * (topW + gapX);
+            const cy = box.y + topH / 2;
+            this._guideCard(m, cx, cy, topW, topH, card);
+        });
 
-            const left = cx - cw / 2;
-            const rail = this.scene.add.graphics();
-            rail.fillStyle(card.accent, 1);
-            rail.fillRoundedRect(left, cy - ch / 2, Math.max(8, cw * 0.03), ch, {
-                tl: Math.min(cw, ch) * 0.1,
-                bl: Math.min(cw, ch) * 0.1,
-                tr: 0,
-                br: 0,
-            });
-            this.add(rail);
-
-            this.add(this._text(cx, cy - ch * 0.22, card.title.toUpperCase(), {
-                fontSize: `${m.fs(TYPE.guideTitle)}px`,
-                fontStyle: WEIGHT.heavy,
-                color: C_NAVY,
-            }).setOrigin(0.5, 0.5));
-
-            this.add(this._text(cx, cy + ch * 0.08, this._wrap(card.body, cw * 0.78, {
-                fontSize: `${m.fs(TYPE.guideBody)}px`,
-                color: C_MUTED,
-                align: 'center',
-                lineSpacing: m.fs(3),
-            }), {
-                fontSize: `${m.fs(TYPE.guideBody)}px`,
-                color: C_MUTED,
-                align: 'center',
-                lineSpacing: m.fs(3),
-            }).setOrigin(0.5, 0.5));
+        wideCards.forEach((card, i) => {
+            const cx = box.x + botW / 2 + i * (botW + gapX);
+            const cy = box.y + topH + gapY + botH / 2;
+            this._guideCard(m, cx, cy, botW, botH, card);
         });
     }
 
-    _wrap (str, maxWidth, style) {
+    _guideCard(m, cx, cy, w, h, card) {
+        const radius = Math.min(w, h) * (card.wide ? 0.12 : 0.1);
+        this._round(cx, cy, w, h, card.fill, radius);
+
+        // Nine-slice so colored frames keep round corners (no stretch).
+        const frameSrc = this.scene.textures.get(card.frame)?.getSourceImage?.();
+        const frameCap = Math.max(36, Math.floor(Math.min(frameSrc?.width ?? 400, frameSrc?.height ?? 400) * 0.14));
+        this.add(this._slice(cx, cy, card.frame, w, h, frameCap));
+
+        const padY = h * 0.05;
+        const gap = Math.max(m.H * 0.006, h * 0.018);
+        const textW = w * (card.wide ? 0.86 : 0.84);
+        const titleBarH = Math.min(m.H * 0.048, h * 0.12);
+        const titleIconS = titleBarH * 0.62;
+
+        const titleStyle = {
+            fontSize: `${m.fs(TYPE.guideTitle)}px`,
+            fontStyle: WEIGHT.black,
+            color: card.titleColor,
+            align: 'center',
+        };
+        let bodyFs = m.fs(TYPE.guideBody);
+        const makeBodyStyle = (fs) => ({
+            fontSize: `${fs}px`,
+            fontStyle: WEIGHT.heavy,
+            color: card.bodyColor,
+            align: 'center',
+            lineSpacing: Math.max(1, Math.round(fs * 0.14)),
+        });
+
+        let bodyStyle = makeBodyStyle(bodyFs);
+        let body = this._text(0, 0, this._wrap(card.body, textW, bodyStyle), bodyStyle).setOrigin(0.5, 0);
+
+        const titleText = this._text(0, 0, card.title, titleStyle).setOrigin(0, 0.5);
+        const titleIcon = this.scene.add.image(0, 0, card.titleIcon);
+        this._fitContain(titleIcon, titleIconS, titleIconS);
+        const titleGap = Math.max(5, m.W * 0.004);
+        const innerW = titleIcon.displayWidth + titleGap + titleText.width;
+        // Keep title type at guideTitle size — only the pill width adapts.
+        const maxPillW = w * 0.94;
+        let { pill, pillW, pillH } = this._titlePill(0, 0, card.titleBar, innerW, titleBarH);
+        if (pillW > maxPillW) {
+            pillW = maxPillW;
+            pill.setDisplaySize(pillW, pillH);
+        }
+
+        const footerH = pillH + gap + body.height;
+        let iconS = Math.min(
+            w * (card.wide ? 0.28 : 0.74),
+            h * (card.wide ? 0.42 : 0.4),
+            h - padY * 2 - footerH - gap,
+        );
+        iconS = Math.max(h * 0.2, iconS);
+
+        while ((iconS + gap + footerH) > (h - padY * 2) && bodyFs > m.fs(12)) {
+            body.destroy();
+            bodyFs -= 1;
+            bodyStyle = makeBodyStyle(bodyFs);
+            body = this._text(0, 0, this._wrap(card.body, textW, bodyStyle), bodyStyle).setOrigin(0.5, 0);
+        }
+
+        const blockH = iconS + gap + pillH + gap + body.height;
+        let y = cy - blockH / 2;
+        y = Math.max(cy - h / 2 + padY, Math.min(y, cy + h / 2 - padY - blockH));
+
+        const icon = this.scene.add.image(cx, y + iconS / 2, card.icon);
+        this._fitContain(icon, iconS, iconS);
+        this.add(icon);
+        y += iconS + gap;
+
+        const titleMidY = y + pillH / 2;
+        pill.setPosition(cx, titleMidY);
+        this.add(pill);
+
+        const titleRowW = titleIcon.displayWidth + titleGap + titleText.width;
+        titleIcon.setPosition(cx - titleRowW / 2 + titleIcon.displayWidth / 2, titleMidY);
+        titleText.setPosition(titleIcon.x + titleIcon.displayWidth / 2 + titleGap, titleMidY);
+        this.add(titleIcon);
+        this.add(titleText);
+        y += pillH + gap;
+
+        body.setPosition(cx, y);
+        this.add(body);
+    }
+
+    _wrap(str, maxWidth, style) {
         return wrapCause(this.scene, str, maxWidth, style);
     }
 
-    _shrinkToWidth (text, maxW) {
+    _shrinkToWidth(text, maxW) {
         let size = parseInt(text.style.fontSize, 10) || 16;
         while (text.width > maxW && size > 11) {
             size -= 1;

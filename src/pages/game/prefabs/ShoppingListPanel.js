@@ -278,6 +278,19 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         return this._entries.map((e) => (e ? { ...e } : null));
     }
 
+    /**
+     * Replace collected counts from authoritative cart line items (API aCartItems).
+     * @param {Array<{sItemKey?:string, nQuantity?:number}>} aCartItems
+     * @param {(entries: Array, aCartItems: Array) => Array} applyFn
+     */
+    syncCollectedFromCart (aCartItems, applyFn) {
+        if (typeof applyFn !== 'function') return;
+        this._entries = applyFn(this._entries, aCartItems);
+        while (this._entries.length < SHOPPING_LIST_SLOT_COUNT) this._entries.push(null);
+        this._entries = this._entries.slice(0, SHOPPING_LIST_SLOT_COUNT);
+        this._refresh();
+    }
+
     /** Call when player removes a product from the cart. */
     onProductRemoved (product) {
         let changed = false;
@@ -299,7 +312,9 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         return (
             entry.key === key ||
             entry.textureKey === product.textureKey ||
-            entry.key === product.textureKey?.replace(/^product_\w+_/, '')
+            (entry.sItemKey && entry.sItemKey === product.sItemKey) ||
+            entry.key === product.textureKey?.replace(/^product_\w+_/, '') ||
+            entry.key === product.textureKey?.replace(/^api_item_|_normal$|_eco$/g, '')
         );
     }
 

@@ -22,6 +22,12 @@ import ecoGoldIcon from '../../../assets/images/gameplay/E-Gold.png';
 import ecoGreenIcon from '../../../assets/images/gameplay/E-Green.png';
 import missionTitleBg from '../../../assets/images/gameplay/gameplay-title-base.png';
 import ecoLoadingBar from '../../../assets/images/gameplay/lOADING-bAR.png';
+import ecoBar1 from '../../../assets/images/gameplay/eco-meter-bar/low-1.png';
+import ecoBar2 from '../../../assets/images/gameplay/eco-meter-bar/low-2.png';
+import ecoBar3 from '../../../assets/images/gameplay/eco-meter-bar/med-3.png';
+import ecoBar4 from '../../../assets/images/gameplay/eco-meter-bar/med-4.png';
+import ecoBar5 from '../../../assets/images/gameplay/eco-meter-bar/full-5.png';
+import ecoBar6 from '../../../assets/images/gameplay/eco-meter-bar/full-6.png';
 import cartBase from '../../../assets/images/gameplay/Base.png';
 import cartFillBox from '../../../assets/images/gameplay/Fill-Box.png';
 import cartIcon from '../../../assets/images/gameplay/Cart.png';
@@ -53,6 +59,12 @@ export const UI_TEXTURE_KEYS = Object.freeze({
     ecoGreenIcon: 'ui_eco_green_icon',
     missionTitleBg: 'ui_mission_title_bg',
     ecoLoadingBar: 'ui_eco_loading_bar',
+    ecoBar1: 'ui_eco_bar_1',
+    ecoBar2: 'ui_eco_bar_2',
+    ecoBar3: 'ui_eco_bar_3',
+    ecoBar4: 'ui_eco_bar_4',
+    ecoBar5: 'ui_eco_bar_5',
+    ecoBar6: 'ui_eco_bar_6',
     shelfPriceBase: 'ui_shelf_price_base',
     ecoIcon: 'ui_eco_icon',
     ecoMeterBg: 'ecoMeterBg',
@@ -83,6 +95,12 @@ export const componentAssetPaths = Object.freeze([
     { key: UI_TEXTURE_KEYS.ecoGreenIcon, path: ecoGreenIcon },
     { key: UI_TEXTURE_KEYS.missionTitleBg, path: missionTitleBg },
     { key: UI_TEXTURE_KEYS.ecoLoadingBar, path: ecoLoadingBar },
+    { key: UI_TEXTURE_KEYS.ecoBar1, path: ecoBar1 },
+    { key: UI_TEXTURE_KEYS.ecoBar2, path: ecoBar2 },
+    { key: UI_TEXTURE_KEYS.ecoBar3, path: ecoBar3 },
+    { key: UI_TEXTURE_KEYS.ecoBar4, path: ecoBar4 },
+    { key: UI_TEXTURE_KEYS.ecoBar5, path: ecoBar5 },
+    { key: UI_TEXTURE_KEYS.ecoBar6, path: ecoBar6 },
     { key: UI_TEXTURE_KEYS.shelfPriceBase, path: shelfPriceBase },
     { key: UI_TEXTURE_KEYS.ecoIcon, path: ecoIcon },
     { key: UI_TEXTURE_KEYS.ecoMeterBg, path: objectBase },

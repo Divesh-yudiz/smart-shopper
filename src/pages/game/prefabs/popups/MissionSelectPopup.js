@@ -283,11 +283,16 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         this._fitW(tag, w * 0.34);
         tag.setOrigin(0, 0);
         wrap.add(tag);
-        wrap.add(this._text(tag.x + tag.displayWidth / 2, tag.y + tag.displayHeight / 2, `Mission ${mission.nOrder ?? ''}`.trim(), {
-            fontSize: `${m.fs(TYPE.missionTag)}px`,
-            fontStyle: 'bold',
-            color: C_WHITE,
-        }).setOrigin(0.5, 0.5));
+        wrap.add(this._text(
+            tag.x + tag.displayWidth / 2,
+            tag.y + tag.displayHeight / 2,
+            mission.sMissionLabel || `Mission ${mission.nOrder ?? ''}`.trim(),
+            {
+                fontSize: `${m.fs(TYPE.missionTag)}px`,
+                fontStyle: 'bold',
+                color: C_WHITE,
+            },
+        ).setOrigin(0.5, 0.5));
 
         const np = this.scene.add.image(left + w - padX, y, theme.notPlayed);
         this._fitW(np, w * 0.30);

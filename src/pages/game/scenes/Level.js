@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import config from "../utils/config.js";
+import { setCauseText } from "../utils/gameText.js";
 import { HUD_LAYOUT } from "../config/hudLayout.js";
 import GameManager from "../scripts/GameManager.js";
 import SoundManager from "../scripts/SoundManager.js";
@@ -45,12 +46,7 @@ class Level extends Phaser.Scene {
         if (gameConfig?.gameId) setGameId(gameConfig.gameId);
         if (gameConfig?.missionId) setMissionId(gameConfig.missionId);
 
-        let racksData = getRacksForView();
-        if (gameConfig?.items?.length) {
-            racksData = patchRacksWithApiPrices(gameConfig.items, racksData);
-        }
-        // Rebuilt every time (not just on fresh load) — a page-refresh resume starts
-        // from an empty module-level cache in gameApi.js, so this must run unconditionally.
+        // Seed variants before patching racks so resolveItem can use API names/images.
         const variantSeed = [
             ...(gameConfig?.items ?? []),
             ...(gameConfig?.shoppingList ?? []).map((it) => ({
@@ -65,6 +61,11 @@ class Level extends Phaser.Scene {
             })),
         ];
         setItemVariants(variantSeed);
+
+        let racksData = getRacksForView();
+        if (gameConfig?.items?.length) {
+            racksData = patchRacksWithApiPrices(gameConfig.items, racksData);
+        }
 
         // Use saved entries (with collected counts) on restore, fresh entries otherwise
         let shoppingEntries = savedState?.shoppingEntries
@@ -302,7 +303,40 @@ class Level extends Phaser.Scene {
             onContinue: () => {},
             onFindRemaining: () => {},
             onCheckout: () => this.openCheckout(),
+            onQtyChange: (item, next, _index, delta) => {
+                if (delta >= 0) return;
+                this._removeCartUnits(item, Math.abs(delta), next);
+            },
         });
+    }
+
+    async _removeCartUnits (item, count, nextQty) {
+        const iItemId = item?.iItemId ?? (item?.sItemKey ? getItemId(item.sItemKey) : null);
+        if (!iItemId || count <= 0) return;
+        const eVariant = item.isEcoVariant ? 'eco' : 'normal';
+        try {
+            let result = null;
+            for (let i = 0; i < count; i++) {
+                result = await removeFromCart({ iItemId, eVariant });
+            }
+            if (result) this._applyCartMutationResult(result);
+            if (nextQty <= 0) {
+                this.oMyCart?.setItems(
+                    (this.oMyCart?.getItems() ?? []).filter((product) => {
+                        const sameItem = (product.iItemId ?? getItemId(product.sItemKey)) === iItemId
+                            || product.sItemKey === item.sItemKey;
+                        const sameVariant = !!product.isEcoVariant === !!item.isEcoVariant;
+                        return !(sameItem && sameVariant);
+                    }),
+                );
+                this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
+            }
+        } catch (err) {
+            console.error('[Cart remove]', err);
+            const restored = (nextQty ?? 0) + count;
+            item.qty = restored;
+            if (item._label) setCauseText(item._label, `${restored}`);
+        }
     }
 
     _buildStillNeededItems () {
@@ -369,11 +403,12 @@ class Level extends Phaser.Scene {
         });
     }
 
-    _showTimesUpPopup () {
+    async _showTimesUpPopup () {
         if (this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen || this._checkoutOpen || this._missionSuccessOpen || this._productPopupOpen) return;
         this._timesUpOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
+        this._clearSavedState();
         const spent = this.oMyCart?.getTotal() ?? 0;
         const budget = this._budget ?? 62;
         const ecoMax = this._ecoMax ?? 32;
@@ -399,8 +434,7 @@ class Level extends Phaser.Scene {
             },
             onDashboard: () => {
                 this._timesUpOpen = false;
-                this._clearSavedState();
-                this.scene.start('Home');
+                this._leaveToDashboard();
             },
             onNewMission: () => {
                 this._timesUpOpen = false;
@@ -411,6 +445,14 @@ class Level extends Phaser.Scene {
                 this._restartMission();
             },
         });
+
+        try {
+            await checkoutGame({
+                nTimeRemaining: this.oTimer?.getRemaining() ?? 0,
+            });
+        } catch (err) {
+            console.error('[Times Up] Checkout API error:', err);
+        }
     }
 
     _canAfford (product) {
@@ -527,75 +569,79 @@ class Level extends Phaser.Scene {
      * @param {string} sItemKey
      */
     async _addProductToCart (selections, sItemKey) {
-        const budget = this._budget ?? 0;
-        let spent = this.oMyCart?.getTotal() ?? 0;
-        const collectedDelta = {};
-        const itemKey = (p) => p.key ?? p.textureKey;
-
-        // Clamp each variant's requested quantity against budget/shopping-list limits,
-        // accounting for the combined effect of both variants in this same batch.
         const batches = [];
         for (const { product, qty } of selections) {
             if (!product || qty <= 0) continue;
-            const onList = this.oShoppingList?.isProductOnList(product) ?? false;
-            const price = product.price ?? 0;
-            let added = 0;
-
-            for (let i = 0; i < qty; i++) {
-                if (budget > 0 && spent + price > budget) break;
-                if (onList) {
-                    const remaining = (this.oShoppingList?.getRemainingForProduct(product) ?? Infinity)
-                        - (collectedDelta[itemKey(product)] ?? 0);
-                    if (remaining <= 0) break;
-                }
-                spent += price;
-                collectedDelta[itemKey(product)] = (collectedDelta[itemKey(product)] ?? 0) + 1;
-                added += 1;
-            }
-
-            if (added > 0) batches.push({ product, qty: added, onList });
+            batches.push({
+                product,
+                qty,
+                onList: this.oShoppingList?.isProductOnList(product) ?? false,
+            });
         }
-
         if (!batches.length) return;
 
-        // POST /cart/add expects { iMissionId, iItemId, eVariant } — one unit per call.
-        // Call once per selected unit so eco vs normal stay distinct; last response's
-        // aCartItems is the sole source of truth for the cart panel.
+        // POST /cart/add decides whether the item can be added. Do not block on local budget or list checks.
         const iItemId = sItemKey ? getItemId(sItemKey) : null;
+        let syncedFromApi = false;
+        const accepted = [];
         if (iItemId) {
-            try {
-                let result = null;
-                for (const { product, qty } of batches) {
-                    const eVariant = product?.isEcoVariant ? 'eco' : 'normal';
-                    for (let i = 0; i < qty; i++) {
-                        result = await addToCart({ iItemId, eVariant });
+            let rejected = false;
+            for (const batch of batches) {
+                if (rejected) break;
+                const eVariant = batch.product?.isEcoVariant ? 'eco' : 'normal';
+                let added = 0;
+                for (let i = 0; i < batch.qty; i++) {
+                    try {
+                        const result = await addToCart({ iItemId, eVariant });
+                        this._applyCartMutationResult(result);
+                        syncedFromApi = true;
+                        added += 1;
+                    } catch (err) {
+                        console.error('[Cart add]', err);
+                        this._handleCartAddRejected(err);
+                        rejected = true;
+                        break;
                     }
                 }
-                if (result) this._applyCartMutationResult(result);
-            } catch (err) {
-                console.error('[Cart add]', err);
-                return;
+                if (added > 0) accepted.push({ ...batch, qty: added });
             }
         } else {
-            for (const { product, qty } of batches) {
+            accepted.push(...batches);
+            for (const { product, qty } of accepted) {
                 for (let i = 0; i < qty; i++) this.oMyCart?.tryAddItem(product);
             }
-            const ecoDelta = batches.reduce((sum, b) => sum + (b.product.ecoImpact ?? 0) * b.qty, 0);
+            const ecoDelta = accepted.reduce((sum, b) => sum + (b.product.ecoImpact ?? 0) * b.qty, 0);
             this.setEcoMeter((this._ecoValue ?? 0) + ecoDelta, this._ecoMax);
             this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
         }
 
+        if (!accepted.length) return;
+
         const ptr = this.input.activePointer;
-        for (const { product, qty, onList } of batches) {
-            if (onList) {
+        for (const { product, qty, onList } of accepted) {
+            if (onList && !syncedFromApi) {
                 for (let i = 0; i < qty; i++) this.oShoppingList?.onProductCollected(product);
             }
-            this._flyToCart(product, ptr.worldX, ptr.worldY);
+            const shelfPos = this.oMarketView?.getProductWorldPosition(product);
+            const fromX = shelfPos?.x ?? ptr.worldX;
+            const fromY = shelfPos?.y ?? ptr.worldY;
+            this._flyToCart(product, fromX, fromY);
         }
 
         this._saveState();
         this._updateHudMeters();
         this._syncShoppingListButton();
+    }
+
+    _handleCartAddRejected (err) {
+        const msg = String(err?.payload?.message || err?.payload?.data?.sMessage || err?.message || '').toLowerCase();
+        if (/eco/.test(msg)) {
+            this._showEcoMeterEmptyPopup();
+            return;
+        }
+        if (/coin|budget|afford|price|balance|insufficient/.test(msg)) {
+            this._showNotEnoughCoinsPopup();
+        }
     }
 
     create({ isMusic, isSound, gameConfig = null } = {}) {
@@ -606,28 +652,71 @@ class Level extends Phaser.Scene {
 
         const saved = this._loadSavedState();
         const resuming = sessionStorage.getItem('ss_inGame') === '1' && !!saved?.gameConfig;
+
+        // Preload always downloads mission items + product textures before starting Level.
+        // Prefer that fresh `items` payload so racks never build from shopping-list stubs.
+        const mergedConfig = gameConfig?.items?.length
+            ? { ...(saved?.gameConfig ?? {}), ...gameConfig, items: gameConfig.items }
+            : (gameConfig ?? saved?.gameConfig ?? null);
+
+        if (!mergedConfig?.items?.length) {
+            console.error('[Level] No mission items ready — returning to Preload');
+            this.scene.start('Preload', { gameConfig: mergedConfig });
+            return;
+        }
+
+        const missingTextures = this._missingProductTextures(mergedConfig.items);
+        if (missingTextures.length) {
+            console.error('[Level] Product textures not ready:', missingTextures);
+            this.scene.start('Preload', { gameConfig: mergedConfig });
+            return;
+        }
+
         if (resuming) {
-            setGameId(saved.gameConfig.gameId);
-            if (saved.gameConfig.sessionId) setSessionId(saved.gameConfig.sessionId);
-            if (saved.gameConfig.missionId) setMissionId(saved.gameConfig.missionId);
-            this.editorCreate(saved.gameConfig, saved);
-            // On refresh the canvas has no keyboard focus (user never clicked it).
-            // Grab focus so arrow keys work immediately without a manual click.
+            setGameId(mergedConfig.gameId ?? saved.gameConfig.gameId);
+            if (mergedConfig.sessionId ?? saved.gameConfig.sessionId) {
+                setSessionId(mergedConfig.sessionId ?? saved.gameConfig.sessionId);
+            }
+            if (mergedConfig.missionId ?? saved.gameConfig.missionId) {
+                setMissionId(mergedConfig.missionId ?? saved.gameConfig.missionId);
+            }
+            this.editorCreate(mergedConfig, saved);
             const canvas = this.game.canvas;
             canvas.setAttribute('tabindex', '1');
             canvas.focus();
         } else {
-            // Saved state had no valid gameConfig (API had failed) — discard and use Preload result.
             if (saved) this._clearSavedState();
-
-            this.editorCreate(gameConfig, null);
-            if (gameConfig?.gameId) setGameId(gameConfig.gameId);
-            if (gameConfig?.missionId) setMissionId(gameConfig.missionId);
+            this.editorCreate(mergedConfig, null);
+            if (mergedConfig?.gameId) setGameId(mergedConfig.gameId);
+            if (mergedConfig?.missionId) setMissionId(mergedConfig.missionId);
         }
+    }
+
+    /** Keys that must exist before racks are built (normal shelf art from oNormal.sImage). */
+    _missingProductTextures (items) {
+        const missing = [];
+        for (const item of items ?? []) {
+            const key = item?.sItemKey;
+            if (!key) continue;
+            const url = item.oNormal?.sImage || item.sImage;
+            if (!url) continue;
+            const texKey = `api_item_${String(key).replace(/[^a-zA-Z0-9_-]/g, '_')}_normal`;
+            if (!this.textures.exists(texKey)) missing.push(texKey);
+        }
+        return missing;
     }
 
     _chooseAnotherMission() {
         this._clearSavedState();
+        this.scene.start('Home');
+    }
+
+    /** Exit the mini-game to the host dashboard (or Home when running standalone). */
+    _leaveToDashboard () {
+        this._clearSavedState();
+        if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'envhero:back-to-dashboard' }, '*');
+        }
         this.scene.start('Home');
     }
 
@@ -723,25 +812,48 @@ class Level extends Phaser.Scene {
         this.oShoppingListBtn?.setProgress(done, total);
     }
 
-    /** Reconciles the cart contents / eco meter / remaining budget with the authoritative values from a cart add/remove API response. */
+    /** Reconciles cart / shopping list / eco / coins from a cart add/remove API response. */
     _applyCartMutationResult (result) {
-        const data = result?.data;
-        if (!data) return;
+        const root = result?.data ?? result ?? {};
+        // Newer APIs nest session fields under data.session; older ones put them on data.
+        const data = root.session ?? root;
+        if (!data || typeof data !== 'object') return;
 
-        if (data.aCartItems) {
-            this.oMyCart?.setItems(buildCartItemsFromApi(data.aCartItems));
+        const aCartItems = data.aCartItems ?? root.aCartItems;
+        if (Array.isArray(aCartItems)) {
+            this.oMyCart?.setItems(buildCartItemsFromApi(aCartItems));
             this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);
+            this.oShoppingList?.syncCollectedFromCart(aCartItems, applyCartCollectedToEntries);
+            this._syncShoppingListButton();
         }
 
-        const ecoValue = data.nEcoMeter ?? data.nCurrentEcoMeter ?? data.nEcoPoints;
-        const ecoMax = data.nEcoMeterMax ?? data.nMaxEcoMeter ?? this._ecoMax;
-        if (ecoValue != null) this.setEcoMeter(ecoValue, ecoMax);
+        const ecoMax = data.nEcoLimit
+            ?? data.nEcoMeterMax
+            ?? data.nMaxEcoMeter
+            ?? this._ecoMax;
+        const ecoRemaining = data.nEcoRemaining
+            ?? data.nEcoMeter
+            ?? data.nCurrentEcoMeter;
+        if (ecoRemaining != null) {
+            // HUD eco panel treats value as remaining budget (same as start session).
+            this.setEcoMeter(ecoRemaining, ecoMax);
+        } else if (data.nEcoSpent != null && ecoMax != null) {
+            this.setEcoMeter(Math.max(0, ecoMax - data.nEcoSpent), ecoMax);
+        }
 
-        const remainingBudget = data.nSessionBudget ?? data.nRemainingBudget ?? data.nBudgetRemaining;
+        const remainingBudget = data.nCoinsRemaining
+            ?? data.nSessionBudget
+            ?? data.nRemainingBudget
+            ?? data.nBudgetRemaining;
         if (remainingBudget != null) {
             this._budgetRemaining = remainingBudget;
-            this._updateHudMeters();
         }
+        if (data.nCoinsBudget != null) {
+            this._budget = data.nCoinsBudget;
+            this._budgetMax = data.nCoinsBudget;
+        }
+
+        this._updateHudMeters();
     }
 
     setEcoMeter (value, max) {
@@ -755,6 +867,7 @@ class Level extends Phaser.Scene {
         this._missionSuccessOpen = true;
         this.oTimer?.pause();
         this.oCharacter?.setInputEnabled(false);
+        this._clearSavedState();
 
         const spent = this.oMyCart?.getTotal() ?? 0;
         const budget = this._budget ?? 0;
@@ -828,9 +941,11 @@ class Level extends Phaser.Scene {
         if (this._productPopupOpen || this._checkoutOpen || this._missionSuccessOpen || this._timesUpOpen || this._viewCartOpen || this._ecoEmptyOpen || this._coinsOpen || this._saleOpen) return;
 
         const rack = getRackByIndex(rackIndex);
-        const sItemKey = resolveItemKeyFromProduct(product);
-        const iconInfo = sItemKey ? resolveItem(sItemKey) : null;
-        const cartProduct = iconInfo ? { ...product, textureKey: iconInfo.textureKey } : product;
+        const sItemKey = resolveItemKeyFromProduct(product) ?? product?.sItemKey ?? null;
+        // Keep API shelf texture (api_item_*_normal); do not swap to removed local PNGs.
+        const cartProduct = sItemKey
+            ? { ...product, sItemKey, textureKey: product.textureKey ?? resolveItem(sItemKey)?.textureKey }
+            : product;
 
         this._showProductPopup(cartProduct, sItemKey);
         console.log(`Product clicked — ${rack?.category} (${rackId}):`, product);
@@ -843,21 +958,29 @@ class Level extends Phaser.Scene {
         }
 
         const dest = this.oCharacter?.getCartWorldPosition() ?? { x: config.centerX, y: 400 };
+        const charDepth = this.oCharacter?.depth ?? 155;
 
         const flyImg = this.add.image(fromX, fromY, product.textureKey);
-        flyImg.setDisplaySize(140, 140);
+        flyImg.setDisplaySize(120, 120);
         const sx = flyImg.scaleX;
         const sy = flyImg.scaleY;
-        flyImg.setDepth(500);
+        // Start above shelves / HUD so the flight is visible, then dive behind the
+        // character so the item reads as landing inside the trolley.
+        flyImg.setDepth(Math.max(charDepth + 20, 180));
 
         this.tweens.add({
             targets: flyImg,
             x: dest.x,
             y: dest.y,
-            scaleX: sx * 0.5,
-            scaleY: sy * 0.5,
-            duration: 900,
-            ease: 'Sine.easeInOut',
+            scaleX: sx * 0.35,
+            scaleY: sy * 0.35,
+            duration: 750,
+            ease: 'Cubic.easeInOut',
+            onUpdate: (tween) => {
+                if (tween.progress >= 0.72) {
+                    flyImg.setDepth(charDepth - 1);
+                }
+            },
             onComplete: () => {
                 flyImg.destroy();
                 this.oCharacter?.setCartItems(this.oMyCart?.getItems() ?? []);

@@ -64,7 +64,9 @@ export default class MarketView extends Phaser.GameObjects.Container {
                 rackId: rackCfg.id,
                 category: rackCfg.category,
                 headerColor: rackCfg.headerColor,
-                layout: rackCfg.layout,
+                // Patched layout rows point at API sItemKeys; placements still
+                // carry the static shelf keys, which would skip downloaded art.
+                layout: suppliedRack?.layout ?? rackCfg.layout,
                 products: suppliedRack?.products ?? rackCfg.products,
                 onProductClick: (p) => this._onProductClick(p, rackCfg.id, i),
             });
@@ -253,6 +255,20 @@ export default class MarketView extends Phaser.GameObjects.Container {
     get scrollX ()    { return this._inner.x; }
     get scrollMinX () { return this._minX; }
     get scrollMaxX () { return this._maxX; }
+
+    /**
+     * World position of a shelf product icon (for fly-to-cart animation).
+     * @returns {{x:number,y:number}|null}
+     */
+    getProductWorldPosition (product) {
+        for (const child of this._inner?.list ?? []) {
+            if (typeof child?.getProductWorldPosition === 'function') {
+                const pos = child.getProductWorldPosition(product);
+                if (pos) return pos;
+            }
+        }
+        return null;
+    }
 
     // ── Driven by WalkingCharacter — call each frame with character's dx ──────
     scrollBy (dx) {

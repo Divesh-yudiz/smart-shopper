@@ -79,12 +79,12 @@ function resolveCartTextureKey (scene, item) {
     if (item?.textureKey && scene.textures.exists(item.textureKey)) {
         return item.textureKey;
     }
-    const key = item?.key;
-    if (!key) return null;
-    const guess = `product_${item.rackId ?? ''}_${key}`.replace(/_+/g, '_');
-    if (scene.textures.exists(guess)) return guess;
-    for (const tex of scene.textures.getTextureKeys()) {
-        if (tex.endsWith(`_${key}`)) return tex;
+    const sItemKey = item?.sItemKey;
+    if (sItemKey) {
+        const normal = `api_item_${String(sItemKey).replace(/[^a-zA-Z0-9_-]/g, '_')}_normal`;
+        if (scene.textures.exists(normal)) return normal;
+        const eco = `api_item_${String(sItemKey).replace(/[^a-zA-Z0-9_-]/g, '_')}_eco`;
+        if (scene.textures.exists(eco)) return eco;
     }
     return null;
 }
@@ -106,31 +106,33 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
 
         ensureCharacterWalkAnim(scene, WALK_ANIM_FPS);
 
-        const idleKey = this._idleTextureKey();
-        const firstWalkKey = characterAssetPaths.find(({ key }) => key !== idleKey)?.key ?? 'char_walk_1';
-
-        // Static idle layer (frame 13) — never tied to the walk animation system.
-        this._idleImg = scene.add.image(0, 0, idleKey);
-        this._idleImg.setOrigin(0.5, 1);
-        this._idleImg.setScale(DISPLAY_H / this._idleImg.height);
-        this.add(this._idleImg);
-
-        // Walk layer — hidden until arrow keys move the character.
-        this._walkSpr = scene.add.sprite(0, 0, firstWalkKey);
-        this._walkSpr.setOrigin(0.5, 1);
-        this._walkSpr.setScale(DISPLAY_H / this._walkSpr.height);
-        this._walkSpr.setVisible(false);
-        this.add(this._walkSpr);
-
+        // Cart pile sits BEHIND the character sprites so items read as inside the trolley
+        // mesh (which is painted into the character frames).
         this._cartLayer = scene.add.container(CART_X, CART_Y);
         this._cartLayer.setScale(CART_LAYOUT_SCALE);
         this.add(this._cartLayer);
+        this.sendToBack(this._cartLayer);
 
         this._cartFloor = scene.add.graphics();
         this._cartFloor.fillStyle(0x2a2a2a, 0.18);
         this._cartFloor.fillRoundedRect(-46, 4, 92, 28, 10);
         this._cartLayer.add(this._cartFloor);
         this._prevItemCount = 0;
+
+        // Character body / cart mesh drawn on top of trolley items.
+        const idleKey = this._idleTextureKey();
+        const firstWalkKey = characterAssetPaths.find(({ key }) => key !== idleKey)?.key ?? 'char_walk_1';
+
+        this._idleImg = scene.add.image(0, 0, idleKey);
+        this._idleImg.setOrigin(0.5, 1);
+        this._idleImg.setScale(DISPLAY_H / this._idleImg.height);
+        this.add(this._idleImg);
+
+        this._walkSpr = scene.add.sprite(0, 0, firstWalkKey);
+        this._walkSpr.setOrigin(0.5, 1);
+        this._walkSpr.setScale(DISPLAY_H / this._walkSpr.height);
+        this._walkSpr.setVisible(false);
+        this.add(this._walkSpr);
 
         attachArrowKeyListeners(this);
         this._setWalkPlaying(false);
@@ -147,9 +149,10 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
     }
 
     getCartWorldPosition () {
+        // Aim toward the basket bowl (slightly below the cart-layer origin).
         return {
             x: this.x + (this._facingRight ? CART_X : -CART_X),
-            y: this.y + CART_Y,
+            y: this.y + CART_Y + 18 * CART_LAYOUT_SCALE,
         };
     }
 

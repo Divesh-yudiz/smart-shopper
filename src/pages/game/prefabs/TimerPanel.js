@@ -14,7 +14,7 @@ const ICON_NATIVE_H = 120;
 const C_TIME = '#1A1A1A';
 const C_LABEL = '#2F8A3A';
 
-function formatTime (totalSeconds) {
+function formatTime(totalSeconds) {
     const s = Math.max(0, Math.floor(totalSeconds));
     const m = Math.floor(s / 60);
     const sec = s % 60;
@@ -25,7 +25,7 @@ function formatTime (totalSeconds) {
  * Top-right countdown timer — cream pill + stopwatch icon + time / Remaining.
  */
 export default class TimerPanel extends Phaser.GameObjects.Container {
-    constructor (scene, x, y, {
+    constructor(scene, x, y, {
         startSeconds = 165,
         displayWidth = PANEL_DISPLAY_W,
         startPaused = false,
@@ -79,7 +79,7 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
         this._timeText.setOrigin(0.5, 0.5);
         this.add(this._timeText);
 
-        this._labelText = addCauseText(scene, textX, contentY + timeSize * 0.38, 'Remaining', {
+        this._labelText = addCauseText(scene, textX, contentY + timeSize * 0.55, 'Remaining', {
             fontSize: `${labelSize}px`,
             fontStyle: 'bold',
             color: C_LABEL,
@@ -101,7 +101,7 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
         }
     }
 
-    _fireComplete () {
+    _fireComplete() {
         if (this._completed) return;
         this._completed = true;
         this._tickEvent?.remove();
@@ -110,15 +110,15 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
         this._onComplete?.();
     }
 
-    resume () {
+    resume() {
         if (this._tickEvent) this._tickEvent.paused = false;
     }
 
-    pause () {
+    pause() {
         if (this._tickEvent) this._tickEvent.paused = true;
     }
 
-    _tick () {
+    _tick() {
         if (this._remaining <= 0) {
             this._fireComplete();
             return;
@@ -132,11 +132,11 @@ export default class TimerPanel extends Phaser.GameObjects.Container {
         }
     }
 
-    getRemaining () {
+    getRemaining() {
         return this._remaining;
     }
 
-    destroy (fromScene) {
+    destroy(fromScene) {
         this._tickEvent?.remove();
         super.destroy(fromScene);
     }

@@ -25,7 +25,21 @@ const FRUIT_CART_ICON_SLOT_FILL = 0.88;
 function isFruitCartItem(item) {
     if (item?.rackId === 'fruits') return true;
     const key = item?.textureKey ?? '';
-    return key.startsWith('product_fruits_');
+    return key.includes('_fruits_') || /api_item_(tomato|potato|carrot|onion|capsicum|qualiflower|cauliflower)/i.test(key);
+}
+
+function resolveCartSlotTexture(scene, item) {
+    if (item?.textureKey && scene.textures.exists(item.textureKey)) {
+        return item.textureKey;
+    }
+    const sItemKey = item?.sItemKey;
+    if (!sItemKey) return null;
+    const safe = String(sItemKey).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const normal = `api_item_${safe}_normal`;
+    if (scene.textures.exists(normal)) return normal;
+    const eco = `api_item_${safe}_eco`;
+    if (scene.textures.exists(eco)) return eco;
+    return null;
 }
 
 const TITLE_STYLE = causeStyle({
@@ -116,6 +130,7 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
             : UI_TEXTURE_KEYS.cartBarBase;
         // Scale the container (starts at 1) so hover never fights setDisplaySize.
         const btnWrap = this.scene.add.container(btnX, bodyCenterY);
+        this._btnWrap = btnWrap;
         this.add(btnWrap);
 
         const btnImg = this.scene.add.image(0, 0, btnKey);
@@ -169,6 +184,13 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         this._slotsLayer = this.scene.add.container(slotsLeft, bodyCenterY);
         this.add(this._slotsLayer);
 
+        // Phaser 3.80+ masks use world space — keep the source OFF this container
+        // and sync its rect to the slots strip so products show and clip at View Cart.
+        this._slotsMaskPadY = this._slotH * 0.28;
+        this._slotsMaskShape = this.scene.make.graphics({ add: false });
+        this._slotsLayer.setMask(this._slotsMaskShape.createGeometryMask());
+        this._syncSlotsMask();
+
         for (let i = 0; i < VISIBLE_SLOTS + 1; i++) {
             const sx = this._slotStep * (i + 0.5);
             const slotContainer = this.scene.add.container(sx, 0);
@@ -185,17 +207,29 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
             productImg.setAlpha(0);
             slotContainer.add(productImg);
 
+            const cross = this._makeCrossBtn();
+            const crossOffset = this._slotSize * 0.40;
+            cross.x = crossOffset;
+            cross.y = -crossOffset;
+            cross.setVisible(false);
+            slotContainer.add(cross);
+            const slotIdx = i;
+            cross.on('pointerdown', () => { this._isDragging = false; });
+            cross.on('pointerup', () => this._removeItemAtSlot(slotIdx));
+
             this._slotViews.push({
                 container: slotContainer,
                 baseX: sx,
                 slotBg,
                 productImg,
+                crossBtn: cross,
                 slotSize: this._slotSize,
             });
         }
 
-        this._buildCrossBtns();
         this._refresh();
+        // Keep View Cart above the scrollable slots for hit-testing / layering.
+        if (this._btnWrap) this.bringToTop(this._btnWrap);
     }
 
     _getMaxScrollIndex() {
@@ -210,11 +244,6 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         const max = this._getMaxScrollIndex();
         this._scrollOffset = Phaser.Math.Clamp(this._scrollOffset, 0, max);
         this._scrollIndex = Math.round(this._scrollOffset);
-    }
-
-    _isExitingLeft(view) {
-        const leftEdge = view.container.x - this._slotStep * 0.48;
-        return leftEdge < 0;
     }
 
     _applyScrollVisual() {
@@ -314,11 +343,13 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         });
 
         this.bringToTop(hit);
-        this._crossBtns.forEach((c) => this.bringToTop(c));
+        if (this._btnWrap) this.bringToTop(this._btnWrap);
     }
 
     _setupScrollUpdate() {
         this._onScrollUpdate = (_time, delta) => {
+            this._syncSlotsMask();
+
             if (this._isDragging || Math.abs(this._scrollVelocity) < 0.05) return;
 
             const dt = delta / 1000;
@@ -343,6 +374,22 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
             }
         };
         this.scene.events.on('update', this._onScrollUpdate);
+    }
+
+    /** World-space clip rect for the slots strip (mask source must stay outside this container). */
+    _syncSlotsMask() {
+        if (!this._slotsMaskShape || this._slotsWidth == null) return;
+        const padY = this._slotsMaskPadY ?? 0;
+        const mx = this.x + this._slotsLeft;
+        const my = this.y + this._bodyCenterY - this._slotH / 2 - padY;
+        this._slotsMaskShape.clear();
+        this._slotsMaskShape.fillStyle(0xffffff, 1);
+        this._slotsMaskShape.fillRect(
+            mx,
+            my,
+            this._slotsWidth,
+            this._slotH + padY * 2,
+        );
     }
 
     _scrollToEnd(smooth = true) {
@@ -395,18 +442,21 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
             const itemIndex = firstIndex + slotIdx;
             const item = itemIndex < this._items.length ? this._items[itemIndex] : null;
             const filled = item != null;
-            const active = itemIndex < this._getSlotCount() && !this._isExitingLeft(view);
+            // Keep slots in the strip; the geometry mask clips spill past View Cart.
+            const active = itemIndex < this._getSlotCount();
 
             view.container.setVisible(active);
             view.slotBg.setVisible(active);
+            if (view.crossBtn) view.crossBtn.setVisible(filled && active);
 
             if (!filled || !active) {
                 view.productImg.setVisible(false);
                 return;
             }
 
-            if (item.textureKey && this.scene.textures.exists(item.textureKey)) {
-                view.productImg.setTexture(item.textureKey);
+            const texKey = resolveCartSlotTexture(this.scene, item);
+            if (texKey) {
+                view.productImg.setTexture(texKey);
                 view.productImg.setAlpha(1);
                 view.productImg.setVisible(true);
                 const fill = isFruitCartItem(item) ? FRUIT_CART_ICON_SLOT_FILL : CART_ICON_SLOT_FILL;
@@ -421,7 +471,6 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
                 view.productImg.setAlpha(0);
             }
         });
-        this._updateCrossBtns();
     }
 
     _refresh() {
@@ -430,30 +479,21 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         this._refreshSlotContents();
     }
 
-    _buildCrossBtns() {
+    _makeCrossBtn() {
         const r = Math.max(6, this._slotSize * 0.14);
-        this._crossBtnR = r;
-        this._crossBtns = [];
-        for (let i = 0; i <= VISIBLE_SLOTS; i++) {
-            const g = this.scene.add.graphics();
-            g.fillStyle(0x555555, 0.85);
-            g.fillCircle(0, 0, r);
-            const arm = r * 0.50;
-            const lw = Math.max(2, r * 0.28);
-            g.lineStyle(lw, 0xffffff, 1);
-            g.lineBetween(-arm, -arm, arm, arm);
-            g.lineBetween(arm, -arm, -arm, arm);
-            g.setInteractive(
-                new Phaser.Geom.Circle(0, 0, r + 6),
-                Phaser.Geom.Circle.Contains,
-            );
-            const idx = i;
-            g.on('pointerdown', () => { this._isDragging = false; });
-            g.on('pointerup', () => this._removeItemAtSlot(idx));
-            g.setVisible(false);
-            this._crossBtns.push(g);
-            this.add(g);
-        }
+        const g = this.scene.add.graphics();
+        g.fillStyle(0x555555, 0.85);
+        g.fillCircle(0, 0, r);
+        const arm = r * 0.50;
+        const lw = Math.max(2, r * 0.28);
+        g.lineStyle(lw, 0xffffff, 1);
+        g.lineBetween(-arm, -arm, arm, arm);
+        g.lineBetween(arm, -arm, -arm, arm);
+        g.setInteractive(
+            new Phaser.Geom.Circle(0, 0, r + 6),
+            Phaser.Geom.Circle.Contains,
+        );
+        return g;
     }
 
     _removeItemAtSlot(slotIdx) {
@@ -464,32 +504,16 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         this._onItemRemoved(removed);
     }
 
-    _updateCrossBtns() {
-        if (!this._crossBtns) return;
-        const firstIndex = Math.floor(this._scrollOffset);
-        const offset = this._slotSize * 0.40;
-        const slotsRight = this._slotsLeft + this._slotsWidth;
-        this._slotViews.forEach((view, slotIdx) => {
-            const btn = this._crossBtns[slotIdx];
-            if (!btn) return;
-            const itemIndex = firstIndex + slotIdx;
-            const hasItem = itemIndex < this._items.length;
-            const btnX = this._slotsLeft + view.container.x + offset;
-            const withinBounds = (btnX + this._crossBtnR) <= slotsRight;
-            const active = hasItem && view.container.visible && withinBounds;
-            btn.setVisible(active);
-            if (active) {
-                btn.x = btnX;
-                btn.y = this._bodyCenterY - offset;
-            }
-        });
-    }
-
     destroy(fromScene) {
         if (this._onScrollUpdate) {
             this.scene.events.off('update', this._onScrollUpdate);
         }
         this.scene.tweens.killTweensOf(this._scrollSnapProxy);
+        this._slotsLayer?.clearMask(true);
+        this._slotsMaskShape?.destroy();
+        this._slotsMaskShape = null;
+        this._slotsMaskImage?.destroy();
+        this._slotsMaskImage = null;
         super.destroy(fromScene);
     }
 }

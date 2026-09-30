@@ -4,6 +4,7 @@ import { missionSelectAssetPaths } from '../config/missionSelectAssets.js';
 import { missionDescriptionAssetPaths } from '../config/missionDescriptionAssets.js';
 import { howToPlayAssetPaths } from '../config/howToPlayAssets.js';
 import { whatLearnAssetPaths } from '../config/whatLearnAssets.js';
+import { gameGuideAssetPaths } from '../config/gameGuideAssets.js';
 import { welcomeBackAssetPaths } from '../config/welcomeBackAssets.js';
 
 class Boot extends Phaser.Scene {
@@ -18,6 +19,7 @@ class Boot extends Phaser.Scene {
             ...missionDescriptionAssetPaths,
             ...howToPlayAssetPaths,
             ...whatLearnAssetPaths,
+            ...gameGuideAssetPaths,
             ...welcomeBackAssetPaths,
         ].forEach(({ key, path }) => {
             this.load.image(key, path);
@@ -26,7 +28,6 @@ class Boot extends Phaser.Scene {
 
     create () {
         this.scene.stop('Boot');
-        // Always land on Home — Welcome Back popup handles unfinished sessions.
         this.scene.start('Home');
     }
 }

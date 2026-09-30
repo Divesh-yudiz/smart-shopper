@@ -3,7 +3,6 @@ import home_bg from '../../../assets/images/home_bg.png';
 import game_bg from '../../../assets/images/game-bg.png';
 import { bannerAssetPaths, bannerAssets } from '../config/bannerAssets.js';
 import { componentAssetPaths, componentAssets } from '../config/componentAssets.js';
-import { productAssetPaths, productAssets } from '../config/productAssets.js';
 import { characterAssetPaths } from '../config/characterAssets.js';
 import { popupAssetPaths } from '../config/popupAssets.js';
 import { checkoutAssetPaths } from '../config/checkoutAssets.js';
@@ -24,7 +23,6 @@ const assetPaths = Object.freeze({
         { key: 'game_bg', path: game_bg },
         ...bannerAssetPaths,
         ...componentAssetPaths,
-        ...productAssetPaths,
         ...characterAssetPaths,
         ...popupAssetPaths,
         ...checkoutAssetPaths,
@@ -51,7 +49,6 @@ const assets = Object.freeze({
     game_bg: 'game_bg',
     ...bannerAssets,
     ...componentAssets,
-    ...productAssets,
 });
 
 export {
@@ -61,6 +58,4 @@ export {
     bannerAssetPaths,
     componentAssets,
     componentAssetPaths,
-    productAssets,
-    productAssetPaths,
 };

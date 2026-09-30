@@ -6,7 +6,7 @@ import MissionPopup from '../prefabs/popups/MissionPopup.js';
 import WelcomeBackPopup from '../prefabs/popups/WelcomeBackPopup.js';
 import config from '../utils/config.js';
 import { addCauseText, setCauseText, wrapCause } from '../utils/gameText.js';
-import { fetchMissions, fetchMissionBrief, buildGameConfigFromMission, startMission, setGameId, mergeStartSessionIntoConfig } from '../../../utils/gameApi.js';
+import { fetchMissions, fetchMissionBrief, buildGameConfigFromMission, startMission, setGameId, mergeStartSessionIntoConfig, checkoutGame } from '../../../utils/gameApi.js';
 import { LOCAL_GAME_ID, LOCAL_MISSIONS } from '../config/missionsConfig.js';
 
 const SAVE_KEY = 'ss_gameState';
@@ -138,8 +138,41 @@ export default class Home extends Phaser.Scene {
             ecoMax,
             onInfo: () => this._toggleInfo(),
             onResume: () => this._resumeMission(saved),
+            onNewMission: () => this._startNewMission(saved),
+            onBack: () => {},
             onClose: () => {},
         });
+    }
+
+    /**
+     * Abandon the unfinished session: checkout the current mission, clear save,
+     * then open the mission list so the player can pick a new one.
+     */
+    async _startNewMission (saved) {
+        if (this._startingNew) return;
+        this._startingNew = true;
+        try {
+            const cfg = saved?.gameConfig ?? {};
+            const missionId = cfg.missionId ?? cfg._id ?? null;
+            const miniGameId = cfg.gameId ?? LOCAL_GAME_ID;
+            const timeLeft = saved?.timerRemaining ?? cfg.timeLimit ?? 0;
+            if (missionId) {
+                try {
+                    await checkoutGame({
+                        iMissionId: missionId,
+                        iMiniGameId: miniGameId,
+                        nTimeRemaining: timeLeft,
+                    });
+                } catch (err) {
+                    console.error('[Home] Checkout before new mission failed:', err);
+                }
+            }
+            sessionStorage.removeItem('ss_inGame');
+            sessionStorage.removeItem(SAVE_KEY);
+            await this._beginGame();
+        } finally {
+            this._startingNew = false;
+        }
     }
 
     _resumeMission (saved) {
@@ -475,7 +508,8 @@ export default class Home extends Phaser.Scene {
             { ...mission, _id: missionId },
             mission.iMiniGameId ?? this._missionsData?.gameId ?? LOCAL_GAME_ID,
         );
-        this._openBrief(localConfig);
+        // Open brief without list first — list animates in after a successful fetch.
+        this._openBrief(localConfig, { deferShoppingList: true });
 
         try {
             const brief = await fetchMissionBrief(missionId);
@@ -486,23 +520,29 @@ export default class Home extends Phaser.Scene {
                 },
                 brief.gameId ?? this._missionsData?.gameId ?? LOCAL_GAME_ID,
             );
-            if (this._briefPopup?.isOpen) this._openBrief(gameConfig);
+            if (!this._briefPopup?.isOpen) return;
+            this._pendingGameConfig = gameConfig;
+            this._briefPopup.revealShoppingList(gameConfig.shoppingList ?? [], { animate: true });
         } catch (err) {
             console.error('[Home] Failed to fetch mission brief, using local mission:', err);
+            if (!this._briefPopup?.isOpen) return;
+            this._briefPopup.revealShoppingList(localConfig.shoppingList ?? [], { animate: true });
         }
     }
 
-    _openBrief(gameConfig) {
+    _openBrief(gameConfig, { deferShoppingList = false } = {}) {
         this._pendingGameConfig = gameConfig;
         this._briefPopup.open({
             shoppingList: gameConfig.shoppingList ?? [],
             title: gameConfig.category ?? '',
             description: gameConfig.description ?? '',
             missionOrder: gameConfig.missionOrder ?? 0,
+            missionLabel: gameConfig.missionLabel ?? null,
             budget: gameConfig.budget ?? 0,
             timeLimit: gameConfig.timeLimit ?? 0,
             ecoLimit: gameConfig.ecoMeterMax ?? 100,
             animate: false,
+            deferShoppingList,
             onStart: () => this._startShopping(),
             onChooseAnother: () => {
                 this._briefPopup.close({ restoreHome: false });

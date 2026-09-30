@@ -557,7 +557,7 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         if (next === item.qty) return;
         item.qty = next;
         if (item._label) setCauseText(item._label, `${next}`);
-        this._onQtyChange?.(item, next, index);
+        this._onQtyChange?.(item, next, index, delta);
     }
 
     _drawNeededColumn (m, cx, top, w, layout) {

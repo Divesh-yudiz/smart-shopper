@@ -207,7 +207,7 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
             ribbonStyle,
         ).setOrigin(0.5, 0.5));
 
-        let cy = panelTop + m.H * 0.098;
+        let cy = panelTop + m.H * 0.086;
         const subStyle = {
             fontSize: `${m.fs(TYPE.subtitle)}px`,
             color: C_MUTED,
@@ -219,7 +219,7 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
             this._wrap('Compare both options before adding one to your cart.', innerW * 0.86, subStyle),
             subStyle,
         ).setOrigin(0.5, 0.5));
-        cy += m.H * 0.036;
+        cy += m.H * 0.04;
 
         const pillW = Math.min(innerW * 0.46, m.W * 0.36);
         const pillH = m.H * 0.048;
@@ -279,9 +279,9 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         }).setOrigin(0.5, 0.5));
 
         const artKey = this._artKey(variant);
-        const artY = h * 0.24;
+        const artY = h * 0.22;
         const art = this.scene.add.image(0, artY, artKey);
-        this._fitContain(art, w * 0.38, h * 0.22);
+        this._fitContain(art, w * 0.38, h * 0.20);
         wrap.add(art);
 
         const nameStyle = {
@@ -291,21 +291,14 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
             align: 'center',
         };
         const name = variantTitle(this._displayName, isEco);
-        wrap.add(this._text(0, h * 0.44, this._wrap(name, w * 0.86, nameStyle), nameStyle).setOrigin(0.5, 0.5));
+        const nameText = this._text(0, 0, this._wrap(name, w * 0.86, nameStyle), nameStyle).setOrigin(0.5, 0.5);
 
         const price = Math.round(variant.price ?? 0);
         const impact = Math.abs(variant.product?.ecoImpact ?? 0);
-        const statY = h * 0.545;
         const rowInset = w * 0.05;
         const rowGap = w * 0.03;
         const statW = w * 0.30;
         const statH = Math.min(m.W * 0.026, m.H * 0.034) * 1.45 + m.H * 0.008;
-        const leftX = -(statW + rowGap) / 2;
-        const rightX = (statW + rowGap) / 2;
-        this._pill(wrap, leftX, statY, statW, statH, 0xF7FBFF);
-        this._pill(wrap, rightX, statY, statW, statH, 0xF7FBFF);
-        this._drawStatPair(wrap, m, leftX, statY, MISSION_DESC_KEYS.coinIcon, `${price}`, 'for 1', C_COIN, 1.45);
-        this._drawStatPair(wrap, m, rightX, statY, CP.leaf, `${impact}`, '', C_ECO);
 
         const desc = (variant.product?.description ?? '').trim()
             || (isEco
@@ -317,23 +310,60 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
             align: 'center',
             lineSpacing: m.fs(3),
         };
-        wrap.add(this._text(0, h * 0.66, this._wrap(desc, w * 0.82, descStyle), descStyle).setOrigin(0.5, 0.5));
+        const descText = this._text(0, 0, this._wrap(desc, w * 0.82, descStyle), descStyle).setOrigin(0.5, 0.5);
 
         const stepSize = m.H * 0.064;
-        const stepY = h - stepSize / 2 - m.H * 0.05;
         const tagH = m.H * 0.048;
         const tagW = w - rowInset * 2;
-        const tagY = stepY - stepSize / 2 - tagH / 2 - m.H * 0.002;
-        this._pill(wrap, 0, tagY, tagW, tagH, isEco ? 0xC6E6C2 : 0xB9D6F6);
         const tagStyle = {
             fontSize: `${m.fs(TYPE.tag)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_TAG,
             align: 'center',
         };
-        wrap.add(this._text(0, tagY, this._wrap(variantTagline(isEco), tagW * 0.92, tagStyle), tagStyle).setOrigin(0.5, 0.5));
+        const tagText = this._text(0, 0, this._wrap(variantTagline(isEco), tagW * 0.92, tagStyle), tagStyle).setOrigin(0.5, 0.5);
 
-        const stepper = this._drawStepper(m, 0, stepY, variant.key, isEco);
+        // Even vertical rhythm between image and card bottom.
+        const bandTop = artY + art.displayHeight / 2 + h * 0.028;
+        const bandBottom = h - m.H * 0.055;
+        const blocks = [
+            nameText.height,
+            statH,
+            descText.height,
+            tagH,
+            stepSize,
+        ];
+        const blocksH = blocks.reduce((sum, bh) => sum + bh, 0);
+        const gaps = blocks.length - 1;
+        const gap = Math.max(m.H * 0.008, (bandBottom - bandTop - blocksH) / gaps);
+
+        let cursor = bandTop;
+        const centers = blocks.map((bh) => {
+            const cy = cursor + bh / 2;
+            cursor += bh + gap;
+            return cy;
+        });
+        const [nameY, statY, descY, tagY, stepY] = centers;
+        const stepperY = stepY - 10;
+
+        nameText.setPosition(0, nameY);
+        wrap.add(nameText);
+
+        const leftX = -(statW + rowGap) / 2;
+        const rightX = (statW + rowGap) / 2;
+        this._pill(wrap, leftX, statY, statW, statH, 0xF7FBFF);
+        this._pill(wrap, rightX, statY, statW, statH, 0xF7FBFF);
+        this._drawStatPair(wrap, m, leftX, statY, MISSION_DESC_KEYS.coinIcon, `${price}`, 'for 1', C_COIN, 1.45);
+        this._drawStatPair(wrap, m, rightX, statY, CP.leaf, `${impact}`, '', C_ECO);
+
+        descText.setPosition(0, descY);
+        wrap.add(descText);
+
+        this._pill(wrap, 0, tagY, tagW, tagH, isEco ? 0xC6E6C2 : 0xB9D6F6);
+        tagText.setPosition(0, tagY);
+        wrap.add(tagText);
+
+        const stepper = this._drawStepper(m, 0, stepperY, variant.key, isEco);
         wrap.add(stepper.wrap);
 
         this._cardViews[variant.key] = {
@@ -347,6 +377,14 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
     _artKey(variant) {
         const productKey = variant.product?.textureKey;
         if (productKey && this.scene.textures.exists(productKey)) return productKey;
+        const sItemKey = variant.product?.sItemKey;
+        if (sItemKey) {
+            const safe = String(sItemKey).replace(/[^a-zA-Z0-9_-]/g, '_');
+            const normal = `api_item_${safe}_normal`;
+            if (this.scene.textures.exists(normal)) return normal;
+            const eco = `api_item_${safe}_eco`;
+            if (this.scene.textures.exists(eco)) return eco;
+        }
         return variant.isEcoVariant ? CP.riceLocal : CP.riceImported;
     }
 
@@ -540,19 +578,14 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         };
     }
 
-    _effectiveMax(key) {
-        const budgetMax = this._budgetMaxByKey[key] ?? 0;
-        if (this._listRemaining == null) return budgetMax;
-        const otherQty = Object.keys(this._qtyByKey)
-            .filter((k) => k !== key)
-            .reduce((sum, k) => sum + (this._qtyByKey[k] ?? 0), 0);
-        return Math.max(0, Math.min(budgetMax, this._listRemaining - otherQty));
+    _effectiveMax() {
+        // Quantity is not blocked locally. The cart API accepts or rejects the add.
+        return 99;
     }
 
     _changeQtyFor(key, delta) {
-        const max = this._effectiveMax(key);
+        const max = this._effectiveMax();
         const current = this._qtyByKey[key] ?? 0;
-        if (delta > 0 && max <= 0) return;
         this._qtyByKey[key] = Phaser.Math.Clamp(current + delta, 0, max);
         Object.keys(this._cardViews).forEach((k) => this._refreshCardQty(k));
         this._refreshAddButton();
@@ -562,7 +595,7 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         const view = this._cardViews[key];
         if (!view) return;
         const qty = this._qtyByKey[key] ?? 0;
-        const max = this._effectiveMax(key);
+        const max = this._effectiveMax();
         setCauseText(view.qtyText, `${qty}`);
         view.minusBtn._setEnabled(qty > 0);
         view.plusBtn._setEnabled(qty < max);

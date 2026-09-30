@@ -107,15 +107,20 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         title = '',
         description = '',
         missionOrder = 0,
+        missionLabel = null,
         budget = 0,
         timeLimit = 0,
         ecoLimit = 100,
         onStart = () => { },
         onChooseAnother = null,
         animate = true,
+        animateShoppingList = false,
+        deferShoppingList = false,
     } = {}) {
         this._onStart = onStart;
         this._onChooseAnother = onChooseAnother;
+        this._listLayout = null;
+        this._listItems = null;
 
         this.removeAll(true);
         this.setScale(1);
@@ -134,13 +139,15 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
 
         this._drawChrome(m);
         this._drawPanel(m, {
-            items: shoppingList.filter(Boolean),
+            items: deferShoppingList ? [] : shoppingList.filter(Boolean),
             title,
             description,
             missionOrder,
+            missionLabel,
             budget,
             timeLimit,
             ecoLimit,
+            animateShoppingList,
         });
 
         this.setVisible(true);
@@ -240,7 +247,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this._drawActions(m, rightX, innerTop + innerH - actionH, rightW, actionH);
     }
 
-    _drawHero(m, cx, cy, w, h, { title, missionOrder }) {
+    _drawHero(m, cx, cy, w, h, { title, missionOrder, missionLabel }) {
         const wrap = this.scene.add.container(cx, cy);
         this.add(wrap);
 
@@ -263,7 +270,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         wrap.add(this._text(
             ribbon.x - ribbon.displayWidth * 0.012,
             ribbon.y - ribbon.displayHeight * 0.14,
-            `Mission ${missionOrder || 1}`,
+            missionLabel || `Mission ${missionOrder || 1}`,
             {
                 fontSize: `${m.fs(TYPE.ribbon)}px`,
                 fontStyle: WEIGHT.heavy,
@@ -368,11 +375,61 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         const listGap = w * 0.012;
         const itemW = (w - listGap * (listSlots - 1)) / listSlots;
         const itemH = Math.min(m.H * 0.175, listAvail);
-        items.forEach((item, i) => {
-            this._drawListItem(m, x + i * (itemW + listGap), cy, itemW, itemH, item, i);
-        });
+
+        this._listLayout = { m, x, y: cy, itemW, itemH, listGap };
+        this._listItems = this.scene.add.container(0, 0);
+        this.add(this._listItems);
+
+        if (items.length) {
+            this._populateListItems(items, { animate: !!data.animateShoppingList });
+        }
 
         this._drawTips(m, x, tipsY, w, tipsH);
+    }
+
+    /**
+     * Show / refresh shopping-list cards. Call after a successful brief fetch
+     * so the list can animate in without rebuilding the whole popup.
+     */
+    revealShoppingList(items = [], { animate = true } = {}) {
+        if (!this.visible || !this._listLayout) return;
+        this._populateListItems((items || []).filter(Boolean).slice(0, 5), { animate });
+    }
+
+    _populateListItems(items, { animate = false } = {}) {
+        if (this._listItems) {
+            this._listItems.removeAll(true);
+        } else {
+            this._listItems = this.scene.add.container(0, 0);
+            this.add(this._listItems);
+        }
+
+        const { m, x, y, itemW, itemH, listGap } = this._listLayout;
+        items.forEach((item, i) => {
+            const card = this._drawListItem(
+                m,
+                x + i * (itemW + listGap),
+                y,
+                itemW,
+                itemH,
+                item,
+                i,
+                this._listItems,
+            );
+            if (!animate) return;
+
+            const targetY = card.y;
+            card.setAlpha(0);
+            card.y = targetY + m.H * 0.028;
+            this.scene.tweens.add({
+                targets: card,
+                alpha: 1,
+                y: targetY,
+                duration: 420,
+                delay: 60 + i * 75,
+                ease: 'Back.easeOut',
+            });
+        });
     }
 
     _drawHeading(m, x, y, w, label) {
@@ -433,16 +490,19 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         this.add(this._text(x + w / 2, y + h * 0.82, this._wrap(sub, w * 0.88, subStyle), subStyle).setOrigin(0.5, 0.5));
     }
 
-    _drawListItem(m, x, y, w, h, item, index) {
+    _drawListItem(m, x, y, w, h, item, index, parent = this) {
+        const card = this.scene.add.container(x, y);
+        parent.add(card);
+
         const r = Math.min(w, h) * 0.16;
         const g = this.scene.add.graphics();
         g.fillStyle(0x000000, 0.06);
-        g.fillRoundedRect(x + 2, y + 3, w, h, r);
+        g.fillRoundedRect(2, 3, w, h, r);
         g.fillStyle(0xFFF8EC, 1);
-        g.fillRoundedRect(x, y, w, h, r);
+        g.fillRoundedRect(0, 0, w, h, r);
         g.lineStyle(2.5, 0xE4D4B8, 1);
-        g.strokeRoundedRect(x, y, w, h, r);
-        this.add(g);
+        g.strokeRoundedRect(0, 0, w, h, r);
+        card.add(g);
 
         const resolved = resolveItem(item.sItemKey);
         const name = item.sName
@@ -457,22 +517,24 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             stroke: C_PURPLE,
             strokeThickness: 1.25,
         };
-        this.add(this._text(x + w / 2, y + h * 0.07, this._wrap(name, w * 0.92, nameStyle), nameStyle).setOrigin(0.5, 0));
+        card.add(this._text(w / 2, h * 0.07, this._wrap(name, w * 0.92, nameStyle), nameStyle).setOrigin(0.5, 0));
 
         const iconKey = itemIconKey(item, index);
         const productKey = resolved?.textureKey;
         const useProduct = productKey && this.scene.textures.exists(productKey);
-        const img = this.scene.add.image(x + w / 2, y + h * 0.50, useProduct ? productKey : iconKey);
+        const img = this.scene.add.image(w / 2, h * 0.50, useProduct ? productKey : iconKey);
         this._fitContain(img, w * 0.70, h * 0.50);
-        this.add(img);
+        card.add(img);
 
-        this.add(this._text(x + w / 2, y + h * 0.90, qtyLabel(item), {
+        card.add(this._text(w / 2, h * 0.90, qtyLabel(item), {
             fontSize: `${m.fs(TYPE.itemQty)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_PURPLE,
             stroke: C_PURPLE,
             strokeThickness: 1.1,
         }).setOrigin(0.5, 0.5));
+
+        return card;
     }
 
     _drawTips(m, x, y, w, h) {

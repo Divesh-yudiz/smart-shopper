@@ -1,4 +1,4 @@
-import { PRODUCT_CATALOG } from '../pages/game/config/productAssets.js';
+import { PRODUCT_CATALOG, RACK_ASSET_CATEGORIES } from '../pages/game/config/productAssets.js';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -54,10 +54,11 @@ let itemVariantsBySItemKey = {};
 let itemMetaBySItemKey = {};
 
 const toVariant = (v) => v ? {
-    price: v.nPrice,
-    ecoImpact: v.nEcoPoints,
-    description: v.sDescription,
+    price: v.nCoins ?? v.nPrice ?? null,
+    ecoImpact: v.nEcoPoints ?? null,
+    description: v.sDescription ?? '',
     image: v.sImage || null,
+    name: v.sName || null,
 } : null;
 
 const buildVariants = (item) => ({
@@ -72,7 +73,11 @@ export function setItemVariants(aItems) {
     itemMetaBySItemKey = {};
     for (const item of aItems ?? []) {
         if (!item?.sItemKey) continue;
-        itemMetaBySItemKey[item.sItemKey] = { id: item._id, sName: item.sName };
+        itemMetaBySItemKey[item.sItemKey] = {
+            id: item._id ?? item.iItemId ?? item.id ?? null,
+            sName: item.sName ?? null,
+            sImage: item.sImage ?? item.oNormal?.sImage ?? null,
+        };
         // Older API shape embedded oNormal/oEco directly on the item — cache it if present.
         if (item.oNormal || item.oEco) {
             itemVariantsBySItemKey[item.sItemKey] = buildVariants(item);
@@ -90,9 +95,9 @@ export function getItemId(sItemKey) {
     return itemMetaBySItemKey[sItemKey]?.id ?? null;
 }
 
-/** GET /item/:iItemId — a single item's oNormal/oEco detail by id, cached for getItemVariants. */
+/** GET /smart-shopper/item/:iItemId — a single item's oNormal/oEco detail by id, cached for getItemVariants. */
 export async function fetchItemVariants(itemId) {
-    const res = await fetch(`${BASE_URL}/item/${itemId}`, { headers: authHeaders() });
+    const res = await fetch(`${BASE_URL}/smart-shopper/item/${itemId}`, { headers: authHeaders() });
     if (!res.ok) throw new Error(`Item details ${res.status}: ${res.statusText}`);
     const json = await res.json();
     const item = json.data;
@@ -102,88 +107,208 @@ export async function fetchItemVariants(itemId) {
 }
 
 /**
- * Maps API sItemKey → internal rack/product identifiers.
- * rackId   : key in MARKET_RACKS
- * key      : product key within that rack's products object
- * textureKey: preloaded Phaser texture key
+ * GET /smart-shopper/items?iMissionId=… — full catalog of items available in a mission
+ * (prices, eco, names). Used to drive shelf tags / variant cache in gameplay.
+ * @param {string} missionId
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchMissionItems (missionId) {
+    if (!missionId) throw new Error('fetchMissionItems requires a missionId');
+    const res = await fetch(
+        `${BASE_URL}/smart-shopper/items?iMissionId=${encodeURIComponent(missionId)}`,
+        { headers: authHeaders() },
+    );
+    if (!res.ok) throw new Error(`Mission items ${res.status}: ${res.statusText}`);
+    const json = await res.json();
+    const data = json.data ?? json ?? {};
+    const raw = Array.isArray(data)
+        ? data
+        : (data.aItems ?? data.items ?? data.aItemList ?? []);
+
+    return (raw ?? []).filter(Boolean).map((item) => ({
+        ...item,
+        _id: item._id ?? item.iItemId ?? item.id ?? null,
+        sItemKey: item.sItemKey ?? item.sKey ?? null,
+        sName: item.sName ?? item.sLabel ?? item.name ?? null,
+    }));
+}
+
+/** Phaser texture key for an API item's normal (shelf) image. */
+export function apiNormalTextureKey (sItemKey) {
+    if (!sItemKey) return null;
+    return `api_item_${String(sItemKey).replace(/[^a-zA-Z0-9_-]/g, '_')}_normal`;
+}
+
+/** Phaser texture key for an API item's eco image. */
+export function apiEcoTextureKey (sItemKey) {
+    if (!sItemKey) return null;
+    return `api_item_${String(sItemKey).replace(/[^a-zA-Z0-9_-]/g, '_')}_eco`;
+}
+
+/**
+ * Maps API sItemKey → internal rack placement.
+ * Product art/labels come from the items API (sName + oNormal.sImage).
+ * `key` defaults to sItemKey when shelves are rebuilt from aItems.
  */
 const ITEM_KEY_MAP = {
     // ── beverages ──────────────────────────────────────────────────────────────
-    milk: { rackId: 'beverages', key: 'milk', textureKey: 'product_beverages_milk' },
-    orange_juice: { rackId: 'beverages', key: 'orangeJuice', textureKey: 'product_beverages_orangeJuice' },
-    grape_juice: { rackId: 'beverages', key: 'grapeJuice', textureKey: 'product_beverages_grapeJuice' },
-    aloe_vera_juice: {
-        rackId: 'beverages',
-        key: 'alowveraJuice',
-        textureKey: 'product_beverages_alowveraJuice',
-        label: 'Aloe Vera Juice',
-    },
+    milk: { rackId: 'beverages' },
+    orange_juice: { rackId: 'beverages' },
+    grape_juice: { rackId: 'beverages' },
+    aloe_vera_juice: { rackId: 'beverages', label: 'Aloe Vera Juice' },
+    water: { rackId: 'beverages' },
 
-    // ── fruits / produce (icon textures used in cart / shopping-list / trolley)
-    tomato: { rackId: 'fruits', key: 'tomatos', textureKey: 'product_fruits_tomato_icon' },
-    tomatoes: { rackId: 'fruits', key: 'tomatos', textureKey: 'product_fruits_tomato_icon', label: 'Tomatoes' },
-    tomatos: { rackId: 'fruits', key: 'tomatos', textureKey: 'product_fruits_tomato_icon' },
-    potato: { rackId: 'fruits', key: 'potato', textureKey: 'product_fruits_potato_icon' },
-    potatoes: { rackId: 'fruits', key: 'potato', textureKey: 'product_fruits_potato_icon', label: 'Potatoes' },
-    carrot: { rackId: 'fruits', key: 'carrots', textureKey: 'product_fruits_carrot_icon' },
-    carrots: { rackId: 'fruits', key: 'carrots', textureKey: 'product_fruits_carrot_icon' },
-    onion: { rackId: 'fruits', key: 'onion', textureKey: 'product_fruits_onion_icon' },
-    onions: { rackId: 'fruits', key: 'onion', textureKey: 'product_fruits_onion_icon' },
-    capsicum: { rackId: 'fruits', key: 'capsicum', textureKey: 'product_fruits_capsicum_icon' },
-    qualiflower: { rackId: 'fruits', key: 'qualiflower', textureKey: 'product_fruits_cabbage_icon' },
-    cauliflower: { rackId: 'fruits', key: 'qualiflower', textureKey: 'product_fruits_cabbage_icon', label: 'Cauliflower' },
+    // ── fruits / produce ───────────────────────────────────────────────────────
+    tomato: { rackId: 'fruits' },
+    tomatoes: { rackId: 'fruits', label: 'Tomatoes' },
+    tomatos: { rackId: 'fruits' },
+    potato: { rackId: 'fruits' },
+    potatoes: { rackId: 'fruits', label: 'Potatoes' },
+    carrot: { rackId: 'fruits' },
+    carrots: { rackId: 'fruits' },
+    onion: { rackId: 'fruits' },
+    onions: { rackId: 'fruits' },
+    capsicum: { rackId: 'fruits' },
+    bell_pepper: { rackId: 'fruits', label: 'Bell Pepper' },
+    qualiflower: { rackId: 'fruits' },
+    cauliflower: { rackId: 'fruits', label: 'Cauliflower' },
+    grapes: { rackId: 'fruits' },
 
     // ── candy ──────────────────────────────────────────────────────────────────
-    lollipop: { rackId: 'candy', key: 'lollipop', textureKey: 'product_candy_lollipop' },
-    candy: { rackId: 'candy', key: 'candy', textureKey: 'product_candy_candy' },
-    jelly: { rackId: 'candy', key: 'jelly', textureKey: 'product_candy_jelly' },
-    giftCandy: { rackId: 'candy', key: 'giftCandy', textureKey: 'product_candy_giftCandy' },
+    lollipop: { rackId: 'candy' },
+    candy: { rackId: 'candy' },
+    candy_2: { rackId: 'candy', label: 'Candy' },
+    jelly: { rackId: 'candy' },
+    giftCandy: { rackId: 'candy' },
 
     // ── toys ───────────────────────────────────────────────────────────────────
-    teddybear: { rackId: 'toys', key: 'teddybear', textureKey: 'product_toys_teddybear' },
-    toyCar: { rackId: 'toys', key: 'toyCar', textureKey: 'product_toys_toyCar' },
-    rings: { rackId: 'toys', key: 'rings', textureKey: 'product_toys_rings' },
-    ball: { rackId: 'toys', key: 'ball', textureKey: 'product_toys_ball' },
-    soft_toy: { rackId: 'toys', key: 'teddybear', textureKey: 'product_toys_teddybear', label: 'Soft Toy' },
+    teddybear: { rackId: 'toys' },
+    soft_toy: { rackId: 'toys', label: 'Soft Toy' },
+    toyCar: { rackId: 'toys' },
+    toy: { rackId: 'toys', label: 'Toy' },
+    rings: { rackId: 'toys' },
+    ball: { rackId: 'toys' },
+    car: { rackId: 'toys' },
 
     // ── chips / snacks ─────────────────────────────────────────────────────────
-    chilliWafers: { rackId: 'chips', key: 'chilliWafers', textureKey: 'product_chips_chilliWafers' },
-    lemonWafers: { rackId: 'chips', key: 'lemonWafers', textureKey: 'product_chips_lemonWafers' },
-    onionWafers: { rackId: 'chips', key: 'onionWafers', textureKey: 'product_chips_onionWafers' },
-    masalaWafers: { rackId: 'chips', key: 'masalaWafers', textureKey: 'product_chips_masalaWafers' },
+    chilliWafers: { rackId: 'chips' },
+    lemonWafers: { rackId: 'chips' },
+    onionWafers: { rackId: 'chips' },
+    masalaWafers: { rackId: 'chips' },
 
     // ── bakery ─────────────────────────────────────────────────────────────────
-    vanillaCake: { rackId: 'cakes', key: 'vanillaCake', textureKey: 'product_cakes_vanillaCake' },
-    chocolateCake: { rackId: 'cakes', key: 'chocolateCake', textureKey: 'product_cakes_chocolateCake' },
-    cake: { rackId: 'cakes', key: 'vanillaCake', textureKey: 'product_cakes_vanillaCake', label: 'Cake' },
-    pie: { rackId: 'cakes', key: 'cookies', textureKey: 'product_cakes_cookies', label: 'Pie' },
-    breads: { rackId: 'cakes', key: 'breads', textureKey: 'product_cakes_breads' },
-    bread: { rackId: 'cakes', key: 'breads', textureKey: 'product_cakes_breads', label: 'Bread' },
-    butter: { rackId: 'cakes', key: 'breads', textureKey: 'product_cakes_breads', label: 'Butter' },
-    cookies: { rackId: 'cakes', key: 'cookies', textureKey: 'product_cakes_cookies' },
+    vanillaCake: { rackId: 'cakes' },
+    chocolateCake: { rackId: 'cakes' },
+    cake: { rackId: 'cakes', label: 'Cake' },
+    pie: { rackId: 'cakes', label: 'Pie' },
+    breads: { rackId: 'cakes' },
+    bread: { rackId: 'cakes', label: 'Bread' },
+    butter: { rackId: 'cakes', label: 'Butter' },
+    cookies: { rackId: 'cakes' },
+    cookies_biscuits: { rackId: 'cakes', label: 'Cookies / Biscuits' },
+    croissants: { rackId: 'cakes' },
 
     // ── toiletries / household ─────────────────────────────────────────────────
-    cleaner: { rackId: 'toiletaries', key: 'cleaner', textureKey: 'product_toiletaries_cleaner' },
-    dishwash: { rackId: 'toiletaries', key: 'dishwash', textureKey: 'product_toiletaries_dishwash' },
-    handwash: { rackId: 'toiletaries', key: 'handwash', textureKey: 'product_toiletaries_handwash' },
-    paper: { rackId: 'toiletaries', key: 'paper', textureKey: 'product_toiletaries_paper' },
-    fancy_pens: { rackId: 'toiletaries', key: 'paper', textureKey: 'product_toiletaries_paper', label: 'Fancy Pens' },
+    cleaner: { rackId: 'toiletaries' },
+    laundry_detergent: { rackId: 'toiletaries', label: 'Laundry Detergent' },
+    dishwash: { rackId: 'toiletaries' },
+    dish_washing_soap: { rackId: 'toiletaries', label: 'Dish Washing Soap' },
+    handwash: { rackId: 'toiletaries' },
+    paper: { rackId: 'toiletaries' },
+    fancy_pens: { rackId: 'toiletaries', label: 'Fancy Pens' },
 
     // ── electronics ────────────────────────────────────────────────────────────
-    laptop: { rackId: 'electronics', key: 'laptop', textureKey: 'product_expensive-items_laptop' },
-    mobile: { rackId: 'electronics', key: 'mobile', textureKey: 'product_expensive-items_mobile' },
-    headphones: { rackId: 'electronics', key: 'headphones', textureKey: 'product_expensive-items_headphones' },
-    gift: { rackId: 'electronics', key: 'gift', textureKey: 'product_expensive-items_gift' },
-    gift_box: { rackId: 'electronics', key: 'gift', textureKey: 'product_expensive-items_gift', label: 'Gift Box' },
+    laptop: { rackId: 'electronics' },
+    mobile: { rackId: 'electronics' },
+    smartphone: { rackId: 'electronics', label: 'Smartphone' },
+    headphones: { rackId: 'electronics' },
+    headphone: { rackId: 'electronics', label: 'Headphone' },
+    gift: { rackId: 'electronics' },
+    gift_box: { rackId: 'electronics', label: 'Gift Box' },
+    video_game: { rackId: 'electronics', label: 'Video Game' },
 
     // ── ration / grocery ───────────────────────────────────────────────────────
-    cola: { rackId: 'ration', key: 'cola', textureKey: 'product_ration_cola' },
-    donuts: { rackId: 'ration', key: 'donuts', textureKey: 'product_ration_donuts' },
-    icecream: { rackId: 'ration', key: 'icecream', textureKey: 'product_ration_icecreame', label: 'Icecream' },
-    rice: { rackId: 'ration', key: 'rice', textureKey: 'product_ration_rice' },
-    salmon: { rackId: 'ration', key: 'rice', textureKey: 'product_ration_rice', label: 'Salmon' },
-    beef: { rackId: 'ration', key: 'donuts', textureKey: 'product_ration_donuts', label: 'Beef' },
+    cola: { rackId: 'ration' },
+    fizzy_drink_soda: { rackId: 'ration', label: 'Fizzy Drink / Soda' },
+    donuts: { rackId: 'ration' },
+    icecream: { rackId: 'ration', label: 'Icecream' },
+    ice_cream_tub: { rackId: 'ration', label: 'Ice Cream Tub' },
+    rice: { rackId: 'ration' },
+    salmon: { rackId: 'ration', label: 'Salmon' },
+    beef: { rackId: 'ration' },
+    tofu: { rackId: 'ration' },
+    chicken: { rackId: 'ration' },
+    fish: { rackId: 'ration' },
+    eggs: { rackId: 'ration' },
+    porridge_oats: { rackId: 'ration', label: 'Porridge Oats' },
+    sack_of_grains: { rackId: 'ration', label: 'Sack of Grains' },
+    cooking_oil: { rackId: 'ration', label: 'Cooking Oil' },
 };
+
+/** Image URL folder under /products/normal|eco/ → market rack id */
+const URL_CATEGORY_TO_RACK = Object.freeze({
+    candy: 'candy',
+    fruits: 'fruits',
+    beverages: 'beverages',
+    toys: 'toys',
+    chips: 'chips',
+    cakes: 'cakes',
+    toiletaries: 'toiletaries',
+    'expensive-items': 'electronics',
+    ration: 'ration',
+});
+
+/** Root-level product images (no category folder in URL) → rack */
+const ROOT_ITEM_RACK = Object.freeze({
+    tofu: 'ration',
+    fancy_pens: 'toiletaries',
+    beef: 'ration',
+    croissants: 'cakes',
+    porridge_oats: 'ration',
+    cookies_biscuits: 'cakes',
+    chicken: 'ration',
+    eggs: 'ration',
+    video_game: 'electronics',
+    car: 'toys',
+    water: 'beverages',
+    sack_of_grains: 'ration',
+    fish: 'ration',
+    cooking_oil: 'ration',
+});
+
+/**
+ * Infer market rack from an items-API image URL
+ * (…/products/normal|eco/<category>/<file>.png).
+ */
+export function rackIdFromProductImageUrl (url) {
+    if (!url) return null;
+    const withFolder = String(url).match(/\/products\/(?:normal|eco)\/([^/]+)\/[^/?#]+/i);
+    if (withFolder?.[1] && URL_CATEGORY_TO_RACK[withFolder[1]]) {
+        return URL_CATEGORY_TO_RACK[withFolder[1]];
+    }
+    return null;
+}
+
+function resolveRackIdForApiItem (item, sItemKey) {
+    const imageUrl = item?.oNormal?.sImage ?? item?.sImage
+        ?? itemMetaBySItemKey[sItemKey]?.sImage
+        ?? getItemVariants(sItemKey)?.standard?.image
+        ?? null;
+    return rackIdFromProductImageUrl(imageUrl)
+        ?? ITEM_KEY_MAP[sItemKey]?.rackId
+        ?? ROOT_ITEM_RACK[sItemKey]
+        ?? 'ration';
+}
+
+/**
+ * Phaser texture key for an item variant (API images loaded in Preload).
+ * @param {string} sItemKey
+ * @param {{ eco?: boolean }} [opts]
+ */
+export function resolveItemTextureKey (sItemKey, { eco = false } = {}) {
+    if (!sItemKey) return null;
+    return eco ? apiEcoTextureKey(sItemKey) : apiNormalTextureKey(sItemKey);
+}
 
 function humanizeItemKey (sItemKey) {
     return String(sItemKey ?? 'Item')
@@ -191,28 +316,37 @@ function humanizeItemKey (sItemKey) {
         .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** @param {string} sItemKey */
-export function resolveItem(sItemKey) {
+/** @param {string} sItemKey @param {{ eco?: boolean }} [opts] */
+export function resolveItem (sItemKey, { eco = false } = {}) {
     if (!sItemKey) return null;
+    const textureKey = resolveItemTextureKey(sItemKey, { eco });
     const mapped = ITEM_KEY_MAP[sItemKey];
-    if (mapped) return { ...mapped, sItemKey };
+    const meta = itemMetaBySItemKey[sItemKey];
+    const rackId = resolveRackIdForApiItem(null, sItemKey)
+        ?? mapped?.rackId
+        ?? 'ration';
+    const label = meta?.sName
+        ?? mapped?.label
+        ?? humanizeItemKey(sItemKey);
 
-    // Always return a displayable fallback so API list/cart rows are never dropped.
     return {
-        rackId: 'unknown',
+        rackId,
         key: sItemKey,
-        textureKey: 'product_expensive-items_gift',
-        label: humanizeItemKey(sItemKey),
+        textureKey,
+        label,
         sItemKey,
-        fallback: true,
+        fallback: !mapped && !meta,
     };
 }
 
-// reverse map: product.key or product.textureKey → sItemKey
+// reverse map: product key / API texture key → sItemKey
 const PRODUCT_TO_ITEM_KEY = {};
-for (const [sItemKey, info] of Object.entries(ITEM_KEY_MAP)) {
-    PRODUCT_TO_ITEM_KEY[info.key] = sItemKey;
-    PRODUCT_TO_ITEM_KEY[info.textureKey] = sItemKey;
+for (const sItemKey of Object.keys(ITEM_KEY_MAP)) {
+    PRODUCT_TO_ITEM_KEY[sItemKey] = sItemKey;
+    const normalKey = apiNormalTextureKey(sItemKey);
+    const ecoKey = apiEcoTextureKey(sItemKey);
+    if (normalKey) PRODUCT_TO_ITEM_KEY[normalKey] = sItemKey;
+    if (ecoKey) PRODUCT_TO_ITEM_KEY[ecoKey] = sItemKey;
 }
 
 /** Resolve a cart product object back to its API sItemKey. */
@@ -256,8 +390,26 @@ export async function addToCart ({ iItemId, eVariant = 'normal', iMissionId } = 
             eVariant: variant,
         }),
     });
-    if (!res.ok) throw new Error(`Cart add ${res.status}: ${res.statusText}`);
-    return res.json();
+    let json = null;
+    try {
+        json = await res.json();
+    } catch {
+        json = null;
+    }
+    const data = json?.data ?? {};
+    const rejected = !res.ok
+        || json?.success === false
+        || json?.bSuccess === false
+        || data.bAdded === false
+        || data.bCanAdd === false
+        || data.canAdd === false;
+    if (rejected) {
+        const err = new Error(json?.message || data.sMessage || data.message || `Cart add ${res.status}`);
+        err.payload = json;
+        err.status = res.status;
+        throw err;
+    }
+    return json;
 }
 
 /**
@@ -323,7 +475,8 @@ function normalizeMission(m = {}, index = 0) {
         _id: m._id ?? m.iMissionId ?? m.id ?? null,
         iMiniGameId: m.iMiniGameId,
         eAgeCategory: m.eAgeCategory,
-        nOrder: m.nOrder ?? index + 1,
+        nOrder: m.nOrder ?? m.nMissionNumber ?? index + 1,
+        sMissionLabel: m.sMissionLabel ?? null,
         sName: m.sName ?? 'Mission',
         sDescription: m.sDescription ?? '',
         nCoins,
@@ -498,7 +651,8 @@ export function buildGameConfigFromMission(mission, gameId) {
         shoppingListTotal: 0,
         category: mission.sName ?? '',
         description: mission.sDescription ?? '',
-        missionOrder: mission.nOrder ?? 0,
+        missionOrder: mission.nOrder ?? mission.nMissionNumber ?? 0,
+        missionLabel: mission.sMissionLabel ?? null,
         ecoMeter: ecoMax,
         ecoMeterMax: ecoMax,
         badge: null,
@@ -535,37 +689,194 @@ export async function fetchGameConfig() {
     };
 }
 
+function toShelfProduct (item, index) {
+    const key = item.sItemKey;
+    const normalImage = item.oNormal?.sImage || item.sImage || null;
+    return {
+        id: index,
+        key,
+        label: item.sName || humanizeItemKey(key),
+        price: item.oNormal?.nCoins
+            ?? item.oNormal?.nPrice
+            ?? item.nCoins
+            ?? item.nPrice
+            ?? null,
+        textureKey: normalImage ? apiNormalTextureKey(key) : null,
+        sItemKey: key,
+        iItemId: item.iItemId ?? item._id ?? null,
+        color: 0x4A90D9,
+    };
+}
+
+/** Produce rows hold up to three different fruits/vegetables. Every other bay is one product. */
+const PRODUCE_PER_ROW = 3;
+
+function rowCapacity (rackId) {
+    return rackId === 'fruits' ? PRODUCE_PER_ROW : 1;
+}
+
+/** One template per visual plank. Produce keeps its authored planks (under the awning). */
+function shelfSlotTemplates (rack) {
+    const baseRows = (rack.layout?.rows ?? []).filter((row) => row && !row.skip);
+
+    if (rack.id === 'fruits') {
+        const authored = baseRows.length
+            ? baseRows
+            : [{ shelfRow: 1, gap: 18, priceTagOffsetY: 6 }, { shelfRow: 3, gap: 18, priceTagOffsetY: 15, offsetY: 8 }];
+        return authored.map((src) => {
+            const {
+                stacks: _stacks,
+                product: _product,
+                skip: _skip,
+                priceTagPerItem: _perItem,
+                ...rest
+            } = src;
+            return {
+                ...rest,
+                shelfRow: src.shelfRow ?? 1,
+                offsetY: src.offsetY ?? 0,
+                gap: 18,
+                priceTagOffsetY: src.priceTagOffsetY ?? 8,
+                iconScale: 1.12,
+                iconSlotFill: 1.08,
+                shelfHeightFactor: 0.98,
+                capacity: PRODUCE_PER_ROW,
+                skip: false,
+            };
+        });
+    }
+
+    const declared = rack.layout?.shelfRows ?? 0;
+    const mappedMax = baseRows.reduce(
+        (max, row, index) => Math.max(max, (row.shelfRow ?? index) + 1),
+        baseRows.length,
+    );
+    const shelfCount = Math.max(4, declared, mappedMax, baseRows.length);
+    const slots = [];
+
+    for (let shelf = 0; shelf < shelfCount; shelf += 1) {
+        const exact = baseRows.find((row, index) => (row.shelfRow ?? index) === shelf);
+        const src = exact
+            ?? baseRows[Math.min(shelf, Math.max(0, baseRows.length - 1))]
+            ?? { count: 4 };
+        const repeat = src.count ?? 4;
+        const {
+            stacks: _stacks,
+            priceTagPerItem: _perItem,
+            product: _product,
+            skip: _skip,
+            ...rest
+        } = src;
+        slots.push({
+            ...rest,
+            shelfRow: shelf,
+            offsetY: exact ? (src.offsetY ?? 0) : 0,
+            count: Math.max(1, repeat),
+            capacity: 1,
+            skip: false,
+        });
+    }
+    return slots;
+}
+
+function placeOnRack (plan, item) {
+    const capacity = rowCapacity(plan.rack.id);
+    let index = plan.assigned.findIndex((bucket) => (bucket?.length ?? 0) < capacity);
+    if (index === -1) index = plan.assigned.length;
+    if (index >= plan.slots.length) return false;
+    if (!plan.assigned[index]) plan.assigned[index] = [];
+    plan.assigned[index].push(item);
+    return true;
+}
+
 /**
- * Returns a new racks array with prices/labels overridden from aItems.
- * Products not listed in aItems keep their default price and catalog label.
- * @param {Array<{sItemKey:string, sName?:string, oNormal?:{nPrice:number}, nPrice?:number}>} aItems
+ * One normal product per shelf row, repeated across that row.
+ * Category items fill their own bay first. Leftover items fill empty rows
+ * in other bays so a short aisle does not stay blank while another aisle overflows.
+ * Eco art is not placed on racks.
+ *
+ * @param {Array<object>} aItems
  * @param {ReturnType<getRacksForView>} racksData
  */
 export function patchRacksWithApiPrices(aItems, racksData) {
-    // Build { rackId → { productKey → { price, label } } }
-    const dataLookup = {};
-    for (const item of aItems) {
-        const resolved = resolveItem(item.sItemKey);
-        if (!resolved) continue;
-        // oNormal.nPrice is the current shape; nPrice is kept as a fallback for older API responses.
-        const price = item.oNormal?.nPrice ?? item.nPrice ?? null;
-        (dataLookup[resolved.rackId] ??= {})[resolved.key] = { price, label: item.sName };
+    const byRack = {};
+    const allItems = [];
+    for (const item of aItems ?? []) {
+        if (!item?.sItemKey) continue;
+        allItems.push(item);
+        const rackId = resolveRackIdForApiItem(item, item.sItemKey);
+        if (!rackId) continue;
+        (byRack[rackId] ??= []).push(item);
     }
 
-    return racksData.map((rack) => {
-        const rackData = dataLookup[rack.id];
-        const patchedProducts = Object.fromEntries(
-            Object.entries(rack.products).map(([key, product]) => {
-                const entry = rackData?.[key];
-                return [key, {
-                    ...product,
-                    // null price → item not in API response, shelf tag shows '-'
-                    price: entry?.price ?? null,
-                    label: entry?.label ?? product.label,
-                }];
-            })
-        );
-        return { ...rack, products: patchedProducts };
+    const slotPlan = racksData.map((rack) => ({
+        rack,
+        slots: shelfSlotTemplates(rack),
+        assigned: [],
+    }));
+
+    const placed = new Set();
+    const overflow = [];
+
+    slotPlan.forEach((plan) => {
+        const local = byRack[plan.rack.id] ?? [];
+        local.forEach((item) => {
+            if (placed.has(item.sItemKey)) return;
+            if (!placeOnRack(plan, item)) {
+                overflow.push(item);
+                return;
+            }
+            placed.add(item.sItemKey);
+        });
+    });
+
+    const rackHasRoom = (plan, item) => {
+        const home = resolveRackIdForApiItem(item, item.sItemKey);
+        // Keep non-produce off the produce bay so those rows stay fruits/vegetables.
+        if (plan.rack.id === 'fruits' && home !== 'fruits') return false;
+        const capacity = rowCapacity(plan.rack.id);
+        return plan.assigned.some((bucket, index) => index < plan.slots.length && (bucket?.length ?? 0) < capacity)
+            || plan.assigned.length < plan.slots.length;
+    };
+
+    for (const item of [...overflow, ...allItems]) {
+        if (placed.has(item.sItemKey)) continue;
+        const plan = slotPlan.find((entry) => rackHasRoom(entry, item));
+        if (!plan || !placeOnRack(plan, item)) continue;
+        placed.add(item.sItemKey);
+    }
+
+    return slotPlan.map((plan) => {
+        const products = {};
+        const produce = plan.rack.id === 'fruits';
+        const rows = plan.slots.map((slot, index) => {
+            const items = plan.assigned[index] ?? [];
+            if (!items.length) return { ...slot, skip: true };
+            items.forEach((item, itemIndex) => {
+                products[item.sItemKey] = toShelfProduct(item, index * 10 + itemIndex);
+            });
+            if (produce) {
+                return {
+                    ...slot,
+                    stacks: items.map((item) => ({ product: item.sItemKey })),
+                    priceTagPerItem: true,
+                    // Crate width stays one-third of the shelf. Empty spots are not filled.
+                    slotCount: PRODUCE_PER_ROW,
+                    skip: false,
+                };
+            }
+            return { ...slot, product: items[0].sItemKey, skip: false };
+        });
+
+        return {
+            ...plan.rack,
+            products,
+            layout: {
+                ...plan.rack.layout,
+                shelfRows: plan.slots.length,
+                rows,
+            },
+        };
     });
 }
 
@@ -574,7 +885,8 @@ export function resolveItemLabel(sItemKey, resolved) {
     const apiName = getItemVariants(sItemKey)?.sName;
     if (apiName) return apiName;
     if (resolved.label) return resolved.label;
-    const catalogLabel = PRODUCT_CATALOG[resolved.rackId]?.[resolved.key]?.label;
+    const catalogId = RACK_ASSET_CATEGORIES[resolved.rackId] ?? resolved.rackId;
+    const catalogLabel = PRODUCT_CATALOG[catalogId]?.[resolved.key]?.label;
     if (catalogLabel) return catalogLabel;
     return resolved.key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 }
@@ -597,6 +909,7 @@ export function buildShoppingListEntries(aShoppingList) {
             required: item.nQuantity ?? 1,
             collected: 0,
             sItemKey: item.sItemKey,
+            rackId: resolved.rackId,
         };
     });
     while (entries.length < SLOT_COUNT) entries.push(null);
@@ -632,7 +945,8 @@ export function buildCartItemsFromApi(aCartItems) {
     const items = [];
     for (const entry of aCartItems ?? []) {
         if (!entry?.sItemKey) continue;
-        const resolved = resolveItem(entry.sItemKey);
+        const isEco = entry.eVariant === 'eco';
+        const resolved = resolveItem(entry.sItemKey, { eco: isEco });
         const label = entry.sName || resolveItemLabel(entry.sItemKey, resolved);
         const qty = Math.max(0, entry.nQuantity ?? 0);
         const price = entry.nPrice ?? entry.nCoins ?? 0;
@@ -645,7 +959,7 @@ export function buildCartItemsFromApi(aCartItems) {
                 label,
                 price,
                 ecoImpact,
-                isEcoVariant: entry.eVariant === 'eco',
+                isEcoVariant: isEco,
                 sItemKey: entry.sItemKey,
                 iItemId: entry.iItemId ?? null,
             });
@@ -665,7 +979,8 @@ export function buildViewCartRowsFromApi (aCartItems, requiredKeys = null) {
         if (!entry?.sItemKey) continue;
         const qty = Math.max(0, entry.nQuantity ?? 0);
         if (qty <= 0) continue;
-        const resolved = resolveItem(entry.sItemKey);
+        const isEco = entry.eVariant === 'eco';
+        const resolved = resolveItem(entry.sItemKey, { eco: isEco });
         const label = entry.sName || resolveItemLabel(entry.sItemKey, resolved);
         const required = requiredKeys
             ? (requiredKeys.has(entry.sItemKey) || requiredKeys.has(resolved.key))
@@ -678,9 +993,9 @@ export function buildViewCartRowsFromApi (aCartItems, requiredKeys = null) {
             qty,
             required,
             textureKey: resolved.textureKey,
-            isEcoVariant: entry.eVariant === 'eco',
+            isEcoVariant: isEco,
             sItemKey: entry.sItemKey,
-            iItemId: entry.iItemId ?? null,
+            iItemId: entry.iItemId ?? getItemId(entry.sItemKey) ?? null,
         });
     }
     return rows;

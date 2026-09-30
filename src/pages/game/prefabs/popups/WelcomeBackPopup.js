@@ -8,16 +8,16 @@ import { WELCOME_BACK_KEYS as WB } from '../../config/welcomeBackAssets.js';
 const TYPE = Object.freeze({
     title: 52,
     subtitle: 22,
-    missionTag: 16,
+    missionTag: 20,
     missionName: 30,
     missionDesc: 18,
-    progressTitle: 20,
-    progressCount: 18,
-    itemLabel: 14,
+    progressTitle: 24,
+    progressCount: 34,
+    itemLabel: 22,
     statLabel: 16,
     statValue: 40,
     statSub: 16,
-    button: 28,
+    button: 36,
     link: 18,
 });
 
@@ -69,7 +69,7 @@ const DEFAULTS = Object.freeze({
     ecoMax: 32,
 });
 
-function formatClock (value) {
+function formatClock(value) {
     if (typeof value === 'string') return value;
     const total = Math.max(0, Math.round(Number(value) || 0));
     const minutes = Math.floor(total / 60);
@@ -77,7 +77,7 @@ function formatClock (value) {
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-function itemIconKey (item, index) {
+function itemIconKey(item, index) {
     if (item?.textureKey) return item.textureKey;
     const hay = `${item?.sItemKey ?? ''} ${item?.name ?? item?.label ?? ''}`.toLowerCase();
     if (/(rice|grain|bowl|cereal)/.test(hay)) return MD.bowlIcon;
@@ -90,21 +90,20 @@ function itemIconKey (item, index) {
 
 /**
  * Welcome Back — resume unfinished mission (Artboard welcome-back).
- * No Back button — only info chrome + Resume Mission.
  */
 export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
-    constructor (scene) {
+    constructor(scene) {
         super(scene, 0, 0);
         scene.add.existing(this);
         this.setDepth(630);
         this.setVisible(false);
     }
 
-    get isOpen () {
+    get isOpen() {
         return this.visible;
     }
 
-    open ({
+    open({
         title = DEFAULTS.title,
         subtitle = DEFAULTS.subtitle,
         missionOrder = DEFAULTS.missionOrder,
@@ -120,10 +119,14 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         ecoLeft = DEFAULTS.ecoLeft,
         ecoMax = DEFAULTS.ecoMax,
         onResume = () => { },
+        onNewMission = () => { },
+        onBack = () => { },
         onInfo = () => { },
         onClose = () => { },
     } = {}) {
         this._onResume = onResume;
+        this._onNewMission = onNewMission;
+        this._onBack = onBack;
         this._onInfo = onInfo;
         this._onClose = onClose;
 
@@ -170,7 +173,7 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         });
     }
 
-    _m () {
+    _m() {
         const W = this.scene.scale.width;
         const H = this.scene.scale.height;
         const s = Math.min(W / 1920, H / 1080);
@@ -184,26 +187,26 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         };
     }
 
-    _text (x, y, message, style) {
+    _text(x, y, message, style) {
         return addCauseText(this.scene, x, y, message, { fontStyle: WEIGHT.bold, ...style });
     }
 
-    _wrap (str, maxWidth, style) {
+    _wrap(str, maxWidth, style) {
         return wrapCause(this.scene, str, maxWidth, style);
     }
 
-    _fitW (img, displayW) {
+    _fitW(img, displayW) {
         img.setDisplaySize(displayW, displayW * (img.height / img.width));
         return img;
     }
 
-    _fitContain (img, maxW, maxH) {
+    _fitContain(img, maxW, maxH) {
         const s = Math.min(maxW / img.width, maxH / img.height);
         img.setDisplaySize(img.width * s, img.height * s);
         return img;
     }
 
-    _shrinkToWidth (text, maxW) {
+    _shrinkToWidth(text, maxW) {
         let size = parseInt(text.style.fontSize, 10) || 16;
         while (text.width > maxW && size > 11) {
             size -= 1;
@@ -212,7 +215,7 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         return text;
     }
 
-    _slice (x, y, key, w, h, preferredCap = 48) {
+    _slice(x, y, key, w, h, preferredCap = 48) {
         const src = this.scene.textures.get(key)?.getSourceImage?.();
         const tw = src?.width ?? 256;
         const th = src?.height ?? 256;
@@ -226,7 +229,7 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         return this.scene.add.nineslice(x, y, key, undefined, w, h, cap, cap, cap, cap);
     }
 
-    _round (cx, cy, w, h, fill, radius, stroke = null, strokeW = 2) {
+    _round(cx, cy, w, h, fill, radius, stroke = null, strokeW = 2) {
         const g = this.scene.add.graphics();
         g.fillStyle(fill, 1);
         g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, radius);
@@ -238,8 +241,16 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         return g;
     }
 
-    _drawChrome (m) {
-        // No Back button on welcome-back / home chrome.
+    _drawChrome(m) {
+        const backH = m.H * 0.078;
+        const back = this.scene.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
+        this._fitW(back, backH * (back.width / back.height));
+        back.setInteractive({ useHandCursor: true });
+        back.on('pointerover', () => back.setScale(back.scaleX * 1.04, back.scaleY * 1.04));
+        back.on('pointerout', () => this._fitW(back, backH * (back.width / back.height)));
+        back.on('pointerup', () => this._close(() => this._onBack?.()));
+        this.add(back);
+
         const infoS = m.H * 0.074;
         const info = this.scene.add.image(m.x(0.948), m.y(0.058), HOME_TEXTURE_KEYS.infoButton);
         info.setDisplaySize(infoS, infoS);
@@ -250,7 +261,7 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         this.add(info);
     }
 
-    _drawPanel (m, data) {
+    _drawPanel(m, data) {
         const panelW = m.W * 0.78;
         const panelH = m.H * 0.88;
         const panelY = m.cy + m.H * 0.02;
@@ -265,7 +276,7 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
 
         // Title with leaf + sparkle accents
         this._drawTitleDecor(m, m.cx, y, data.title);
-        y += m.H * 0.055;
+        y += m.H * 0.030;
 
         this.add(this._text(m.cx, y, data.subtitle, {
             fontSize: `${m.fs(TYPE.subtitle)}px`,
@@ -274,41 +285,28 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         y += m.H * 0.042;
 
         // Mission banner card
-        const missionH = m.H * 0.20;
+        const missionH = m.H * 0.21;
         this._drawMissionBlock(m, m.cx, y + missionH / 2, innerW, missionH, data);
-        y += missionH + m.H * 0.022;
+        y += missionH + m.H * 0.018;
 
         // Shopping progress
-        const progressH = m.H * 0.20;
+        const progressH = m.H * 0.265;
         this._drawProgress(m, m.cx, y + progressH / 2, innerW, progressH, data);
-        y += progressH + m.H * 0.018;
+        y += progressH + m.H * 0.016;
 
         // Stats row
         const statsH = m.H * 0.115;
         this._drawStats(m, m.cx, y + statsH / 2, innerW, statsH, data);
-        y += statsH + m.H * 0.028;
+        y += statsH + m.H * 0.014;
 
-        // Resume button
-        const btnH = m.H * 0.078;
-        const btnW = Math.min(innerW * 0.42, m.W * 0.28);
-        this._drawResumeButton(m, m.cx, y + btnH / 2, btnW, btnH);
-        y += btnH + m.H * 0.018;
-
-        this.add(this._text(m.cx, y, 'Continue from your point', {
-            fontSize: `${m.fs(TYPE.link)}px`,
-            color: C_BLUE,
-        }).setOrigin(0.5, 0));
-        const link = this.list[this.list.length - 1];
-        const ul = this.scene.add.graphics();
-        ul.lineStyle(Math.max(2, Math.round(2 * m.s)), 0x2F6FE0, 1);
-        const linkW = Math.min(link.width, innerW * 0.5);
-        ul.lineBetween(m.cx - linkW / 2, y + link.height + 2, m.cx + linkW / 2, y + link.height + 2);
-        this.add(ul);
-        link.setInteractive({ useHandCursor: true });
-        link.on('pointerup', () => this._close(() => this._onResume?.()));
+        // Action buttons — Start New Mission (blue) + Resume Mission (green).
+        const btnH = m.H * 0.072;
+        const panelBot = panelY + panelH / 2;
+        const btnCy = Math.min(y + btnH / 2, panelBot - btnH / 2 - m.H * 0.028);
+        this._drawActionButtons(m, m.cx, btnCy, innerW, btnH);
     }
 
-    _drawTitleDecor (m, cx, y, title) {
+    _drawTitleDecor(m, cx, y, title) {
         const titleTxt = this._text(cx, y, title, {
             fontSize: `${m.fs(TYPE.title)}px`,
             fontStyle: WEIGHT.heavy,
@@ -336,32 +334,47 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         });
     }
 
-    _drawMissionBlock (m, cx, cy, w, h, data) {
+    _drawMissionBlock(m, cx, cy, w, h, data) {
         this._round(cx, cy, w, h, 0xF5EDE0, Math.min(w, h) * 0.12, 0xE8D8C4, 2);
 
-        const artS = h * 0.72;
+        const top = cy - h / 2;
+        const padTop = h * 0.055;
+
+        const artS = h * 0.90;
         if (this.scene.textures.exists(MS.basketArt)) {
-            const left = this.scene.add.image(cx - w * 0.34, cy - h * 0.04, MS.basketArt);
+            const left = this.scene.add.image(cx - w * 0.34, cy - h * 0.02, MS.basketArt);
             this._fitContain(left, artS, artS);
             this.add(left);
         }
         if (this.scene.textures.exists(MS.packArt)) {
-            const right = this.scene.add.image(cx + w * 0.34, cy - h * 0.04, MS.packArt);
+            const right = this.scene.add.image(cx + w * 0.34, cy - h * 0.02, MS.packArt);
             this._fitContain(right, artS, artS);
             this.add(right);
         }
 
-        const tag = this.scene.add.image(cx, cy - h * 0.32, MS.missionTag);
-        this._fitW(tag, w * 0.16);
-        this.add(tag);
-        this.add(this._text(tag.x, tag.y, `MISSION ${data.missionOrder}`, {
+        // Purple pill
+        const tagLabel = this._text(0, 0, `MISSION ${data.missionOrder}`, {
             fontSize: `${m.fs(TYPE.missionTag)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_WHITE,
-        }).setOrigin(0.5, 0.5));
+        }).setOrigin(0.5, 0.5);
+        const tagPadX = m.W * 0.014;
+        const tagPadY = m.H * 0.008;
+        const tagW = tagLabel.width + tagPadX * 2;
+        const tagH = tagLabel.height + tagPadY * 2;
+        const tagY = top + padTop + tagH / 2;
+        this._round(cx, tagY, tagW, tagH, 0x8B4FD9, tagH * 0.5, 0x6A35B0, Math.max(1, Math.round(1.5 * m.s)));
+        tagLabel.setPosition(cx, tagY);
+        this.add(tagLabel);
 
-        const ribbon = this.scene.add.image(cx, cy - h * 0.06, WB.ribbon);
+        // Ribbon — asset has transparent padding; fractions map to the visible purple band.
+        const ribbon = this.scene.add.image(cx, 0, WB.ribbon);
         this._fitW(ribbon, w * 0.52);
+        const bandTopFrac = 0.30;
+        const bandBotFrac = 0.55;
+        const gapTagToRibbon = h * 0.085;
+        const tagBottom = tagY + tagH / 2;
+        ribbon.y = tagBottom + gapTagToRibbon - ribbon.displayHeight * (bandTopFrac - 0.5);
         this.add(ribbon);
         const name = this._text(ribbon.x, ribbon.y - ribbon.displayHeight * 0.02, data.missionName, {
             fontSize: `${m.fs(TYPE.missionName)}px`,
@@ -371,83 +384,111 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         this._shrinkToWidth(name, ribbon.displayWidth * 0.78);
         this.add(name);
 
+        // Description under the ribbon only — do not reposition other elements.
+        const bandBottom = ribbon.y + ribbon.displayHeight * (bandBotFrac - 0.5);
+        const descMaxW = ribbon.displayWidth * 0.78;
+        const descStyle = {
+            fontSize: `${m.fs(TYPE.missionDesc)}px`,
+            color: C_BODY,
+            align: 'center',
+            lineSpacing: m.fs(2),
+        };
         const desc = this._text(
             cx,
-            cy + h * 0.28,
-            this._wrap(data.missionDescription, w * 0.72, { fontSize: `${m.fs(TYPE.missionDesc)}px` }),
-            {
-                fontSize: `${m.fs(TYPE.missionDesc)}px`,
-                color: C_BODY,
-                align: 'center',
-                lineSpacing: m.fs(2),
-            },
+            bandBottom + h * 0.15,
+            this._wrap(data.missionDescription, descMaxW, { fontSize: descStyle.fontSize }),
+            descStyle,
         ).setOrigin(0.5, 0);
         this.add(desc);
     }
 
-    _drawProgress (m, cx, cy, w, h, data) {
+    _drawProgress(m, cx, cy, w, h, data) {
         this._round(cx, cy, w, h, 0xFFFFFF, Math.min(w, h) * 0.1, 0xD8E0F0, 2);
 
         const top = cy - h / 2;
         const padX = w * 0.035;
         const left = cx - w / 2 + padX;
-        const right = cx + w / 2 - padX;
+        const innerW = w - padX * 2;
 
-        const headY = top + h * 0.18;
-        if (this.scene.textures.exists(MD.leafIcon)) {
-            const leaf = this.scene.add.image(left + m.W * 0.01, headY, MD.leafIcon);
-            leaf.setDisplaySize(m.H * 0.028, m.H * 0.028);
-            this.add(leaf);
-        }
-        this.add(this._text(left + m.W * 0.028, headY, 'SHOPPING PROGRESS', {
+        // Progress bar = 60% width (left), items-found count = remaining 40% (right).
+        const barW = innerW * 0.60;
+        const countW = innerW * 0.40;
+        const barCx = left + barW / 2;
+        const countCx = left + barW + countW / 2;
+
+        const headY = top + h * 0.16;
+        // Title centered over the progress bar (not the full container).
+        const titleTxt = this._text(barCx, headY, 'SHOPPING PROGRESS', {
             fontSize: `${m.fs(TYPE.progressTitle)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_BLUE,
-        }).setOrigin(0, 0.5));
+        }).setOrigin(0.5, 0.5);
+        this.add(titleTxt);
 
-        this.add(this._text(right, headY, `${data.itemsFound}/${data.itemsTotal} Items Found`, {
-            fontSize: `${m.fs(TYPE.progressCount)}px`,
-            fontStyle: WEIGHT.bold,
-            color: C_NAVY,
-        }).setOrigin(1, 0.5));
+        const leafS = m.H * 0.028;
+        const leafGap = titleTxt.width / 2 + m.W * 0.012;
+        if (this.scene.textures.exists(MD.leafIcon)) {
+            [-1, 1].forEach((side) => {
+                const leaf = this.scene.add.image(barCx + side * leafGap, headY, MD.leafIcon);
+                leaf.setDisplaySize(leafS, leafS);
+                if (side < 0) leaf.setFlipX(true);
+                this.add(leaf);
+            });
+        }
 
-        // Progress bar
-        const barW = w - padX * 2;
-        const barH = Math.max(10, m.H * 0.016);
-        const barY = headY + h * 0.22;
-        const base = this._slice(cx, barY, WB.loadingBase, barW, barH, 12);
+        // Clear gap under the (larger) title so they never overlap.
+        const barH = Math.max(14, m.H * 0.024);
+        const barY = headY + titleTxt.height / 2 + h * 0.12 + barH / 2;
+        // Cap ≈ half height keeps pill ends round (avoids horizontal stretch).
+        const barCap = Math.max(6, Math.floor(barH / 2));
+
+        const base = this._slice(barCx, barY, WB.loadingBase, barW, barH, barCap);
         this.add(base);
         const pct = Phaser.Math.Clamp(data.itemsFound / data.itemsTotal, 0, 1);
         if (pct > 0.02) {
-            const fillW = Math.max(barH, barW * pct);
+            const fillH = barH * 0.72;
+            const fillInset = (barH - fillH) / 2;
+            const fillW = Math.max(fillH, (barW - fillInset * 2) * pct);
             const fill = this._slice(
-                cx - barW / 2 + fillW / 2,
+                barCx - barW / 2 + fillInset + fillW / 2,
                 barY,
                 WB.loadingBar,
                 fillW,
-                barH * 0.85,
-                10,
+                fillH,
+                Math.max(5, Math.floor(fillH / 2)),
             );
             this.add(fill);
         }
 
-        // Item tiles
-        const tiles = data.items.slice(0, 6);
-        const tileGap = m.W * 0.012;
-        const tileW = Math.min(
-            (w - padX * 2 - tileGap * Math.max(0, tiles.length - 1)) / Math.max(1, tiles.length),
-            m.W * 0.11,
-        );
-        const tileH = h * 0.42;
-        const tileY = cy + h * 0.22;
-        const totalW = tiles.length * tileW + (tiles.length - 1) * tileGap;
+        const countLabel = this._text(
+            countCx,
+            headY + h * 0.09,
+            `${data.itemsFound}/${data.itemsTotal} Items Found`,
+            {
+                fontSize: `${m.fs(TYPE.progressCount)}px`,
+                fontStyle: WEIGHT.bold,
+                color: C_NAVY,
+            },
+        ).setOrigin(0.5, 0.5);
+        this._shrinkToWidth(countLabel, countW * 0.92);
+        this.add(countLabel);
+
+        // Item tiles — flex width to fit 1–7 items in one row.
+        const MAX_TILES = 7;
+        const tiles = (data.items || []).slice(0, MAX_TILES);
+        const n = Math.max(1, tiles.length);
+        const tileGap = m.W * (n >= 7 ? 0.006 : n >= 6 ? 0.008 : 0.010);
+        const tileW = (innerW - tileGap * (n - 1)) / n;
+        const tileH = Math.min(h * 0.46, tileW * 1.2);
+        const tileY = cy + h * 0.18;
+        const totalW = n * tileW + (n - 1) * tileGap;
         tiles.forEach((item, i) => {
             const x = cx - totalW / 2 + tileW / 2 + i * (tileW + tileGap);
             this._drawItemTile(m, x, tileY, tileW, tileH, item);
         });
     }
 
-    _drawItemTile (m, cx, cy, w, h, item) {
+    _drawItemTile(m, cx, cy, w, h, item) {
         const fill = item.done ? 0xE8F6E4 : 0xF7F1E6;
         const stroke = item.done ? 0x8BC47A : 0xE0D4C4;
         this._round(cx, cy, w, h, fill, Math.min(w, h) * 0.18, stroke, 2);
@@ -466,23 +507,23 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
             this.add(g);
         }
 
-        const iconKey = item.textureKey;
-        if (iconKey && this.scene.textures.exists(iconKey)) {
-            const icon = this.scene.add.image(cx, cy + h * 0.02, iconKey);
-            this._fitContain(icon, w * 0.55, h * 0.48);
-            this.add(icon);
-        }
-
-        const label = this._text(cx, cy + h * 0.36, item.name, {
+        const label = this._text(cx, cy - h * 0.32, item.name, {
             fontSize: `${m.fs(TYPE.itemLabel)}px`,
-            fontStyle: WEIGHT.bold,
+            fontStyle: WEIGHT.heavy,
             color: C_NAVY,
         }).setOrigin(0.5, 0.5);
-        this._shrinkToWidth(label, w * 0.88);
+        this._shrinkToWidth(label, w * 0.78);
         this.add(label);
+
+        const iconKey = item.textureKey;
+        if (iconKey && this.scene.textures.exists(iconKey)) {
+            const icon = this.scene.add.image(cx, cy + h * 0.12, iconKey);
+            this._fitContain(icon, w * 0.72, h * 0.55);
+            this.add(icon);
+        }
     }
 
-    _drawStats (m, cx, cy, w, h, data) {
+    _drawStats(m, cx, cy, w, h, data) {
         const gap = m.W * 0.014;
         const cardW = (w - gap * 2) / 3;
         const specs = [
@@ -520,12 +561,12 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         });
     }
 
-    _drawStatCard (m, cx, cy, w, h, spec) {
+    _drawStatCard(m, cx, cy, w, h, spec) {
         const card = this._slice(cx, cy, spec.key, w, h, 28);
         this.add(card);
 
-        const iconS = h * 0.42;
-        const iconX = cx - w * 0.32;
+        const iconS = h * 0.68;
+        const iconX = cx - w * 0.30;
         if (spec.icon && this.scene.textures.exists(spec.icon)) {
             const icon = this.scene.add.image(iconX, cy, spec.icon);
             this._fitContain(icon, iconS, iconS);
@@ -553,45 +594,56 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         }).setOrigin(0.5, 0.5));
     }
 
-    _drawResumeButton (m, cx, cy, w, h) {
-        const btn = this.scene.add.image(cx, cy, HOME_TEXTURE_KEYS.greenButton);
+    _drawActionButtons(m, cx, cy, innerW, btnH) {
+        const gap = m.W * 0.018;
+        const blueSrc = this.scene.textures.get(MD.blueButton)?.getSourceImage?.();
+        const greenSrc = this.scene.textures.get(HOME_TEXTURE_KEYS.greenButton)?.getSourceImage?.();
+        const blueRatio = (blueSrc?.width ?? 565) / Math.max(1, blueSrc?.height ?? 123);
+        const greenRatio = (greenSrc?.width ?? 568) / Math.max(1, greenSrc?.height ?? 128);
+        let newW = btnH * blueRatio;
+        let resumeW = btnH * greenRatio;
+        const maxPair = innerW * 0.92;
+        if (newW + gap + resumeW > maxPair) {
+            const scale = maxPair / (newW + gap + resumeW);
+            newW *= scale;
+            resumeW *= scale;
+        }
+        const pairW = newW + gap + resumeW;
+        const leftX = cx - pairW / 2 + newW / 2;
+        const rightX = cx + pairW / 2 - resumeW / 2;
+
+        this._pillButton(m, leftX, cy, newW, btnH, MD.blueButton, 'Start New Mission', () => {
+            this._close(() => this._onNewMission?.());
+        });
+        this._pillButton(m, rightX, cy, resumeW, btnH, HOME_TEXTURE_KEYS.greenButton, 'Resume Mission', () => {
+            this._close(() => this._onResume?.());
+        });
+    }
+
+    _pillButton(m, cx, cy, w, h, key, label, onClick) {
+        const wrap = this.scene.add.container(cx, cy);
+        this.add(wrap);
+
+        const btn = this.scene.add.image(0, 0, key);
         this._fitContain(btn, w, h);
         const displayW = btn.displayWidth;
-        const displayH = btn.displayHeight;
         btn.setInteractive({ useHandCursor: true });
-        btn.on('pointerover', () => btn.setScale(btn.scaleX * 1.04, btn.scaleY * 1.04));
-        btn.on('pointerout', () => {
-            btn.setScale(1);
-            this._fitContain(btn, w, h);
-        });
-        btn.on('pointerup', () => this._close(() => this._onResume?.()));
-        this.add(btn);
+        wrap.add(btn);
 
-        const label = this._text(cx, cy, 'Resume Mission', {
+        const txt = this._text(0, -h * 0.06, label, {
             fontSize: `${m.fs(TYPE.button)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_WHITE,
         }).setOrigin(0.5, 0.5);
-        this.add(label);
+        this._shrinkToWidth(txt, displayW * 0.82);
+        wrap.add(txt);
 
-        // Play triangle
-        const tri = this.scene.add.triangle(
-            0, 0,
-            0, -displayH * 0.16,
-            0, displayH * 0.16,
-            displayH * 0.22, 0,
-            0xffffff,
-        );
-        const gap = m.W * 0.008;
-        this._shrinkToWidth(label, displayW * 0.7);
-        const total = tri.width + gap + label.width;
-        tri.x = cx - total / 2 + tri.width / 2;
-        tri.y = cy;
-        label.x = tri.x + tri.width / 2 + gap + label.width / 2;
-        this.add(tri);
+        btn.on('pointerover', () => wrap.setScale(1.05));
+        btn.on('pointerout', () => wrap.setScale(1));
+        btn.on('pointerup', onClick);
     }
 
-    _close (afterClose = null) {
+    _close(afterClose = null) {
         this.scene.tweens.add({
             targets: this,
             alpha: 0,
@@ -607,7 +659,7 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         });
     }
 
-    close () {
+    close() {
         this._close();
     }
 }
