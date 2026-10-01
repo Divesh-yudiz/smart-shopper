@@ -15,7 +15,7 @@ const TYPE = Object.freeze({
     badge: 14,
     scoreLabel: 18,
     scoreValue: 42,
-    note: 16,
+    note: 24,
     statTitle: 26,
     statValue: 44,
     statOutOf: 20,
@@ -26,6 +26,7 @@ const TYPE = Object.freeze({
 const C_WHITE = '#ffffff';
 const C_NAVY = '#1A2744';
 const C_MUTED = '#6A6258';
+const C_NOTE = '#2A241C';
 const C_GREEN = '#1F8A3A';
 const C_BLUE = '#2F6FE0';
 const C_PURPLE = '#7B3CC9';
@@ -89,6 +90,7 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
         missionName = DEFAULTS.missionName,
         items = DEFAULT_ITEMS,
         stars = DEFAULTS.stars,
+        maxStars = 3,
         score = DEFAULTS.score,
         scoreMax = DEFAULTS.scoreMax,
         scoreNote = DEFAULTS.scoreNote,
@@ -98,9 +100,12 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
         sustainabilityTotal = DEFAULTS.sustainabilityTotal,
         coinsUsed = DEFAULTS.coinsUsed,
         coinsMax = DEFAULTS.coinsMax,
+        coinsRemaining,
         ecoUsed = DEFAULTS.ecoUsed,
         ecoMax = DEFAULTS.ecoMax,
+        ecoRemaining,
         timeRemaining = DEFAULTS.timeRemaining,
+        timeRemainLabel = 'Remaining',
         onDashboard = () => { },
         onNewMission = () => { },
         onPlayAgain = () => { },
@@ -129,7 +134,8 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
             subtitle,
             missionName,
             items: Array.isArray(items) ? items : [...DEFAULT_ITEMS],
-            stars: Phaser.Math.Clamp(Math.round(stars), 0, 3),
+            stars: Phaser.Math.Clamp(Math.round(stars), 0, Math.max(1, Math.round(maxStars))),
+            maxStars: Math.max(1, Math.round(maxStars)),
             score: Math.max(0, Math.round(score)),
             scoreMax: Math.max(1, Math.round(scoreMax)),
             scoreNote,
@@ -139,9 +145,12 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
             sustainabilityTotal: Math.max(1, Math.round(sustainabilityTotal)),
             coinsUsed: Math.max(0, Math.round(coinsUsed)),
             coinsMax: Math.max(0, Math.round(coinsMax)),
+            coinsRemaining: coinsRemaining == null ? null : Math.max(0, Math.round(coinsRemaining)),
             ecoUsed: Math.max(0, Math.round(ecoUsed)),
             ecoMax: Math.max(0, Math.round(ecoMax)),
+            ecoRemaining: ecoRemaining == null ? null : Math.max(0, Math.round(ecoRemaining)),
             timeLabel: formatClock(timeRemaining),
+            timeRemainLabel,
         });
 
         this.setVisible(true);
@@ -267,7 +276,7 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
 
         // Keep stars lower; only the completion text moves up.
         const starsY = ribbon.y + ribbon.displayHeight * 0.72 + m.H * 0.055;
-        this._drawStars(m, m.cx, starsY, data.stars);
+        this._drawStars(m, m.cx, starsY, data.stars, data.maxStars);
         this._drawConfetti(m, m.cx, starsY, panelW * 0.55);
 
         const starsLabelY = starsY + m.H * 0.052;
@@ -292,11 +301,10 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
         this._drawFooter(m, m.cx, btnY, Math.min(innerW * 0.94, m.W * 0.72), btnH, gap);
     }
 
-    _drawStars(m, cx, cy, count) {
+    _drawStars(m, cx, cy, count, total = 3) {
         const starS = m.H * 0.07;
         const gap = starS * 1.15;
-        const total = 3;
-        const startX = cx - gap;
+        const startX = cx - ((total - 1) * gap) / 2;
         for (let i = 0; i < total; i += 1) {
             const key = i < count ? MS.starFilled : MS.starEmpty;
             const star = this.scene.add.image(startX + i * gap, cy, key);
@@ -369,10 +377,18 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
 
         const scoreLabelFs = m.fs(compact ? TYPE.scoreLabel - 2 : TYPE.scoreLabel);
         const scoreValueFs = m.fs(compact ? TYPE.scoreValue - 6 : TYPE.scoreValue);
-        const noteFs = m.fs(compact ? TYPE.note - 1 : TYPE.note);
+        const noteFs = m.fs(TYPE.note);
         const evenGap = m.H * (compact ? 0.01 : 0.014);
-
-        const noteH = noteFs;
+        const noteStyle = {
+            fontSize: `${noteFs}px`,
+            fontStyle: WEIGHT.heavy,
+            color: C_NOTE,
+            lineSpacing: Math.round(noteFs * 0.15),
+        };
+        const noteStr = this._wrap(data.scoreNote, innerW * 0.96, noteStyle);
+        const noteProbe = this._text(0, 0, noteStr, noteStyle).setVisible(false);
+        const noteH = Math.max(noteFs, noteProbe.height);
+        noteProbe.destroy();
         const valueH = scoreValueFs;
         const labelH = scoreLabelFs;
         const noteY = bottom - noteH / 2;
@@ -415,11 +431,7 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
         this.add(starL);
         this.add(starR);
 
-        const note = this._text(cx, noteY, data.scoreNote, {
-            fontSize: `${noteFs}px`,
-            color: C_MUTED,
-        }).setOrigin(0.5, 0.5);
-        this._shrinkToWidth(note, innerW * 0.92);
+        const note = this._text(cx, noteY, noteStr, noteStyle).setOrigin(0.5, 0.5);
         this.add(note);
     }
 
@@ -487,7 +499,7 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
                 stroke: 0xBCE4A8,
                 icon: MSS.ecoIcon,
                 value: `${data.ecoUsed} out of ${data.ecoMax}`,
-                remain: `Remaining: ${Math.max(0, data.ecoMax - data.ecoUsed)}`,
+                remain: `Remaining: ${data.ecoRemaining ?? Math.max(0, data.ecoMax - data.ecoUsed)}`,
                 remainColor: C_GREEN,
             },
         ];
@@ -508,7 +520,7 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
                 stroke: 0xF0C8A0,
                 icon: MSS.timeIcon,
                 value: data.timeLabel,
-                remain: 'Remaining',
+                remain: data.timeRemainLabel || 'Remaining',
                 remainColor: C_ORANGE,
             },
         ];
@@ -519,7 +531,7 @@ export default class MissionSuccessPopup extends Phaser.GameObjects.Container {
             stroke: 0xD2BFF0,
             icon: MSS.coinsIcon,
             value: `${data.coinsUsed} used out of ${data.coinsMax}`,
-            remain: `Remaining: ${Math.max(0, data.coinsMax - data.coinsUsed)}`,
+            remain: `Remaining: ${data.coinsRemaining ?? Math.max(0, data.coinsMax - data.coinsUsed)}`,
             remainColor: C_PURPLE,
             wide: true,
         };

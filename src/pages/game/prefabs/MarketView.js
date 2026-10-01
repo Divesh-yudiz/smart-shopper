@@ -257,6 +257,28 @@ export default class MarketView extends Phaser.GameObjects.Container {
     get scrollMaxX () { return this._maxX; }
 
     /**
+     * Glow the sale item's shelf row and scroll that bay into view.
+     * @returns {boolean}
+     */
+    highlightSaleProduct (sItemKey) {
+        if (!sItemKey) return false;
+        let found = null;
+        for (const child of this._inner?.list ?? []) {
+            if (typeof child?.highlightSaleProduct !== 'function') continue;
+            const local = child.highlightSaleProduct(sItemKey);
+            if (!local) continue;
+            found = { rack: child, local };
+            break;
+        }
+        if (!found) return false;
+
+        const worldX = found.rack.x + found.local.x + this._inner.x;
+        const target = this._inner.x + (config.width * 0.5 - worldX);
+        this.scrollTo(target);
+        return true;
+    }
+
+    /**
      * World position of a shelf product icon (for fly-to-cart animation).
      * @returns {{x:number,y:number}|null}
      */

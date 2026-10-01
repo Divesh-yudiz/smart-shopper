@@ -81,6 +81,7 @@ function rackLayout (rackId, extra = {}) {
         shelfHeightFactor: align.shelfHeightFactor,
         iconAspect: align.iconAspect,
         iconSlotFill: align.iconSlotFill,
+        keepAspect: align.keepAspect,
         spreadFullBay: align.spreadFullBay,
         rowSidePad: align.rowSidePad,
         shelfPlankOffset: align.shelfPlankOffset,

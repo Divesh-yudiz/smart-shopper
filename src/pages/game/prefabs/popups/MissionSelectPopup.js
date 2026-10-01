@@ -24,7 +24,7 @@ const C_STATS = '#1F2933';
 const C_RATING = '#2D3748';
 
 const TITLE_MAX_LINES = 2;
-const DESC_MAX_LINES = 4;
+const DESC_MAX_LINES = 3;
 
 const THEMES = [
     {
@@ -64,14 +64,14 @@ const THEMES = [
  * Positions and sizes are fractions of the live game width / height.
  */
 export default class MissionSelectPopup extends Phaser.GameObjects.Container {
-    constructor (scene) {
+    constructor(scene) {
         super(scene, 0, 0);
         scene.add.existing(this);
         this.setDepth(600);
         this.setVisible(false);
     }
 
-    open ({ missions = [], loading = false, error = '', onSelect = () => { }, animate = true } = {}) {
+    open({ missions = [], loading = false, error = '', onSelect = () => { }, animate = true } = {}) {
         this._onSelect = onSelect;
         this._picked = false;
         this._dismissible = !!error;
@@ -116,7 +116,7 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         }
     }
 
-    _m () {
+    _m() {
         const W = this.scene.scale.width;
         const H = this.scene.scale.height;
         const s = Math.min(W / 1920, H / 1080);
@@ -130,30 +130,30 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         };
     }
 
-    _copy (s) {
+    _copy(s) {
         return copyCause(s);
     }
 
-    _wrap (str, maxWidth, style) {
+    _wrap(str, maxWidth, style) {
         return wrapCause(this.scene, str, maxWidth, style);
     }
 
-    _text (x, y, message, style) {
+    _text(x, y, message, style) {
         return addCauseText(this.scene, x, y, message, style);
     }
 
-    _fitW (img, displayW) {
+    _fitW(img, displayW) {
         img.setDisplaySize(displayW, displayW * (img.height / img.width));
         return img;
     }
 
-    _fitContain (img, maxW, maxH) {
+    _fitContain(img, maxW, maxH) {
         const s = Math.min(maxW / img.width, maxH / img.height);
         img.setDisplaySize(img.width * s, img.height * s);
         return img;
     }
 
-    _drawChrome (m) {
+    _drawChrome(m) {
         const backH = m.H * 0.078;
         const back = this.scene.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
         this._fitW(back, backH * (back.width / back.height));
@@ -165,7 +165,7 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
 
     }
 
-    _drawPanel (m, items) {
+    _drawPanel(m, items) {
         const panelW = m.W * 0.78;
         const panelH = m.H * 0.82;
         const panelY = m.y(0.54);
@@ -179,7 +179,7 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         this._fitW(ribbon, ribbonW);
         this.add(ribbon);
 
-        this.add(this._text(m.cx, ribbon.y, 'CHOOSE YOUR MISSION', {
+        this.add(this._text(m.cx, ribbon.y - ribbon.displayHeight * 0.05, 'CHOOSE YOUR MISSION', {
             fontSize: `${m.fs(TYPE.ribbon)}px`,
             fontStyle: 'bold',
             color: C_WHITE,
@@ -218,7 +218,7 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         });
     }
 
-    _clampLines (str, maxWidth, style, maxLines) {
+    _clampLines(str, maxWidth, style, maxLines) {
         const wrapped = this._wrap(str, maxWidth, style);
         const lines = wrapped.split('\n').filter(Boolean);
         if (lines.length <= maxLines) return wrapped;
@@ -228,14 +228,14 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         return kept.join('\n');
     }
 
-    _missionStatsLabel (mission) {
+    _missionStatsLabel(mission) {
         const count = mission.nShoppingListCount
             ?? (mission.aShoppingList ?? []).reduce((sum, it) => sum + (it.nQuantity ?? 0), 0);
         if (!count) return '';
         return `${count} item${count === 1 ? '' : 's'}`;
     }
 
-    _drawCard (m, cx, cy, w, h, mission, theme) {
+    _drawCard(m, cx, cy, w, h, mission, theme) {
         const wrap = this.scene.add.container(cx, cy);
         const left = -w / 2;
         const top = -h / 2;
@@ -269,7 +269,9 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         const footerPad = padY;
         const contentBottom = top + h - footerPad;
         const scoreGap = gapSm * 0.75;
-        const scoreBlockH = showScore ? scoreFs + scoreGap : 0;
+        // Always reserve the score row so rating, stars, and the button line up
+        // on cards that have not been played yet.
+        const scoreBlockH = scoreFs + scoreGap;
         // Stars + button share a row above the score; keep button vertically centered on that row.
         const starCy = contentBottom - scoreBlockH - Math.max(starS, btnH) / 2;
         const btnCy = starCy;
@@ -399,7 +401,7 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         return wrap;
     }
 
-    _drawViewButton (m, cx, cy, w, h, theme, mission) {
+    _drawViewButton(m, cx, cy, w, h, theme, mission) {
         const wrap = this.scene.add.container(cx, cy);
         const g = this.scene.add.graphics();
         const r = h / 2;
@@ -434,7 +436,7 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         return wrap;
     }
 
-    _drawStatus (m, message) {
+    _drawStatus(m, message) {
         const style = {
             fontSize: `${m.fs(28)}px`,
             fontStyle: 'bold',
@@ -444,7 +446,7 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         this.add(this._text(m.cx, m.y(0.55), this._wrap(message, m.W * 0.7, style), style).setOrigin(0.5, 0.5));
     }
 
-    _statusLabel (mission) {
+    _statusLabel(mission) {
         if (mission?.bPlayed === true || mission?.bPlayed === 'true') return 'Played';
         const key = String(mission?.eStatus ?? mission ?? '').toLowerCase();
         if (key === 'played' || key === 'completed') return 'Played';
@@ -452,24 +454,24 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         return 'Not Played';
     }
 
-    _selectMission (mission) {
+    _selectMission(mission) {
         if (this._picked) return;
         this._picked = true;
         this._onSelect?.(mission);
     }
 
-    close ({ restoreHome = true } = {}) {
+    close({ restoreHome = true } = {}) {
         if (restoreHome && this.scene._root) this.scene._root.setVisible(true);
         this.setVisible(false);
         this.setAlpha(1);
         this.setScale(1);
     }
 
-    get isDismissible () {
+    get isDismissible() {
         return !!this._dismissible;
     }
 
-    get isOpen () {
+    get isOpen() {
         return this.visible;
     }
 }

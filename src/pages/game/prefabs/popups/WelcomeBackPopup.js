@@ -10,13 +10,13 @@ const TYPE = Object.freeze({
     subtitle: 22,
     missionTag: 20,
     missionName: 30,
-    missionDesc: 18,
+    missionDesc: 21,
     progressTitle: 24,
     progressCount: 34,
     itemLabel: 22,
-    statLabel: 16,
-    statValue: 40,
-    statSub: 16,
+    statLabel: 22,
+    statValue: 48,
+    statSub: 20,
     button: 36,
     link: 18,
 });
@@ -120,14 +120,10 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         ecoMax = DEFAULTS.ecoMax,
         onResume = () => { },
         onNewMission = () => { },
-        onBack = () => { },
-        onInfo = () => { },
         onClose = () => { },
     } = {}) {
         this._onResume = onResume;
         this._onNewMission = onNewMission;
-        this._onBack = onBack;
-        this._onInfo = onInfo;
         this._onClose = onClose;
 
         this.removeAll(true);
@@ -144,7 +140,6 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         ov.setInteractive();
         this.add(ov);
 
-        this._drawChrome(m);
         this._drawPanel(m, {
             title,
             subtitle,
@@ -241,30 +236,11 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         return g;
     }
 
-    _drawChrome(m) {
-        const backH = m.H * 0.078;
-        const back = this.scene.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
-        this._fitW(back, backH * (back.width / back.height));
-        back.setInteractive({ useHandCursor: true });
-        back.on('pointerover', () => back.setScale(back.scaleX * 1.04, back.scaleY * 1.04));
-        back.on('pointerout', () => this._fitW(back, backH * (back.width / back.height)));
-        back.on('pointerup', () => this._close(() => this._onBack?.()));
-        this.add(back);
-
-        const infoS = m.H * 0.074;
-        const info = this.scene.add.image(m.x(0.948), m.y(0.058), HOME_TEXTURE_KEYS.infoButton);
-        info.setDisplaySize(infoS, infoS);
-        info.setInteractive({ useHandCursor: true });
-        info.on('pointerover', () => info.setDisplaySize(infoS * 1.06, infoS * 1.06));
-        info.on('pointerout', () => info.setDisplaySize(infoS, infoS));
-        info.on('pointerup', () => this._onInfo?.());
-        this.add(info);
-    }
-
     _drawPanel(m, data) {
         const panelW = m.W * 0.78;
-        const panelH = m.H * 0.88;
-        const panelY = m.cy + m.H * 0.02;
+        const panelH = m.H * 0.93;
+        // Keep the previous bottom edge so the taller progress card does not push the buttons off screen.
+        const panelY = m.cy + m.H * 0.46 - panelH / 2;
         const panel = this._slice(m.cx, panelY, MS.pop, panelW, panelH, 90);
         this.add(panel);
 
@@ -284,25 +260,25 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         }).setOrigin(0.5, 0));
         y += m.H * 0.042;
 
-        // Mission banner card
-        const missionH = m.H * 0.21;
+        // Mission banner card — a little taller so the description can sit below the ribbon.
+        const missionH = m.H * 0.268;
         this._drawMissionBlock(m, m.cx, y + missionH / 2, innerW, missionH, data);
-        y += missionH + m.H * 0.018;
+        y += missionH + m.H * 0.006;
 
-        // Shopping progress
-        const progressH = m.H * 0.265;
+        // Shopping progress and stats sit higher so the buttons have room above them.
+        const progressH = m.H * 0.26;
         this._drawProgress(m, m.cx, y + progressH / 2, innerW, progressH, data);
-        y += progressH + m.H * 0.016;
+        y += progressH + m.H * 0.008;
 
         // Stats row
         const statsH = m.H * 0.115;
         this._drawStats(m, m.cx, y + statsH / 2, innerW, statsH, data);
-        y += statsH + m.H * 0.014;
+        y += statsH + m.H * 0.03;
 
         // Action buttons — Start New Mission (blue) + Resume Mission (green).
         const btnH = m.H * 0.072;
         const panelBot = panelY + panelH / 2;
-        const btnCy = Math.min(y + btnH / 2, panelBot - btnH / 2 - m.H * 0.028);
+        const btnCy = Math.min(y + btnH / 2, panelBot - btnH / 2 - m.H * 0.042);
         this._drawActionButtons(m, m.cx, btnCy, innerW, btnH);
     }
 
@@ -340,14 +316,16 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         const top = cy - h / 2;
         const padTop = h * 0.055;
 
-        const artS = h * 0.90;
+        // Keep the side art beside the ribbon; extra card height is for the description below.
+        const artS = m.H * 0.19;
+        const artY = top + m.H * 0.10;
         if (this.scene.textures.exists(MS.basketArt)) {
-            const left = this.scene.add.image(cx - w * 0.34, cy - h * 0.02, MS.basketArt);
+            const left = this.scene.add.image(cx - w * 0.34, artY, MS.basketArt);
             this._fitContain(left, artS, artS);
             this.add(left);
         }
         if (this.scene.textures.exists(MS.packArt)) {
-            const right = this.scene.add.image(cx + w * 0.34, cy - h * 0.02, MS.packArt);
+            const right = this.scene.add.image(cx + w * 0.34, artY, MS.packArt);
             this._fitContain(right, artS, artS);
             this.add(right);
         }
@@ -371,7 +349,6 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         const ribbon = this.scene.add.image(cx, 0, WB.ribbon);
         this._fitW(ribbon, w * 0.52);
         const bandTopFrac = 0.30;
-        const bandBotFrac = 0.55;
         const gapTagToRibbon = h * 0.085;
         const tagBottom = tagY + tagH / 2;
         ribbon.y = tagBottom + gapTagToRibbon - ribbon.displayHeight * (bandTopFrac - 0.5);
@@ -384,8 +361,7 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         this._shrinkToWidth(name, ribbon.displayWidth * 0.78);
         this.add(name);
 
-        // Description under the ribbon only — do not reposition other elements.
-        const bandBottom = ribbon.y + ribbon.displayHeight * (bandBotFrac - 0.5);
+        // Description sits under the ribbon, with a small gap above the card bottom.
         const descMaxW = ribbon.displayWidth * 0.78;
         const descStyle = {
             fontSize: `${m.fs(TYPE.missionDesc)}px`,
@@ -395,10 +371,13 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         };
         const desc = this._text(
             cx,
-            bandBottom + h * 0.15,
+            0,
             this._wrap(data.missionDescription, descMaxW, { fontSize: descStyle.fontSize }),
             descStyle,
         ).setOrigin(0.5, 0);
+        const bottomPad = m.H * 0.022;
+        const cardBottom = cy + h / 2;
+        desc.y = cardBottom - bottomPad - desc.height;
         this.add(desc);
     }
 
@@ -479,8 +458,13 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         const n = Math.max(1, tiles.length);
         const tileGap = m.W * (n >= 7 ? 0.006 : n >= 6 ? 0.008 : 0.010);
         const tileW = (innerW - tileGap * (n - 1)) / n;
-        const tileH = Math.min(h * 0.46, tileW * 1.2);
-        const tileY = cy + h * 0.18;
+        const gapBelowBar = m.H * 0.022;
+        const tileTop = barY + barH / 2 + gapBelowBar;
+        const bottomPad = h * 0.05;
+        let tileH = Math.min(h * 0.46, tileW * 1.2);
+        const maxTileH = (cy + h / 2 - bottomPad) - tileTop;
+        if (tileH > maxTileH) tileH = Math.max(h * 0.28, maxTileH);
+        const tileY = tileTop + tileH / 2;
         const totalW = n * tileW + (n - 1) * tileGap;
         tiles.forEach((item, i) => {
             const x = cx - totalW / 2 + tileW / 2 + i * (tileW + tileGap);
@@ -574,24 +558,29 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         }
 
         const textX = cx + w * 0.08;
-        this.add(this._text(textX, cy - h * 0.28, spec.label, {
+        const textMaxW = w * 0.5;
+        const label = this._text(textX, cy - h * 0.30, spec.label, {
             fontSize: `${m.fs(TYPE.statLabel)}px`,
             fontStyle: WEIGHT.heavy,
             color: spec.labelColor,
-        }).setOrigin(0.5, 0.5));
+        }).setOrigin(0.5, 0.5);
+        this._shrinkToWidth(label, textMaxW);
+        this.add(label);
 
         const value = this._text(textX, cy + h * 0.02, spec.value, {
             fontSize: `${m.fs(TYPE.statValue)}px`,
             fontStyle: WEIGHT.heavy,
             color: spec.valueColor,
         }).setOrigin(0.5, 0.5);
-        this._shrinkToWidth(value, w * 0.52);
+        this._shrinkToWidth(value, textMaxW);
         this.add(value);
 
-        this.add(this._text(textX, cy + h * 0.32, spec.sub, {
+        const sub = this._text(textX, cy + h * 0.34, spec.sub, {
             fontSize: `${m.fs(TYPE.statSub)}px`,
             color: C_MUTED,
-        }).setOrigin(0.5, 0.5));
+        }).setOrigin(0.5, 0.5);
+        this._shrinkToWidth(sub, textMaxW);
+        this.add(sub);
     }
 
     _drawActionButtons(m, cx, cy, innerW, btnH) {

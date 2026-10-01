@@ -9,20 +9,20 @@ import { CHOOSE_PRODUCT_KEYS as CP } from '../../config/chooseProductAssets.js';
 import { VIEW_CART_KEYS as VC } from '../../config/viewCartAssets.js';
 
 const TYPE = Object.freeze({
-    ribbon: 42,
-    subtitle: 22,
-    statTitle: 15,
-    statValue: 36,
-    section: 16,
-    name: 20,
-    badge: 13,
-    pack: 18,
-    price: 22,
-    qty: 22,
-    needed: 16,
-    button: 20,
-    link: 16,
-    note: 14,
+    ribbon: 46,
+    subtitle: 26,
+    statTitle: 17,
+    statValue: 40,
+    section: 18,
+    name: 24,
+    badge: 16,
+    pack: 22,
+    price: 26,
+    qty: 26,
+    needed: 20,
+    button: 28,
+    link: 22,
+    note: 18,
 });
 
 const C_WHITE = '#ffffff';
@@ -95,6 +95,7 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         this._onCheckout = onCheckout;
         this._onQtyChange = onQtyChange;
         this._onClose = onClose;
+        this._timerText = null;
         this._cartItems = cartItems.map((item) => ({
             ...item,
             qty: Math.max(0, Math.round(item.qty ?? 1)),
@@ -288,8 +289,8 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         subProbe.destroy();
 
         const btnMaxH = m.H * 0.064;
-        const linkH = m.H * 0.028;
-        const noteH = m.H * 0.022;
+        const linkH = m.H * 0.036;
+        const noteH = m.H * 0.028;
         const needVisible = Math.min(VISIBLE_NEEDED, Math.max(1, (data.stillNeeded?.length || 0)));
         const rightBody = sectionH + wellPadY
             + needVisible * needH + Math.max(0, needVisible - 1) * rowGap
@@ -361,7 +362,7 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
             { title: 'ITEMS FOUND', titleColor: C_PURPLE, fill: 0xF3E8FF, stroke: 0xD9BCFF, icon: VC.basket, value: data.itemsFound },
             { title: 'REMAINING COINS', titleColor: '#C47A12', fill: 0xFFF9E6, stroke: 0xFCDA8B, icon: MISSION_DESC_KEYS.coinIcon, value: `${data.coinsRemaining}` },
             { title: 'REMAINING ECO', titleColor: C_GREEN, fill: 0xEEF9E8, stroke: 0xBCE4A8, icon: CP.leaf, value: `${data.ecoRemaining}` },
-            { title: 'REMAINING TIME', titleColor: C_LINK, fill: 0xE8F4FF, stroke: 0xADD8FF, icon: MISSION_DESC_KEYS.timerIcon, value: data.timerLabel },
+            { title: 'REMAINING TIME', titleColor: C_LINK, fill: 0xE8F4FF, stroke: 0xADD8FF, icon: MISSION_DESC_KEYS.timerIcon, value: data.timerLabel, liveTimer: true },
         ];
         const gap = w * 0.016;
         const cardW = (w - gap * (cards.length - 1)) / cards.length;
@@ -392,6 +393,19 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         }).setOrigin(0, 0.5);
         this.add(title);
         this.add(value);
+        if (card.liveTimer) this._timerText = value;
+    }
+
+    setTimerRemaining (seconds) {
+        if (!this.visible || !this._timerText?.active) return;
+        setCauseText(this._timerText, formatClock(seconds));
+    }
+
+    dismiss () {
+        this.scene.tweens.killTweensOf(this);
+        this._timerText = null;
+        this.setVisible(false);
+        this.setAlpha(1);
     }
 
     _sectionPill (m, x, y, label) {
@@ -521,7 +535,7 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
 
     _drawStepper (m, parent, x, y, size, index) {
         const btn = size;
-        const gap = size * 0.15;
+        const gap = size * 0.55;
         const label = this._text(x, y, `${this._cartItems[index].qty}`, {
             fontSize: `${m.fs(TYPE.qty)}px`,
             fontStyle: WEIGHT.heavy,
@@ -584,7 +598,7 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
             this._drawNeededRow(m, list, 0, y, innerW, needH, item);
         });
 
-        this._drawActionButton(m, cx, continueY, innerW, btnMaxH, SP.blueButton, 'CONTINUE SHOPPING', NEC.cart, () => {
+        this._drawActionButton(m, cx, continueY, innerW, btnMaxH, SP.blueButton, 'CONTINUE', NEC.cart, () => {
             this._close(() => this._onContinue?.());
         });
 
@@ -639,7 +653,8 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         }).setOrigin(0.5, 0.5);
         this.add(labelText);
 
-        const innerMax = w * 0.62;
+        // Keep the label (and icon) inside the pill, clear of the rounded ends.
+        const innerMax = w - h * 1.35;
         if (iconKey && this.scene.textures.exists(iconKey)) {
             const iconS = h * 0.38;
             const icon = this.scene.add.image(cx, cy, iconKey);

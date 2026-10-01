@@ -11,7 +11,6 @@ const TYPE = Object.freeze({
     tab: 26,
     stepTitle: 30,
     stepBody: 22,
-    control: 18,
     learnTitle: 24,
     learnBody: 24,
     guideTitle: 24,
@@ -33,27 +32,25 @@ const C_MUTED = '#3F3A34';
 const TAB_BASE_NATIVE_W = 414;
 const TAB_BASE_NATIVE_H = 136;
 
+/** Shared label and icon color for every unselected tab. */
+const TAB_IDLE_COLOR = '#8B5A2B';
+const TAB_IDLE_TINT = 0x8B5A2B;
+
 const TABS = Object.freeze([
     Object.freeze({
         id: 'play',
         label: 'How to Play',
         icon: HTP.tabPlay,
-        idleColor: '#5B3FC9',
-        idleTint: 0x5B3FC9,
     }),
     Object.freeze({
         id: 'learn',
         label: "What you'll Learn",
         icon: HTP.tabLearn,
-        idleColor: '#C47A12',
-        idleTint: 0xC47A12,
     }),
     Object.freeze({
         id: 'guide',
         label: 'Game Guide',
         icon: HTP.tabGuide,
-        idleColor: '#8B5A2B',
-        idleTint: 0x8B5A2B,
     }),
 ]);
 
@@ -443,11 +440,9 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         ).setOrigin(0.5, 0.5);
         this.add(title);
 
-        // Height-led size keeps plates compact; width follows native aspect (no stretch).
         const tabH = m.H * 0.072;
-        const tabW = tabH * (TAB_BASE_NATIVE_W / TAB_BASE_NATIVE_H) * 1.08;
         const tabY = title.y + title.height / 2 + tabH / 2 + m.H * 0.014;
-        this._drawTabs(m, tabY, tabW, tabH);
+        this._drawTabs(m, tabY, tabH);
 
         const bodyTop = tabY + tabH / 2 + m.H * 0.022;
         const bodyBottom = panelY + panelH / 2 - m.H * 0.032;
@@ -464,28 +459,35 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         else this._drawGuide(m, box);
     }
 
-    _drawTabs(m, y, tabW, tabH) {
-        const gap = m.W * 0.01;
+    _drawTabs(m, y, tabH) {
+        const gap = m.W * 0.012;
+        const fontSize = `${m.fs(TYPE.tab)}px`;
+        const labels = TABS.map((tab) => this._text(0, 0, tab.label, {
+            fontSize,
+            fontStyle: WEIGHT.heavy,
+            color: tab.id === this._tab ? C_WHITE : TAB_IDLE_COLOR,
+        }).setOrigin(0, 0.5).setVisible(false));
+
+        const iconS = tabH * 0.48;
+        const contentGap = tabH * 0.16;
+        const sidePad = tabH * 0.38;
+        const widest = Math.max(...labels.map((label) => label.width));
+        const needed = sidePad * 2 + iconS + contentGap + widest;
+        const aspectW = tabH * (TAB_BASE_NATIVE_W / TAB_BASE_NATIVE_H);
+        const panelW = this._panel?.w ?? m.W * 0.78;
+        const maxTab = (panelW * 0.94 - gap * (TABS.length - 1)) / TABS.length;
+        const tabW = Math.min(Math.max(aspectW, needed), maxTab);
+
         const total = TABS.length * tabW + (TABS.length - 1) * gap;
         let x = m.cx - total / 2 + tabW / 2;
 
-        TABS.forEach((tab) => {
+        TABS.forEach((tab, i) => {
             const active = tab.id === this._tab;
             const baseKey = active ? HTP.tabBasePurple : HTP.tabBaseBrown;
-            const base = this.scene.add.image(x, y, baseKey);
-            base.setDisplaySize(tabW, tabH);
+            const base = this._slice(x, y, baseKey, tabW, tabH, Math.floor(TAB_BASE_NATIVE_H * 0.48));
             this.add(base);
 
-            const iconS = tabH * 0.52;
-            const contentGap = tabW * 0.04;
-            const sidePad = tabW * 0.1;
-            const label = this._text(0, 0, tab.label, {
-                fontSize: `${m.fs(TYPE.tab)}px`,
-                fontStyle: WEIGHT.heavy,
-                color: active ? C_WHITE : tab.idleColor,
-            }).setOrigin(0, 0.5);
-            this._shrinkToWidth(label, tabW - sidePad * 2 - iconS - contentGap);
-
+            const label = labels[i];
             const rowW = iconS + contentGap + label.width;
             const iconX = x - rowW / 2 + iconS / 2;
             const labelX = iconX + iconS / 2 + contentGap;
@@ -493,10 +495,11 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
             const icon = this.scene.add.image(iconX, y, tab.icon);
             this._fitContain(icon, iconS, iconS);
             if (active) icon.setTint(0xffffff);
-            else icon.setTint(tab.idleTint);
+            else icon.setTint(TAB_IDLE_TINT);
             this.add(icon);
 
             label.setPosition(labelX, y);
+            label.setVisible(true);
             this.add(label);
 
             const hit = this.scene.add.rectangle(x, y, tabW, tabH, 0, 0);
@@ -537,8 +540,12 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         const left = cx - w / 2;
         const top = cy - h / 2;
         const badgeS = Math.min(w, h) * 0.14;
-        this._round(left + badgeS * 0.55, top + badgeS * 0.55, badgeS, badgeS, card.badge, badgeS * 0.5);
-        this.add(this._text(left + badgeS * 0.55, top + badgeS * 0.55, card.n, {
+        const strokeW = Math.max(2, Math.round(2.5 * m.s));
+        const badgeGap = Math.max(strokeW * 2, badgeS * 0.48);
+        const badgeX = left + badgeGap + badgeS / 2;
+        const badgeY = top + badgeGap + badgeS / 2;
+        this._round(badgeX, badgeY, badgeS, badgeS, card.badge, badgeS * 0.5);
+        this.add(this._text(badgeX, badgeY, card.n, {
             fontSize: `${m.fs(TYPE.badge)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_WHITE,
@@ -627,9 +634,9 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
         const iconX = cx - w / 2 + iconW / 2;
         this._drawControlIcon(m, iconX, y, h, row.kind);
         this.add(this._text(iconX + iconW * 0.7, y, row.label, {
-            fontSize: `${m.fs(TYPE.control)}px`,
+            fontSize: `${m.fs(TYPE.stepBody)}px`,
             fontStyle: WEIGHT.heavy,
-            color: C_NAVY,
+            color: C_MUTED,
         }).setOrigin(0, 0.5));
     }
 
@@ -857,14 +864,5 @@ export default class HomeInfoPopup extends Phaser.GameObjects.Container {
 
     _wrap(str, maxWidth, style) {
         return wrapCause(this.scene, str, maxWidth, style);
-    }
-
-    _shrinkToWidth(text, maxW) {
-        let size = parseInt(text.style.fontSize, 10) || 16;
-        while (text.width > maxW && size > 11) {
-            size -= 1;
-            text.setFontSize(size);
-        }
-        return text;
     }
 }

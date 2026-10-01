@@ -8,7 +8,7 @@ import { MISSION_DESC_KEYS } from '../../config/missionDescriptionAssets.js';
 
 const TYPE = Object.freeze({
     ribbon: 36,
-    subtitle: 18,
+    subtitle: 24,
     requirement: 20,
     option: 20,
     name: 32,
@@ -17,9 +17,9 @@ const TYPE = Object.freeze({
     desc: 20,
     tag: 22,
     qty: 34,
-    footer: 22,
-    save: 16,
-    button: 22,
+    footer: 26,
+    save: 22,
+    button: 26,
 });
 
 const C_WHITE = '#ffffff';
@@ -136,6 +136,15 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         return wrapCause(this.scene, str, maxWidth, style);
     }
 
+    _shrinkToWidth(text, maxW) {
+        let size = parseInt(text.style.fontSize, 10) || 16;
+        while (text.width > maxW && size > 14) {
+            size -= 1;
+            text.setFontSize(size);
+        }
+        return text;
+    }
+
     _fitW(img, displayW) {
         img.setDisplaySize(displayW, displayW * (img.height / img.width));
         return img;
@@ -200,12 +209,15 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
             color: C_WHITE,
             align: 'center',
         };
-        this.add(this._text(
+        // Stay inside the flat band — the folded ends are outside ~68% of the art.
+        const ribbonText = this._text(
             m.cx,
-            ribbon.y,
-            this._wrap(`CHOOSE YOUR ${String(displayName).toUpperCase()}`, ribbon.displayWidth * 0.82, ribbonStyle),
+            ribbon.y - ribbon.displayHeight * 0.04,
+            `CHOOSE YOUR ${String(displayName).toUpperCase()}`,
             ribbonStyle,
-        ).setOrigin(0.5, 0.5));
+        ).setOrigin(0.5, 0.5);
+        this._shrinkToWidth(ribbonText, ribbon.displayWidth * 0.68);
+        this.add(ribbonText);
 
         let cy = panelTop + m.H * 0.086;
         const subStyle = {
@@ -221,25 +233,29 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         ).setOrigin(0.5, 0.5));
         cy += m.H * 0.04;
 
-        const pillW = Math.min(innerW * 0.46, m.W * 0.36);
-        const pillH = m.H * 0.048;
-        const pill = this._slice(m.cx, cy, MS.notPlayedBlue, pillW, pillH, 18);
-        this.add(pill);
-
         const reqQty = Math.max(1, requirementQty ?? 1);
         const reqLabel = `Requirement:- ${displayName} ${reqQty} ${qtyUnit(displayName, reqQty)}`;
-        this.add(this._text(m.cx, cy, reqLabel, {
+        const reqText = this._text(m.cx, cy, reqLabel, {
             fontSize: `${m.fs(TYPE.requirement)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_NAVY,
-        }).setOrigin(0.5, 0.5));
+        }).setOrigin(0.5, 0.5);
+        const pillPadX = m.W * 0.018;
+        const pillW = Math.min(reqText.width + pillPadX * 2, innerW * 0.55);
+        const pillH = m.H * 0.048;
+        const pill = this._slice(m.cx, cy, MS.notPlayedBlue, pillW, pillH, 18);
+        this.add(pill);
+        this.add(reqText);
         cy += pillH / 2 + m.H * 0.004;
 
         const footerH = m.H * 0.112;
         const footerPadX = panelW * 0.018;
         const footerPadBottom = m.H * 0.025;
         const footerY = panelY + panelH / 2 - footerH - footerPadBottom;
-        const cardsBottom = footerY + m.H * 0.032;
+        // Shift both cards up together; the requirement line still has room above them.
+        const cardLift = m.H * 0.022;
+        cy -= cardLift;
+        const cardsBottom = footerY + m.H * 0.032 - cardLift;
         const cardH = cardsBottom - cy;
         const cardGap = innerW * 0.028;
         const cardW = (innerW - cardGap) / 2;
@@ -251,7 +267,8 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
             this._drawOptionCard(m, cx, cy, cardW, cardH, variant, i);
         });
 
-        this._drawFooter(m, panelLeft + footerPadX, footerY, panelW - footerPadX * 2, footerH, {
+        const footerLift = m.H * 0.014;
+        this._drawFooter(m, panelLeft + footerPadX, footerY - footerLift, panelW - footerPadX * 2, footerH, {
             variants,
             coinsRemaining,
             ecoRemaining,
@@ -269,7 +286,7 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         const badgeW = w * 0.40;
         const badgeH = m.H * 0.048;
         const badgeX = -w / 2 + badgeW / 2 + w * 0.04;
-        const badgeY = m.H * 0.034;
+        const badgeY = m.H * 0.052;
         const badge = this._slice(badgeX, badgeY, isEco ? CP.optionGreen : CP.optionBlue, badgeW, badgeH, 28);
         wrap.add(badge);
         wrap.add(this._text(badgeX, badgeY, `Option ${index + 1}`, {
@@ -540,40 +557,69 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
             },
         ).setOrigin(0, 0.5));
 
-        const btnW = w * 0.22;
-        const btnH = h * 0.48;
-        const btnX = x + w * 0.82;
-        const btnY = y + h * 0.5;
-        const btn = this.scene.add.image(btnX, btnY, HOME_TEXTURE_KEYS.greenButton);
-        btn.setDisplaySize(btnW, btnH);
-        this.add(btn);
+        const maxW = w * 0.22;
+        const maxH = h * 0.56;
+        const wrap = this.scene.add.container(x + w * 0.79, y + h * 0.5);
+        this.add(wrap);
 
-        const label = this._text(btnX - btnW * 0.04, btnY, 'Add To Cart', {
+        const btn = this.scene.add.image(0, 0, HOME_TEXTURE_KEYS.greenButton);
+        this._fitContain(btn, maxW, maxH);
+        wrap.add(btn);
+
+        const label = this._text(0, 0, 'Add To Cart', {
             fontSize: `${m.fs(TYPE.button)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_WHITE,
         }).setOrigin(0.5, 0.5);
-        this.add(label);
+        wrap.add(label);
 
+        let cart = null;
         if (this.scene.textures.exists(CHECKOUT_TEXTURE_KEYS.cartIcon)) {
-            const cart = this.scene.add.image(label.x + label.width / 2 + m.W * 0.014, btnY, CHECKOUT_TEXTURE_KEYS.cartIcon);
-            this._fitContain(cart, btnW * 0.16, btnH * 0.5);
-            this.add(cart);
+            cart = this.scene.add.image(0, 0, CHECKOUT_TEXTURE_KEYS.cartIcon);
+            this._fitContain(cart, btn.displayHeight * 0.42, btn.displayHeight * 0.42);
+            wrap.add(cart);
         }
 
-        const hit = this.scene.add.rectangle(btnX, btnY, btnW, btnH, 0, 0);
-        hit.setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => btn.setDisplaySize(btnW * 1.04, btnH * 1.04));
-        hit.on('pointerout', () => btn.setDisplaySize(btnW, btnH));
-        hit.on('pointerup', () => this._confirm());
-        this.add(hit);
+        const gap = m.W * 0.01;
+        const innerMax = btn.displayWidth * 0.72;
+        const labelLift = btn.displayHeight * 0.06;
+        label.y = -labelLift;
+        if (cart) cart.y = -labelLift;
+        let fontSize = m.fs(TYPE.button);
+        const contentW = () => label.width + (cart ? gap + cart.displayWidth : 0);
+        while (contentW() > innerMax && fontSize > 12) {
+            fontSize -= 1;
+            label.setFontSize(fontSize);
+        }
+        const left = -contentW() / 2;
+        label.x = left + label.width / 2;
+        if (cart) cart.x = label.x + label.width / 2 + gap + cart.displayWidth / 2;
+
+        const hoverTo = (scale) => {
+            this.scene.tweens.killTweensOf(wrap);
+            this.scene.tweens.add({
+                targets: wrap,
+                scaleX: scale,
+                scaleY: scale,
+                duration: 140,
+                ease: 'Quad.easeOut',
+            });
+        };
+
+        btn.setInteractive({ useHandCursor: true });
+        btn.on('pointerover', () => hoverTo(1.05));
+        btn.on('pointerout', () => hoverTo(1));
+        btn.on('pointerup', () => this._confirm());
 
         this._addWrap = {
             _setEnabled: (enabled) => {
-                hit.disableInteractive();
-                if (enabled) hit.setInteractive({ useHandCursor: true });
-                btn.setAlpha(enabled ? 1 : 0.45);
-                label.setAlpha(enabled ? 1 : 0.45);
+                btn.disableInteractive();
+                if (enabled) btn.setInteractive({ useHandCursor: true });
+                else {
+                    this.scene.tweens.killTweensOf(wrap);
+                    wrap.setScale(1);
+                }
+                wrap.setAlpha(enabled ? 1 : 0.45);
             },
         };
     }

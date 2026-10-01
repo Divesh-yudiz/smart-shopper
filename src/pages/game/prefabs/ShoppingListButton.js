@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { UI_TEXTURE_KEYS } from '../config/componentAssets.js';
 import { addCauseText, setCauseText } from '../utils/gameText.js';
 
-const BTN_SIZE = 96;
+const BTN_SIZE = 124;
 
 /**
  * Clipboard toggle beside MY CART — expands / collapses the shopping list panel.
@@ -39,7 +39,7 @@ export default class ShoppingListButton extends Phaser.GameObjects.Container {
         this.add(bg);
 
         const icon = this.scene.add.image(0, -2, UI_TEXTURE_KEYS.listIcon);
-        const iconSize = s * 0.72;
+        const iconSize = s * 0.8;
         icon.setDisplaySize(iconSize, iconSize);
         this.add(icon);
         this._icon = icon;
@@ -47,8 +47,8 @@ export default class ShoppingListButton extends Phaser.GameObjects.Container {
         this._badge = this.scene.add.graphics();
         this.add(this._badge);
 
-        this._badgeText = addCauseText(this.scene, s * 0.28, -s * 0.28, '0/0', {
-            fontSize: `${Math.round(s * 0.18)}px`,
+        this._badgeText = addCauseText(this.scene, s * 0.32, -s * 0.32, '0/0', {
+            fontSize: `${Math.round(s * 0.16)}px`,
             fontStyle: 'bold',
             color: '#ffffff',
             align: 'center',
@@ -145,13 +145,18 @@ export default class ShoppingListButton extends Phaser.GameObjects.Container {
         setCauseText(this._badgeText, `${d}/${t}`);
 
         const s = this._size;
-        const br = Math.max(12, s * 0.16);
-        const bx = s * 0.28;
-        const by = -s * 0.28;
+        const fontSize = Math.round(s * 0.16);
+        this._badgeText.setFontSize(fontSize);
+        // Circle grows with the count, plus a little padding so the digits don't touch the edge.
+        const pad = Math.max(4, s * 0.032);
+        const br = Math.max(this._badgeText.width, this._badgeText.height) / 2 + pad;
+        const bx = s * 0.32;
+        const by = -s * 0.32;
+        this._badgeText.setPosition(bx, by - fontSize * 0.06);
         this._badge.clear();
         this._badge.fillStyle(0xe05050, 1);
         this._badge.fillCircle(bx, by, br);
-        this._badge.lineStyle(2, 0xffffff, 0.9);
+        this._badge.lineStyle(Math.max(2, s * 0.025), 0xffffff, 0.9);
         this._badge.strokeCircle(bx, by, br);
         this._badgeText.setVisible(t > 0);
         this._badge.setVisible(t > 0);

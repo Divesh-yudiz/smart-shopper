@@ -18,7 +18,7 @@ const CART_PANEL_NATIVE_H = 136;
 /** Keep in sync with MyCartPanel PANEL_HEIGHT_SCALE. */
 const CART_PANEL_HEIGHT_SCALE = 0.76;
 const TIMER_DISPLAY_W = 240;
-const SHOPPING_LIST_BTN_SIZE = 96;
+const SHOPPING_LIST_BTN_SIZE = 124;
 
 const RIGHT_MARGIN = 28;
 const TIMER_X = config.width - RIGHT_MARGIN - TIMER_DISPLAY_W / 2;
@@ -28,8 +28,10 @@ const SHOPPING_LIST_Y = config.centerY - 36;
 
 const CART_Y = config.height - 10;
 const CART_H = CART_PANEL_NATIVE_H * (CART_PANEL_W / CART_PANEL_NATIVE_W) * CART_PANEL_HEIGHT_SCALE;
-/** Right of MY CART bar, vertically centered with the cart body. */
-const SHOPPING_LIST_BTN_X = config.centerX + CART_PANEL_W / 2 + 18 + SHOPPING_LIST_BTN_SIZE / 2;
+const CART_LIST_GAP = 18;
+/** Cart bar and clipboard button share one center, so the pair sits in the middle of the screen. */
+const CART_X = config.centerX - (CART_LIST_GAP + SHOPPING_LIST_BTN_SIZE) / 2;
+const SHOPPING_LIST_BTN_X = CART_X + CART_PANEL_W / 2 + CART_LIST_GAP + SHOPPING_LIST_BTN_SIZE / 2;
 const SHOPPING_LIST_BTN_Y = CART_Y - CART_H / 2;
 
 const MISSION_TITLE_W = 520;
@@ -52,6 +54,7 @@ export const HUD_LAYOUT = Object.freeze({
     timerX: TIMER_X,
     shoppingListWidth: SHOPPING_LIST_W,
     cartPanelWidth: CART_PANEL_W,
+    cartX: CART_X,
     cartY: CART_Y,
     shoppingListBtnX: SHOPPING_LIST_BTN_X,
     shoppingListBtnY: SHOPPING_LIST_BTN_Y,

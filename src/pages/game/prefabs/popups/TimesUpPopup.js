@@ -241,7 +241,7 @@ export default class TimesUpPopup extends Phaser.GameObjects.Container {
         const ribbon = this.scene.add.image(m.cx, ribbonBaseY - ribbonLift, NEC.ribbon);
         this._fitW(ribbon, ribbonW);
         this.add(ribbon);
-        this.add(this._text(ribbon.x, ribbon.y - ribbon.displayHeight * 0.04, data.title, {
+        this.add(this._text(ribbon.x, ribbon.y - ribbon.displayHeight * 0.1, data.title, {
             fontSize: `${m.fs(TYPE.ribbon)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_WHITE,

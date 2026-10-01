@@ -10,6 +10,8 @@ const PANEL_DISPLAY_W = 520;
 const TITLE_COLOR = '#FFD24A';
 const SUBTITLE_COLOR = '#ffffff';
 const STROKE_COLOR = '#2a1408';
+/** Keep title and mission name inset from the plaque edges and corner leaves. */
+const TEXT_SIDE_PAD_RATIO = 0.17;
 
 /**
  * Top-center wooden mission plaque — "Mission N" + mission name.
@@ -70,11 +72,15 @@ export default class MissionTitlePanel extends Phaser.GameObjects.Container {
         const name = String(missionName || '').trim() || 'Shopping Mission';
         setCauseText(this._subtitleText, name);
 
-        // Keep long names inside the wood inset.
-        const maxW = this._w * 0.78;
-        this._subtitleText.setScale(1);
-        if (this._subtitleText.width > maxW) {
-            this._subtitleText.setScale(maxW / this._subtitleText.width);
+        const maxW = this._w * (1 - TEXT_SIDE_PAD_RATIO * 2);
+        this._fitToWidth(this._titleText, maxW);
+        this._fitToWidth(this._subtitleText, maxW);
+    }
+
+    _fitToWidth (text, maxW) {
+        text.setScale(1);
+        if (text.width > maxW) {
+            text.setScale(maxW / text.width);
         }
     }
 }

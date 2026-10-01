@@ -297,8 +297,19 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         hit.setInteractive({ useHandCursor: true });
         this.scene.input.setDraggable(hit);
         this.add(hit);
+        const hitHomeX = hit.x;
+        const hitHomeY = hit.y;
+        const parkHit = () => {
+            hit.x = hitHomeX;
+            hit.y = hitHomeY;
+        };
 
-        hit.on('pointerdown', () => {
+        hit.on('pointerdown', (ptr) => {
+            this._pressOnCross = this._slotIndexAtCross(ptr.worldX, ptr.worldY) >= 0;
+            if (this._pressOnCross) {
+                this._isDragging = false;
+                return;
+            }
             this.scene.tweens.killTweensOf(this._scrollSnapProxy);
             this._isDragging = true;
             this._scrollVelocity = 0;
@@ -307,6 +318,10 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         });
 
         hit.on('drag', (_ptr, dragX) => {
+            if (this._pressOnCross) {
+                parkHit();
+                return;
+            }
             if (!this._isDragging) return;
             const now = this.scene.time.now;
             const dt = (now - this._lastDragTime) / 1000;
@@ -333,8 +348,24 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
             }
         };
 
-        hit.on('pointerup', endDrag);
-        hit.on('dragend', endDrag);
+        hit.on('pointerup', (ptr) => {
+            if (this._pressOnCross) {
+                this._pressOnCross = false;
+                this._isDragging = false;
+                parkHit();
+                const slotIdx = this._slotIndexAtCross(ptr.worldX, ptr.worldY);
+                if (slotIdx >= 0) this._removeItemAtSlot(slotIdx);
+                return;
+            }
+            endDrag();
+        });
+        hit.on('dragend', () => {
+            if (this._pressOnCross) {
+                parkHit();
+                return;
+            }
+            endDrag();
+        });
 
         hit.on('wheel', (_ptr, _dx, dy) => {
             this.scene.tweens.killTweensOf(this._scrollSnapProxy);
@@ -496,12 +527,30 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         return g;
     }
 
+    _slotIndexAtCross(worldX, worldY) {
+        const r = Math.max(6, this._slotSize * 0.14) + 6;
+        for (let i = 0; i < this._slotViews.length; i++) {
+            const cross = this._slotViews[i].crossBtn;
+            if (!cross?.visible) continue;
+            const mat = cross.getWorldTransformMatrix();
+            const dx = worldX - mat.tx;
+            const dy = worldY - mat.ty;
+            if (dx * dx + dy * dy <= r * r) return i;
+        }
+        return -1;
+    }
+
     _removeItemAtSlot(slotIdx) {
+        if (this._removePending) return;
         const itemIndex = Math.floor(this._scrollOffset) + slotIdx;
-        if (itemIndex < 0 || itemIndex >= this._items.length) return;
-        const [removed] = this._items.splice(itemIndex, 1);
-        this._refresh();
-        this._onItemRemoved(removed);
+        const product = this._items[itemIndex];
+        if (!product) return;
+        // Leave the slot filled until the remove API succeeds.
+        this._removePending = true;
+        Promise.resolve(this._onItemRemoved?.(product))
+            .finally(() => {
+                this._removePending = false;
+            });
     }
 
     destroy(fromScene) {

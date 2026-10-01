@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { UI_TEXTURE_KEYS } from '../config/componentAssets.js';
 import { getShelfRowsForRack } from '../config/shelfLayouts.js';
 import { addCauseText } from '../utils/gameText.js';
 import { getMarketLayout, normalizeRowBottomSpaces } from '../utils/rackConfig.js';
@@ -23,17 +22,51 @@ const DEFAULT_LAYOUT = {
     shelfHeightFactor: 0.88,
     iconAspect: 1,
     iconSlotFill: 0.92,
+    keepAspect: false,
     spreadFullBay: false,
     rowSidePad: 24,
 };
 
 const PROD_GAP = 6;
 
-/** Price-Base.png */
-const PRICE_TAG_NATIVE_W = 96;
-const PRICE_TAG_NATIVE_H = 37;
+/** Wide enough for names like "Dish Washing Soap" at full label size. */
+const PRICE_TAG_W = 196;
+/**
+ * Produce bays show three products on one shelf, each with its own plaque.
+ * Narrow enough that those three sit side by side without overlapping.
+ */
+const PRICE_TAG_ITEM_W = 112;
+const PRICE_TAG_H = 36;
+const PRICE_TAG_RADIUS = 12;
+/** Light oak plaque — matches the shelf timber without burying the name. */
+const PRICE_TAG_WOOD = 0xE6BE74;
+const PRICE_TAG_WOOD_EDGE = 0x8C5528;
+const PRICE_TAG_SALE = 0xFFD24A;
+const PRICE_TAG_SALE_EDGE = 0xC98412;
 /** Default hang below shelf plank; lower = up, higher = down (per-row override in shelfLayouts.js) */
 const DEFAULT_PRICE_TAG_OFFSET_Y = 10;
+
+function paintShelfTag (graphics, fill, edge, width = PRICE_TAG_W) {
+    graphics.clear();
+    graphics.fillStyle(0x5A3818, 0.28);
+    graphics.fillRoundedRect(
+        -width / 2 + 1,
+        -PRICE_TAG_H / 2 + 2,
+        width,
+        PRICE_TAG_H,
+        PRICE_TAG_RADIUS,
+    );
+    graphics.fillStyle(fill, 1);
+    graphics.fillRoundedRect(-width / 2, -PRICE_TAG_H / 2, width, PRICE_TAG_H, PRICE_TAG_RADIUS);
+    graphics.lineStyle(2, edge, 1);
+    graphics.strokeRoundedRect(
+        -width / 2 + 1,
+        -PRICE_TAG_H / 2 + 1,
+        width - 2,
+        PRICE_TAG_H - 2,
+        PRICE_TAG_RADIUS - 1,
+    );
+}
 
 function shelfLabelText (product, rowCfg) {
     return rowCfg?.label ?? product?.label ?? '-';
@@ -57,6 +90,7 @@ function buildGridLayout (
         shelfHeightFactor = 0.88,
         iconAspect = 1,
         iconSlotFill = 0.92,
+        keepAspect = false,
         spreadFullBay = false,
         rowSidePad = 24,
         shelfPlankOffset,
@@ -107,6 +141,7 @@ function buildGridLayout (
         shelfHeightFactor,
         iconAspect,
         iconSlotFill,
+        keepAspect,
         spreadFullBay,
         rowSidePad,
         shelfPlankOffset,
@@ -176,7 +211,67 @@ export default class ProductRack extends Phaser.GameObjects.Container {
 
         this._tagLayer = scene.add.container(0, 0);
         this.add(this._tagLayer);
+        this._shelfTags = [];
         this._flushShelfPriceTags();
+    }
+
+    /**
+     * Hang a SALE tag on the left of a flash-sale item's shelf row.
+     * @returns {{x:number,y:number}|null} position in this rack's local space
+     */
+    highlightSaleProduct (sItemKey) {
+        if (!sItemKey) return null;
+        const matches = this._productCards.filter(({ product }) => (
+            product?.sItemKey === sItemKey || product?.key === sItemKey
+        ));
+        if (!matches.length) return null;
+
+        if (!this._saleHighlighted) {
+            this._saleHighlighted = true;
+            this._addSaleBadge(matches);
+            this._markSalePriceTags(sItemKey);
+        }
+
+        const first = matches[0].container;
+        return { x: first.x, y: first.y };
+    }
+
+    _addSaleBadge (matches) {
+        const w = 92;
+        const h = 34;
+        // Product cards live in this rack's local space (x grows to the right).
+        // The sprite origin is the shelf floor, so the row's left edge is the
+        // leftmost card minus half its icon width.
+        let left = matches[0].container;
+        for (const { container } of matches) {
+            if (container.x < left.x) left = container;
+        }
+        const img = left.list?.find((child) => child?.type === 'Image');
+        const iconW = Math.abs(img?.displayWidth ?? 0);
+        const iconH = Math.abs(img?.displayHeight ?? 0);
+        // Keep the tag on this row: a little right of the first item and above its middle.
+        const x = left.x - iconW / 2 + 34;
+        const y = left.y - iconH / 2 - 32;
+
+        const badge = this.scene.add.container(x, y);
+        const bg = this.scene.add.graphics();
+        bg.fillStyle(0x3CC45A, 1);
+        bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+        const label = addCauseText(this.scene, 0, -1, 'SALE', {
+            fontSize: '18px',
+            fontStyle: '800',
+            color: '#ffffff',
+        });
+        label.setOrigin(0.5, 0.5);
+        badge.add([bg, label]);
+        this.add(badge);
+    }
+
+    _markSalePriceTags (sItemKey) {
+        for (const entry of this._shelfTags ?? []) {
+            if (entry.sItemKey !== sItemKey) continue;
+            entry.paint?.(PRICE_TAG_SALE, PRICE_TAG_SALE_EDGE);
+        }
     }
 
     _rowSpan (layout) {
@@ -322,7 +417,14 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         if (product.textureKey && this.scene.textures.exists(product.textureKey)) {
             const img = this.scene.add.image(0, 0, product.textureKey);
             img.setOrigin(0.5, 1);
-            img.setDisplaySize(iconW, iconH);
+            const keepAspect = rowOverrides.keepAspect ?? this._layout.keepAspect;
+            if (keepAspect && img.width > 0 && img.height > 0) {
+                const fit = Math.min(iconW / img.width, iconH / img.height);
+                img.setScale(fit);
+                img.setAngle(0);
+            } else {
+                img.setDisplaySize(iconW, iconH);
+            }
             container.add(img);
         } else if (product.textureKey) {
             console.warn(`[ProductRack] Texture not loaded: ${product.textureKey}`);
@@ -392,30 +494,35 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         this._pendingShelfTags = [];
     }
 
-    /** One hanging tag per shelf row — Price-Base.png, centered (reference). */
+    /** Wooden nameplate — one per shelf row, or one per product on produce rows. */
     _createShelfRowPriceTag ({ centerX, shelfY, product, rowCfg }) {
         const text = shelfLabelText(product, rowCfg);
         const tagOffsetY = rowCfg.priceTagOffsetY ?? DEFAULT_PRICE_TAG_OFFSET_Y;
         const tagY = shelfY + tagOffsetY;
+        const perItem = rowCfg.priceTagPerItem === true || this._rackId === 'fruits';
+        const tagW = perItem ? PRICE_TAG_ITEM_W : PRICE_TAG_W;
 
         const tagContainer = this.scene.add.container(centerX, tagY);
 
-        const tag = this.scene.add.image(0, 0, UI_TEXTURE_KEYS.shelfPriceBase);
-        tag.setOrigin(0.5, 0.5);
-        tag.setDisplaySize(PRICE_TAG_NATIVE_W, PRICE_TAG_NATIVE_H);
+        const tag = this.scene.add.graphics();
+        const paint = (fill, edge) => paintShelfTag(tag, fill, edge, tagW);
+        paint(PRICE_TAG_WOOD, PRICE_TAG_WOOD_EDGE);
         tagContainer.add(tag);
 
         const label = addCauseText(this.scene, 0, -1, text, {
-            fontSize: '14px',
+            fontSize: '15px',
             fontStyle: 'bold',
-            color: '#1e3a5f',
+            color: '#3A2412',
             align: 'center',
         });
         label.setOrigin(0.5, 0.5);
-        const maxTextW = PRICE_TAG_NATIVE_W - 10;
+        const maxTextW = tagW - 16;
         if (label.width > maxTextW) label.setScale(maxTextW / label.width);
         tagContainer.add(label);
 
+        const sItemKey = product?.sItemKey ?? product?.key ?? null;
+        tagContainer.setData('sItemKey', sItemKey);
+        this._shelfTags.push({ sItemKey, label, plate: tag, paint });
         this._tagLayer.add(tagContainer);
     }
 }

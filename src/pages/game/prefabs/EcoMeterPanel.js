@@ -64,9 +64,9 @@ export default class EcoMeterPanel extends Phaser.GameObjects.Container {
         this._statusMaxW = Math.max(80, textRight - textX);
 
         const titleSize = Math.max(17, Math.round(h * 0.17));
-        const bodySize = Math.max(11, Math.round(h * 0.105));
+        const bodySize = Math.max(14, Math.round(h * 0.145));
 
-        this.add(addCauseText(scene, textX, topY - bodySize * 0.55, 'Eco Meter', {
+        this.add(addCauseText(scene, textX, topY - h * 0.06, 'Eco Meter', {
             fontSize: `${titleSize}px`,
             fontStyle: 'bold',
             color: C_TITLE,
@@ -76,7 +76,7 @@ export default class EcoMeterPanel extends Phaser.GameObjects.Container {
         this._statusText = addCauseText(
             scene,
             textX,
-            topY + titleSize * 0.48,
+            topY + h * 0.11,
             this._statusLabel(),
             {
                 fontSize: `${bodySize}px`,

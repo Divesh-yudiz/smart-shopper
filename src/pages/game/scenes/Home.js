@@ -6,13 +6,13 @@ import MissionPopup from '../prefabs/popups/MissionPopup.js';
 import WelcomeBackPopup from '../prefabs/popups/WelcomeBackPopup.js';
 import config from '../utils/config.js';
 import { addCauseText, setCauseText, wrapCause } from '../utils/gameText.js';
-import { fetchMissions, fetchMissionBrief, buildGameConfigFromMission, startMission, setGameId, mergeStartSessionIntoConfig, checkoutGame } from '../../../utils/gameApi.js';
+import { fetchMissions, fetchMissionBrief, buildGameConfigFromMission, startMission, setGameId, setMissionId, mergeStartSessionIntoConfig, checkoutGame, fetchCart, applyCartCollectedToEntries, buildCartItemsFromApi, buildShoppingListEntries } from '../../../utils/gameApi.js';
 import { LOCAL_GAME_ID, LOCAL_MISSIONS } from '../config/missionsConfig.js';
 
 const SAVE_KEY = 'ss_gameState';
 
 const T_NAVY = '#1e3a5f';
-const T_MUTED = '#4a6280';
+const T_MUTED = '#243B58';
 const T_WHITE = '#ffffff';
 const T_CARD_SUB = '#1e3a5f';
 
@@ -97,7 +97,66 @@ export default class Home extends Phaser.Scene {
         }
     }
 
-    _showWelcomeBack (saved) {
+    async _showWelcomeBack (saved) {
+        const missionId = saved?.gameConfig?.missionId ?? saved?.gameConfig?._id ?? null;
+        if (missionId) {
+            try {
+                if (saved?.gameConfig?.gameId) setGameId(saved.gameConfig.gameId);
+                setMissionId(missionId);
+                const json = await fetchCart(missionId);
+                if (!this.sys?.isActive()) return;
+                this._applyCartToSaved(saved, json?.data ?? json ?? {});
+            } catch (err) {
+                console.error('[Home] Welcome back cart fetch failed:', err);
+            }
+        }
+        if (!this.sys?.isActive()) return;
+        this._welcomeBack.open(this._welcomeBackView(saved));
+    }
+
+    /**
+     * Overlay GET /cart onto the unfinished session.
+     * Coins, eco, and found items come from the server. The timer stays local.
+     */
+    _applyCartToSaved (saved, data) {
+        const session = data?.session ?? data ?? {};
+        const aCartItems = data?.aCartItems ?? session.aCartItems;
+        const cfg = saved.gameConfig ?? (saved.gameConfig = {});
+
+        if (session.nCoinsBudget != null) cfg.budget = session.nCoinsBudget;
+        if (session.nCoinsRemaining != null) {
+            cfg.coinsRemaining = session.nCoinsRemaining;
+            saved.budgetRemaining = session.nCoinsRemaining;
+        }
+        if (session.nEcoLimit != null) cfg.ecoMeterMax = session.nEcoLimit;
+        const ecoLeft = session.nEcoRemaining ?? session.nEcoMeter ?? session.nCurrentEcoMeter;
+        if (ecoLeft != null) {
+            cfg.ecoMeter = ecoLeft;
+            saved.ecoValue = ecoLeft;
+        }
+
+        if (Array.isArray(aCartItems)) {
+            cfg.initialCartItems = aCartItems;
+            const baseEntries = saved.shoppingEntries?.length
+                ? saved.shoppingEntries
+                : (cfg.shoppingList?.length ? buildShoppingListEntries(cfg.shoppingList) : null);
+            if (baseEntries) {
+                saved.shoppingEntries = applyCartCollectedToEntries(baseEntries, aCartItems);
+            }
+            saved.cartItems = buildCartItemsFromApi(aCartItems);
+        }
+
+        try {
+            const stored = this._loadSavedState() ?? {};
+            sessionStorage.setItem(SAVE_KEY, JSON.stringify({
+                ...stored,
+                ...saved,
+                timerRemaining: stored.timerRemaining ?? saved.timerRemaining,
+            }));
+        } catch { /* storage full or unavailable */ }
+    }
+
+    _welcomeBackView (saved) {
         const cfg = saved?.gameConfig ?? {};
         const entries = (saved?.shoppingEntries ?? []).filter(Boolean);
         const itemsFound = entries.filter((e) => (e.collected ?? 0) >= (e.required ?? 1)).length;
@@ -122,7 +181,7 @@ export default class Home extends Phaser.Scene {
             }))
             : undefined;
 
-        this._welcomeBack.open({
+        return {
             missionOrder: cfg.missionOrder ?? 1,
             missionName: cfg.category || cfg.sName || 'Family Grocery Basket',
             missionDescription: cfg.description
@@ -136,12 +195,10 @@ export default class Home extends Phaser.Scene {
             coinsMax,
             ecoLeft,
             ecoMax,
-            onInfo: () => this._toggleInfo(),
             onResume: () => this._resumeMission(saved),
             onNewMission: () => this._startNewMission(saved),
-            onBack: () => {},
             onClose: () => {},
-        });
+        };
     }
 
     /**
@@ -284,7 +341,7 @@ export default class Home extends Phaser.Scene {
             color: T_NAVY,
         }).setOrigin(0.5, 0.5));
 
-        const taglineStyle = { fontSize: `${m.fs(28)}px`, color: T_MUTED, align: 'center' };
+        const taglineStyle = { fontSize: `${m.fs(28)}px`, fontStyle: '500', color: T_MUTED, align: 'center' };
         this._add(this._text(
             m.cx,
             m.y(0.522),
@@ -292,18 +349,24 @@ export default class Home extends Phaser.Scene {
             taglineStyle,
         ).setOrigin(0.5, 0.5));
 
-        const btnW = m.W * 0.248;
+        const btnW = m.W * 0.20;
         const cta = this.add.container(m.cx, m.y(0.600));
         const btn = this.add.image(0, 0, HOME_TEXTURE_KEYS.greenButton);
+        btn.setOrigin(0.5, 0.5);
         this._fitW(btn, btnW);
         btn.setInteractive({ useHandCursor: true });
         cta.add(btn);
 
         const btnLabel = this._text(0, 0, 'Select Mission', {
-            fontSize: `${m.fs(38)}px`,
+            fontSize: `${m.fs(44)}px`,
             fontStyle: 'bold',
             color: T_WHITE,
-        }).setOrigin(0.5, 0.5);
+            align: 'center',
+        });
+        btnLabel.setOrigin(0.5, 0.5);
+        // Cause's glyph box sits below its visual center, so lift the label
+        // until the letters sit in the middle of the button.
+        btnLabel.setPosition(0, -btn.displayHeight * 0.065);
         cta.add(btnLabel);
 
         btn.on('pointerover', () => cta.setScale(1.05));
@@ -323,6 +386,7 @@ export default class Home extends Phaser.Scene {
 
         this._challengeLink = this._text(m.cx, m.y(0.668), 'Choose from 5 shopping challenges.', {
             fontSize: `${m.fs(24)}px`,
+            fontStyle: '500',
             color: T_MUTED,
         }).setOrigin(0.5, 0.5);
         this._challengeLink.setInteractive({ useHandCursor: true });

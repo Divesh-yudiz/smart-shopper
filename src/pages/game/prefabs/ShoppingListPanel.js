@@ -4,7 +4,7 @@ import {
     SHOPPING_LIST_ENTRIES,
     SHOPPING_LIST_SLOT_COUNT,
 } from '../config/shoppingListConfig.js';
-import { addCauseText, setCauseText } from '../utils/gameText.js';
+import { addCauseText, setCauseText, wrapCause } from '../utils/gameText.js';
 
 const PANEL_NATIVE_W = 259;
 const PANEL_DISPLAY_W = 400;
@@ -365,22 +365,19 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
             view.rowContainer.setVisible(true);
 
             const complete = entry.collected >= entry.required;
-            setCauseText(view.labelText, this._formatLabel(entry));
+            const labelStyle = {
+                fontSize: `${view.labelBaseSize}px`,
+                fontStyle: 'bold',
+            };
+            setCauseText(
+                view.labelText,
+                wrapCause(this.scene, this._formatLabel(entry), view.labelMaxW, labelStyle),
+            );
             view.labelText.setColor(complete ? LABEL_DONE : LABEL_COLOR);
             view.labelText.setFontSize(view.labelBaseSize);
-            this._fitLabelWidth(view.labelText, view.labelMaxW);
             this._fitIcon(view.icon, entry.textureKey, view.iconSize);
             this._drawBullet(view, complete);
         });
-    }
-
-    _fitLabelWidth (text, maxW) {
-        let size = parseInt(text.style.fontSize, 10) || 16;
-        while (text.width > maxW && size > 11) {
-            size -= 1;
-            text.setFontSize(size);
-        }
-        return text;
     }
 
     getProgress () {

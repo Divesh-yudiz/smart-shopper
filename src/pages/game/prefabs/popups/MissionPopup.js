@@ -11,14 +11,14 @@ const TYPE = Object.freeze({
     heroTitle: 34,
     heading: 38,
     body: 22,
-    statLabel: 16,
-    statValue: 50,
-    statSub: 14,
+    statLabel: 22,
+    statValue: 58,
+    statSub: 18,
     itemName: 24,
     itemQty: 19,
     tipsTitle: 22,
     tipsBody: 18,
-    button: 23,
+    button: 26,
     link: 17,
 });
 
@@ -88,6 +88,17 @@ function itemIconKey(item, index) {
     if (/(cola|juice|drink|soda|water)/.test(hay)) return K.milkIcon;
     if (/(cookie|wafer|cake|donut|bread)/.test(hay)) return K.breadIcon;
     return ITEM_ICON_FALLBACKS[index % ITEM_ICON_FALLBACKS.length];
+}
+
+/** Stable Phaser key for a shopping-list image URL. */
+function listImageTextureKey(url) {
+    let hash = 2166136261;
+    const s = String(url);
+    for (let i = 0; i < s.length; i += 1) {
+        hash ^= s.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `ms_list_${(hash >>> 0).toString(36)}`;
 }
 
 /**
@@ -181,6 +192,17 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
 
     _wrap(str, maxWidth, style) {
         return wrapCause(this.scene, str, maxWidth, style);
+    }
+
+    /** Shrink until the label stays within maxLines, so it doesn't cover the product. */
+    _fitWrapped(str, maxWidth, style, maxLines) {
+        let size = parseInt(style.fontSize, 10) || 16;
+        let text = this._wrap(str, maxWidth, { ...style, fontSize: `${size}px` });
+        while (text.split('\n').length > maxLines && size > 13) {
+            size -= 1;
+            text = this._wrap(str, maxWidth, { ...style, fontSize: `${size}px` });
+        }
+        return { text, fontSize: `${size}px` };
     }
 
     _text(x, y, message, style) {
@@ -370,13 +392,11 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         const tipsY = y + h - tipsH;
         const listAvail = Math.max(m.H * 0.12, tipsY - tipsGap - cy);
 
-        const items = data.items.slice(0, 5);
-        const listSlots = 5;
-        const listGap = w * 0.012;
-        const itemW = (w - listGap * (listSlots - 1)) / listSlots;
-        const itemH = Math.min(m.H * 0.175, listAvail);
+        const items = (data.items || []).filter(Boolean).slice(0, 6);
+        const listGap = w * 0.01;
+        const itemH = Math.min(m.H * 0.21, listAvail);
 
-        this._listLayout = { m, x, y: cy, itemW, itemH, listGap };
+        this._listLayout = { m, x, y: cy, listW: w, itemH, listGap };
         this._listItems = this.scene.add.container(0, 0);
         this.add(this._listItems);
 
@@ -393,10 +413,12 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
      */
     revealShoppingList(items = [], { animate = true } = {}) {
         if (!this.visible || !this._listLayout) return;
-        this._populateListItems((items || []).filter(Boolean).slice(0, 5), { animate });
+        this._populateListItems((items || []).filter(Boolean).slice(0, 6), { animate });
     }
 
     _populateListItems(items, { animate = false } = {}) {
+        this._listImageGen = (this._listImageGen ?? 0) + 1;
+        this._listImageJobs = [];
         if (this._listItems) {
             this._listItems.removeAll(true);
         } else {
@@ -404,7 +426,9 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             this.add(this._listItems);
         }
 
-        const { m, x, y, itemW, itemH, listGap } = this._listLayout;
+        const { m, x, y, listW, itemH, listGap } = this._listLayout;
+        const count = Math.max(items.length, 1);
+        const itemW = (listW - listGap * (count - 1)) / count;
         items.forEach((item, i) => {
             const card = this._drawListItem(
                 m,
@@ -430,6 +454,57 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
                 ease: 'Back.easeOut',
             });
         });
+        this._loadListImages();
+    }
+
+    /**
+     * Shopping-list art comes from each item's sImage. Local icons are only a
+     * stand-in until that URL is on the texture cache (or when the URL is missing).
+     */
+    _loadListImages() {
+        const jobs = this._listImageJobs ?? [];
+        this._listImageJobs = [];
+        if (!jobs.length || !this.scene) return;
+
+        const gen = this._listImageGen;
+        const scene = this.scene;
+        const applyAll = () => {
+            if (gen !== this._listImageGen) return;
+            jobs.forEach((job) => job.apply());
+        };
+
+        const missing = [];
+        const queued = new Set();
+        jobs.forEach((job) => {
+            if (scene.textures.exists(job.key)) return;
+            if (queued.has(job.key)) return;
+            queued.add(job.key);
+            missing.push(job);
+        });
+        if (!missing.length) {
+            applyAll();
+            return;
+        }
+
+        const start = () => {
+            if (gen !== this._listImageGen || !this.scene) return;
+            scene.load.setCORS('anonymous');
+            missing.forEach(({ key, url }) => {
+                if (!scene.textures.exists(key)) scene.load.image(key, url);
+            });
+            if (!scene.load.list.size) {
+                applyAll();
+                return;
+            }
+            scene.load.once(Phaser.Loader.Events.COMPLETE, applyAll);
+            scene.load.start();
+        };
+
+        if (scene.load.isLoading()) {
+            scene.load.once(Phaser.Loader.Events.COMPLETE, start);
+        } else {
+            start();
+        }
     }
 
     _drawHeading(m, x, y, w, label) {
@@ -456,7 +531,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         card.setDisplaySize(w, h);
         this.add(card);
 
-        const iconS = Math.min(w * 0.15, h * 0.24);
+        const iconS = Math.min(w * 0.17, h * 0.28);
         const headerY = y + h * 0.22;
         const labelStyle = {
             fontSize: `${m.fs(TYPE.statLabel)}px`,
@@ -517,16 +592,50 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             stroke: C_PURPLE,
             strokeThickness: 1.25,
         };
-        card.add(this._text(w / 2, h * 0.07, this._wrap(name, w * 0.92, nameStyle), nameStyle).setOrigin(0.5, 0));
+        const fittedName = this._fitWrapped(name, w * 0.9, nameStyle, 2);
+        const nameY = h * 0.05;
+        const nameText = this._text(w / 2, nameY, fittedName.text, {
+            ...nameStyle,
+            fontSize: fittedName.fontSize,
+        }).setOrigin(0.5, 0);
+        card.add(nameText);
 
+        const qtyFs = m.fs(TYPE.itemQty);
+        const qtyY = h - Math.max(h * 0.075, qtyFs * 0.7);
+        const nameGap = Math.max(m.fs(10), h * 0.07);
+        const imageTop = nameY + nameText.height + nameGap;
+        const imageBottom = qtyY - qtyFs * 0.7;
+        const maxW = w * 0.68;
+        const maxH = Math.max(h * 0.22, imageBottom - imageTop);
+        const imageY = imageTop + maxH / 2;
         const iconKey = itemIconKey(item, index);
-        const productKey = resolved?.textureKey;
-        const useProduct = productKey && this.scene.textures.exists(productKey);
-        const img = this.scene.add.image(w / 2, h * 0.50, useProduct ? productKey : iconKey);
-        this._fitContain(img, w * 0.70, h * 0.50);
+        const imageUrl = item.sImage || null;
+        const imageKey = imageUrl ? listImageTextureKey(imageUrl) : null;
+        const readyKey = imageKey && this.scene.textures.exists(imageKey) ? imageKey : iconKey;
+        const img = this.scene.add.image(w / 2, imageY, readyKey);
+        this._fitContain(img, maxW, maxH);
+        // Keep the slot-based icon hidden until the real product URL arrives,
+        // so tomatoes never briefly shows the bread fallback.
+        if (imageKey && readyKey !== imageKey) img.setVisible(false);
         card.add(img);
+        if (imageKey && readyKey !== imageKey) {
+            this._listImageJobs = this._listImageJobs ?? [];
+            this._listImageJobs.push({
+                key: imageKey,
+                url: imageUrl,
+                apply: () => {
+                    if (!img.active || !this.scene?.textures.exists(imageKey)) {
+                        if (img.active) img.setVisible(true);
+                        return;
+                    }
+                    img.setTexture(imageKey);
+                    this._fitContain(img, maxW, maxH);
+                    img.setVisible(true);
+                },
+            });
+        }
 
-        card.add(this._text(w / 2, h * 0.90, qtyLabel(item), {
+        card.add(this._text(w / 2, qtyY, qtyLabel(item), {
             fontSize: `${m.fs(TYPE.itemQty)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_PURPLE,
@@ -562,16 +671,14 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         const tip = 'Check both price and Eco impact. The cheapest choice may not always be the smartest choice!';
         const tipStyle = {
             fontSize: `${m.fs(TYPE.tipsBody)}px`,
-            fontStyle: WEIGHT.heavy,
+            fontStyle: WEIGHT.bold,
             color: C_TIP_BODY,
-            stroke: C_TIP_BODY,
-            strokeThickness: 1,
         };
         this.add(this._text(x + w * 0.035, y + h * 0.70, this._wrap(tip, w * 0.93, tipStyle), tipStyle).setOrigin(0, 0.5));
     }
 
     _drawActions(m, x, top, w, h) {
-        const btnH = Math.min(m.H * 0.062, h * 0.62);
+        const btnH = Math.min(m.H * 0.074, h * 0.74);
         const gap = w * 0.03;
 
         // Size from height using native aspect so buttons stay pill-shaped.
@@ -616,32 +723,56 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         img.setDisplaySize(w, h);
         this.add(img);
 
-        const labelX = icon ? cx - w * 0.04 : cx;
-        const txt = this._text(labelX, cy, label, {
+        // Label + icon are one centered run, lifted together so Cause's glyph
+        // box sits in the middle of the pill.
+        const group = this.scene.add.container(cx, cy - h * 0.06);
+        this.add(group);
+
+        const txt = this._text(0, 0, label, {
             fontSize: `${m.fs(TYPE.button)}px`,
             fontStyle: WEIGHT.heavy,
             color,
             letterSpacing: 0,
-        }).setOrigin(0.5, 0.5);
-        this._shrinkToWidth(txt, w * 0.78);
-        this.add(txt);
+        }).setOrigin(0, 0.5);
+        group.add(txt);
 
+        let iconImg = null;
         if (icon && this.scene.textures.exists(icon)) {
-            const cart = this.scene.add.image(txt.x + txt.width / 2 + m.W * 0.012, cy, icon);
-            this._fitContain(cart, w * 0.12, h * 0.48);
-            this.add(cart);
+            iconImg = this.scene.add.image(0, 0, icon).setOrigin(0, 0.5);
+            group.add(iconImg);
         }
+
+        const layout = () => {
+            const gap = iconImg ? Math.max(m.fs(7), h * 0.1) : 0;
+            const iconSize = iconImg ? Math.min(h * 0.42, txt.height * 0.92) : 0;
+            if (iconImg) {
+                this._fitContain(iconImg, iconSize, iconSize);
+                iconImg.setTintFill(0xffffff);
+            }
+            const total = txt.width + (iconImg ? gap + iconImg.displayWidth : 0);
+            const start = -total / 2;
+            txt.x = start;
+            if (iconImg) iconImg.x = txt.x + txt.width + gap;
+        };
+
+        this._shrinkToWidth(txt, w * (iconImg ? 0.68 : 0.82));
+        layout();
+        const maxContent = w * 0.86;
+        const contentW = iconImg
+            ? (iconImg.x + iconImg.displayWidth) - txt.x
+            : txt.width;
+        const baseScale = contentW > maxContent ? maxContent / contentW : 1;
+        group.setScale(baseScale);
+
+        const hover = (scale) => {
+            img.setDisplaySize(w * scale, h * scale);
+            group.setScale(baseScale * scale);
+        };
 
         const hit = this.scene.add.rectangle(cx, cy, w, h, 0, 0);
         hit.setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => {
-            img.setDisplaySize(w * 1.03, h * 1.03);
-            txt.setScale(1.03);
-        });
-        hit.on('pointerout', () => {
-            img.setDisplaySize(w, h);
-            txt.setScale(1);
-        });
+        hit.on('pointerover', () => hover(1.03));
+        hit.on('pointerout', () => hover(1));
         hit.on('pointerup', onClick);
         this.add(hit);
     }

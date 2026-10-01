@@ -6,6 +6,21 @@ import { MISSION_DESC_KEYS } from '../../config/missionDescriptionAssets.js';
 import { CHOOSE_PRODUCT_KEYS as CP } from '../../config/chooseProductAssets.js';
 import { SALE_POPUP_KEYS as SP } from '../../config/salePopupAssets.js';
 
+/** Keep the sentence after a question mark on its own line, then wrap each part. */
+function wrapAfterQuestion (scene, str, maxWidth, style) {
+    const parts = String(str ?? '').split('?');
+    if (parts.length < 2) return wrapCause(scene, str, maxWidth, style);
+    const lines = [];
+    parts.forEach((part, i) => {
+        const isQuestion = i < parts.length - 1;
+        const chunk = `${part.trim()}${isQuestion ? '?' : ''}`.trim();
+        if (!chunk) return;
+        const wrapped = wrapCause(scene, chunk, maxWidth, style);
+        if (wrapped) lines.push(wrapped);
+    });
+    return lines.join('\n');
+}
+
 const TYPE = Object.freeze({
     ribbon: 46,
     name: 38,
@@ -211,7 +226,7 @@ export default class SalePopup extends Phaser.GameObjects.Container {
         };
         this.add(this._text(
             m.cx,
-            ribbon.y - m.H * 0.016,
+            ribbon.y - ribbon.displayHeight * 0.08,
             this._wrap(title, ribbon.displayWidth * 0.7, ribbonStyle),
             ribbonStyle,
         ).setOrigin(0.5, 0.5));
@@ -270,7 +285,7 @@ export default class SalePopup extends Phaser.GameObjects.Container {
             align: 'center',
             lineSpacing: m.fs(4),
         };
-        const descText = this._text(colCx, 0, this._wrap(description, colW * 0.92, descStyle), descStyle).setOrigin(0.5, 0);
+        const descText = this._text(colCx, 0, wrapAfterQuestion(this.scene, description, colW * 0.92, descStyle), descStyle).setOrigin(0.5, 0);
         this.add(descText);
 
         const blocks = [
@@ -380,9 +395,9 @@ export default class SalePopup extends Phaser.GameObjects.Container {
 
         this.add(this.scene.add.rectangle(cx, y, Math.max(2, m.s * 2), h * 0.56, 0xE4D8C8));
 
-        const leaf = this.scene.add.image(0, numY, MISSION_DESC_KEYS.leafIcon);
+        const leaf = this.scene.add.image(0, y, MISSION_DESC_KEYS.leafIcon);
         this._fitContain(leaf, iconS * 0.92, iconS * 0.92);
-        const ecoT = this._text(0, numY, `${this._ecoImpact}`, {
+        const ecoT = this._text(0, y, `${this._ecoImpact}`, {
             fontSize: `${m.fs(TYPE.eco)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_ECO,
@@ -424,13 +439,17 @@ export default class SalePopup extends Phaser.GameObjects.Container {
         }).setOrigin(0.5, 0.5));
         const hit = this.scene.add.rectangle(0, 0, size, size, 0, 0);
         hit.setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => btn.setDisplaySize(size * 1.06, size * 1.06));
-        hit.on('pointerout', () => btn.setDisplaySize(size, size));
+        hit.on('pointerover', () => this._hoverScale(wrap, 1.06));
+        hit.on('pointerout', () => this._hoverScale(wrap, 1));
         hit.on('pointerup', onClick);
         wrap.add(hit);
         wrap._setEnabled = (enabled) => {
             hit.disableInteractive();
             if (enabled) hit.setInteractive({ useHandCursor: true });
+            else {
+                this.scene.tweens.killTweensOf(wrap);
+                wrap.setScale(1);
+            }
             wrap.setAlpha(enabled ? 1 : 0.45);
         };
         this.add(wrap);
@@ -500,46 +519,67 @@ export default class SalePopup extends Phaser.GameObjects.Container {
         const gap = m.W * 0.018;
 
         const skipX = m.cx - btnW / 2 - gap / 2;
-        const skip = this.scene.add.image(skipX, y, SP.blueButton);
+        const skipWrap = this.scene.add.container(skipX, y);
+        const skip = this.scene.add.image(0, 0, SP.blueButton);
         this._fitW(skip, btnW);
         const btnH = skip.displayHeight;
-        this.add(skip);
-        this.add(this._text(skipX, y, 'Skip Offer', {
-            fontSize: `${m.fs(TYPE.button)}px`,
-            fontStyle: WEIGHT.heavy,
-            color: C_WHITE,
-        }).setOrigin(0.5, 0.5));
-        const skipHit = this.scene.add.rectangle(skipX, y, btnW, btnH, 0, 0);
-        skipHit.setInteractive({ useHandCursor: true });
-        skipHit.on('pointerover', () => this._fitW(skip, btnW * 1.04));
-        skipHit.on('pointerout', () => this._fitW(skip, btnW));
-        skipHit.on('pointerup', () => this._skip());
-        this.add(skipHit);
-
-        const buyX = m.cx + btnW / 2 + gap / 2;
-        const buy = this.scene.add.image(buyX, y, SP.greenButton);
-        this._fitW(buy, btnW);
-        this.add(buy);
-        const buyCoin = this.scene.add.image(buyX, y, MISSION_DESC_KEYS.coinIcon);
-        this._fitContain(buyCoin, btnH * 0.42, btnH * 0.42);
-        this.add(buyCoin);
-        this._buyCoin = buyCoin;
-        this._buyX = buyX;
-        this._buyLabel = this._text(buyX, y, 'Buy for 5 Coins', {
+        // Capsule ends are semicircles, so labels stay in the flat middle.
+        const innerMax = Math.max(btnW * 0.5, btnW - btnH);
+        const labelLift = btnH * 0.02;
+        skipWrap.add(skip);
+        const skipLabel = this._text(0, -labelLift, 'Skip Offer', {
             fontSize: `${m.fs(TYPE.button)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_WHITE,
         }).setOrigin(0.5, 0.5);
-        this.add(this._buyLabel);
+        this._fitInWidth(skipLabel, innerMax);
+        skipWrap.add(skipLabel);
+        const skipHit = this.scene.add.rectangle(0, 0, btnW, btnH, 0, 0);
+        skipHit.setInteractive({ useHandCursor: true });
+        skipHit.on('pointerover', () => this._hoverScale(skipWrap, 1.04));
+        skipHit.on('pointerout', () => this._hoverScale(skipWrap, 1));
+        skipHit.on('pointerup', () => this._skip());
+        skipWrap.add(skipHit);
+        this.add(skipWrap);
+
+        const buyX = m.cx + btnW / 2 + gap / 2;
+        const buyWrap = this.scene.add.container(buyX, y);
+        const buy = this.scene.add.image(0, 0, SP.greenButton);
+        this._fitW(buy, btnW);
+        buyWrap.add(buy);
+        const buyContent = this.scene.add.container(0, -labelLift);
+        const buyCoin = this.scene.add.image(0, 0, MISSION_DESC_KEYS.coinIcon);
+        this._fitContain(buyCoin, btnH * 0.42, btnH * 0.42);
+        buyContent.add(buyCoin);
+        this._buyCoin = buyCoin;
+        this._buyLabel = this._text(0, 0, 'Buy for 5 Coins', {
+            fontSize: `${m.fs(TYPE.button)}px`,
+            fontStyle: WEIGHT.heavy,
+            color: C_WHITE,
+        }).setOrigin(0.5, 0.5);
+        buyContent.add(this._buyLabel);
+        buyWrap.add(buyContent);
+        this._buyContent = buyContent;
+        this._buyInnerMax = innerMax;
         this._layoutBuyLabel();
-        const buyHit = this.scene.add.rectangle(buyX, y, btnW, btnH, 0, 0);
+        const buyHit = this.scene.add.rectangle(0, 0, btnW, btnH, 0, 0);
         buyHit.setInteractive({ useHandCursor: true });
-        buyHit.on('pointerover', () => this._fitW(buy, btnW * 1.04));
-        buyHit.on('pointerout', () => this._fitW(buy, btnW));
+        buyHit.on('pointerover', () => this._hoverScale(buyWrap, 1.04));
+        buyHit.on('pointerout', () => this._hoverScale(buyWrap, 1));
         buyHit.on('pointerup', () => this._buy());
-        this.add(buyHit);
-        this._buyHit = buyHit;
-        this._buyImg = buy;
+        buyWrap.add(buyHit);
+        this.add(buyWrap);
+    }
+
+    _hoverScale(target, scale) {
+        this.scene.tweens.killTweensOf(target);
+        this.scene.tweens.add({
+            targets: target,
+            scaleX: scale,
+            scaleY: scale,
+            duration: 120,
+            ease: 'Quad.easeOut',
+        });
     }
 
     _changeQty(delta) {
@@ -556,13 +596,22 @@ export default class SalePopup extends Phaser.GameObjects.Container {
         this._layoutBuyLabel();
     }
 
+    _fitInWidth(label, maxW) {
+        label.setScale(1);
+        if (label.width > maxW && label.width > 0) label.setScale(maxW / label.width);
+    }
+
     _layoutBuyLabel() {
-        if (!this._buyLabel || !this._buyCoin) return;
+        if (!this._buyLabel || !this._buyCoin || !this._buyContent) return;
+        this._buyContent.setScale(1);
         const gap = this._buyCoin.displayWidth * 0.35;
         const total = this._buyCoin.displayWidth + gap + this._buyLabel.width;
-        const left = this._buyX - total / 2;
+        const left = -total / 2;
         this._buyCoin.x = left + this._buyCoin.displayWidth / 2;
         this._buyLabel.x = this._buyCoin.x + this._buyCoin.displayWidth / 2 + gap + this._buyLabel.width / 2;
+        if (total > this._buyInnerMax && total > 0) {
+            this._buyContent.setScale(this._buyInnerMax / total);
+        }
     }
 
     _buy() {

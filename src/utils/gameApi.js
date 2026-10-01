@@ -372,15 +372,27 @@ export async function fetchCart (iMissionId) {
     return res.json();
 }
 
+/** Cart line variant sent to /cart/add and /cart/remove. */
+export function cartVariantOf (entry) {
+    if (entry?.eVariant === 'sale' || entry?.isSaleVariant) return 'sale';
+    if (entry?.eVariant === 'eco' || entry?.isEcoVariant) return 'eco';
+    return 'normal';
+}
+
+function resolveCartVariant (eVariant) {
+    if (eVariant === 'eco' || eVariant === 'sale') return eVariant;
+    return 'normal';
+}
+
 /**
  * POST /cart/add — body: { iMissionId, iItemId, eVariant }.
- * @param {{ iItemId: string, eVariant?: 'eco'|'normal', iMissionId?: string }} opts
+ * @param {{ iItemId: string, eVariant?: 'eco'|'normal'|'sale', iMissionId?: string }} opts
  */
 export async function addToCart ({ iItemId, eVariant = 'normal', iMissionId } = {}) {
     const mission = iMissionId ?? missionId;
     if (!mission) throw new Error('addToCart requires iMissionId');
     if (!iItemId) throw new Error('addToCart requires iItemId');
-    const variant = eVariant === 'eco' ? 'eco' : 'normal';
+    const variant = resolveCartVariant(eVariant);
     const res = await fetch(`${BASE_URL}/cart/add`, {
         method: 'POST',
         headers: authHeaders(),
@@ -437,13 +449,13 @@ export async function checkoutGame ({ iMissionId, iMiniGameId, nTimeRemaining } 
 
 /**
  * POST /cart/remove — body: { iMissionId, iItemId, eVariant }.
- * @param {{ iItemId: string, eVariant?: 'eco'|'normal', iMissionId?: string }} opts
+ * @param {{ iItemId: string, eVariant?: 'eco'|'normal'|'sale', iMissionId?: string }} opts
  */
 export async function removeFromCart ({ iItemId, eVariant = 'normal', iMissionId } = {}) {
     const mission = iMissionId ?? missionId;
     if (!mission) throw new Error('removeFromCart requires iMissionId');
     if (!iItemId) throw new Error('removeFromCart requires iItemId');
-    const variant = eVariant === 'eco' ? 'eco' : 'normal';
+    const variant = resolveCartVariant(eVariant);
     const res = await fetch(`${BASE_URL}/cart/remove`, {
         method: 'POST',
         headers: authHeaders(),
@@ -453,8 +465,25 @@ export async function removeFromCart ({ iItemId, eVariant = 'normal', iMissionId
             eVariant: variant,
         }),
     });
-    if (!res.ok) throw new Error(`Cart remove ${res.status}: ${res.statusText}`);
-    return res.json();
+    let json = null;
+    try {
+        json = await res.json();
+    } catch {
+        json = null;
+    }
+    const data = json?.data ?? {};
+    const rejected = !res.ok
+        || json?.success === false
+        || json?.bSuccess === false
+        || data.bRemoved === false
+        || data.removed === false;
+    if (rejected) {
+        const err = new Error(json?.message || data.sMessage || data.message || `Cart remove ${res.status}`);
+        err.payload = json;
+        err.status = res.status;
+        throw err;
+    }
+    return json;
 }
 
 function normalizeMission(m = {}, index = 0) {
@@ -602,6 +631,10 @@ export function mergeStartSessionIntoConfig (baseConfig = {}, startJson = {}) {
     const ecoRemaining = session.nEcoRemaining
         ?? (session.nEcoSpent != null ? Math.max(0, ecoMax - session.nEcoSpent) : null);
 
+    const oSale = normalizeSaleOffer(
+        data.oSale ?? session.oSale ?? startJson?.oSale ?? baseConfig.oSale ?? null,
+    );
+
     return {
         ...baseConfig,
         sessionId: session.iSessionId ?? baseConfig.sessionId ?? null,
@@ -617,6 +650,28 @@ export function mergeStartSessionIntoConfig (baseConfig = {}, startJson = {}) {
         description: data.sDescription ?? baseConfig.description,
         coinsRemaining: session.nCoinsRemaining ?? null,
         initialCartItems: session.aCartItems ?? [],
+        oSale,
+    };
+}
+
+/** Flash-sale shelf item from POST .../missions/:id/start (`oSale`). */
+function normalizeSaleOffer (raw) {
+    if (!raw || typeof raw !== 'object' || !raw.sItemKey) return null;
+    const salePrice = raw.nSalePrice ?? raw.nCoins ?? null;
+    return {
+        nOrder: raw.nOrder ?? 0,
+        sItemKey: raw.sItemKey,
+        iItemId: raw.iItemId ?? raw._id ?? null,
+        sName: raw.sName ?? '',
+        sDisplayName: raw.sDisplayName ?? raw.sName ?? '',
+        eShelf: raw.eShelf ?? '',
+        sImage: raw.sImage ?? null,
+        nOriginalPrice: raw.nOriginalPrice ?? raw.nPrice ?? salePrice,
+        nSalePrice: salePrice,
+        nCoins: raw.nCoins ?? salePrice,
+        nEcoPoints: raw.nEcoPoints ?? 0,
+        sPitch: raw.sPitch ?? '',
+        eVariant: raw.eVariant ?? 'sale',
     };
 }
 
@@ -945,7 +1000,8 @@ export function buildCartItemsFromApi(aCartItems) {
     const items = [];
     for (const entry of aCartItems ?? []) {
         if (!entry?.sItemKey) continue;
-        const isEco = entry.eVariant === 'eco';
+        const variant = cartVariantOf(entry);
+        const isEco = variant === 'eco';
         const resolved = resolveItem(entry.sItemKey, { eco: isEco });
         const label = entry.sName || resolveItemLabel(entry.sItemKey, resolved);
         const qty = Math.max(0, entry.nQuantity ?? 0);
@@ -960,6 +1016,7 @@ export function buildCartItemsFromApi(aCartItems) {
                 price,
                 ecoImpact,
                 isEcoVariant: isEco,
+                isSaleVariant: variant === 'sale',
                 sItemKey: entry.sItemKey,
                 iItemId: entry.iItemId ?? null,
             });
@@ -979,7 +1036,8 @@ export function buildViewCartRowsFromApi (aCartItems, requiredKeys = null) {
         if (!entry?.sItemKey) continue;
         const qty = Math.max(0, entry.nQuantity ?? 0);
         if (qty <= 0) continue;
-        const isEco = entry.eVariant === 'eco';
+        const variant = cartVariantOf(entry);
+        const isEco = variant === 'eco';
         const resolved = resolveItem(entry.sItemKey, { eco: isEco });
         const label = entry.sName || resolveItemLabel(entry.sItemKey, resolved);
         const required = requiredKeys
@@ -994,6 +1052,7 @@ export function buildViewCartRowsFromApi (aCartItems, requiredKeys = null) {
             required,
             textureKey: resolved.textureKey,
             isEcoVariant: isEco,
+            isSaleVariant: variant === 'sale',
             sItemKey: entry.sItemKey,
             iItemId: entry.iItemId ?? getItemId(entry.sItemKey) ?? null,
         });
