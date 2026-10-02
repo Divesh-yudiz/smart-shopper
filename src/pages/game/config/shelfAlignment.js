@@ -31,9 +31,10 @@ export const RACK_ALIGNMENT = Object.freeze({
         shelfPlankOffset: 36,
         rowYAdjust: [0, 2, 0, 15],
         rowXAdjust: [0, 0, 0, 0],
-        iconScale: 1.2,
+        iconScale: 1.38,
         iconSlotFill: 1.30,
         shelfHeightFactor: 1.50,
+        keepAspect: true,
         rackOffsetX: 6,
     }),
     beverages: Object.freeze({

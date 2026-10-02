@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { UI_TEXTURE_KEYS } from '../config/componentAssets.js';
-import config from '../utils/config.js';
+import { addCauseText, setCauseText } from '../utils/gameText.js';
 
 const PANEL_NATIVE_W = 350;
 const PANEL_NATIVE_H = 135;
@@ -34,8 +34,7 @@ export default class BudgetPanel extends Phaser.GameObjects.Container {
         const textLeft = coinX + coinSize * 0.5 + 24 * scale;
         const labelY = -panelH * 0.24;
 
-        this._label = scene.add.text(textLeft, labelY, 'BUDGET', {
-            fontFamily: config.fonts.text,
+        this._label = addCauseText(scene, textLeft, labelY, 'BUDGET', {
             fontSize: `${Math.round(26 * scale)}px`,
             fontStyle: 'bold',
             color: '#a8d4f0',
@@ -53,8 +52,7 @@ export default class BudgetPanel extends Phaser.GameObjects.Container {
         this.add(green);
 
         const amountX = textLeft + greenW / 2;
-        this._amountText = scene.add.text(amountX, greenY, `AED ${amount}`, {
-            fontFamily: config.fonts.text,
+        this._amountText = addCauseText(scene, amountX, greenY, `AED ${amount}`, {
             fontSize: `${Math.round(30 * scale)}px`,
             fontStyle: 'bold',
             color: '#ffffff',
@@ -65,6 +63,6 @@ export default class BudgetPanel extends Phaser.GameObjects.Container {
     }
 
     setAmount (amount) {
-        this._amountText.setText(`AED ${amount}`);
+        setCauseText(this._amountText, `AED ${amount}`);
     }
 }

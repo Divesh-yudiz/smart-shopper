@@ -3,56 +3,92 @@
     src: url('./assets/fonts/Cause-Regular.ttf') format('truetype');
     font-weight: 400;
     font-style: normal;
+    font-display: block;
 }
 @font-face {
     font-family: 'Cause';
     src: url('./assets/fonts/Cause-Medium.ttf') format('truetype');
     font-weight: 500;
     font-style: normal;
+    font-display: block;
 }
 @font-face {
     font-family: 'Cause';
     src: url('./assets/fonts/Cause-SemiBold.ttf') format('truetype');
     font-weight: 600;
     font-style: normal;
+    font-display: block;
 }
 @font-face {
     font-family: 'Cause';
     src: url('./assets/fonts/Cause-Bold.ttf') format('truetype');
     font-weight: 700;
     font-style: normal;
+    font-display: block;
 }
 @font-face {
     font-family: 'Cause';
     src: url('./assets/fonts/Cause-ExtraBold.ttf') format('truetype');
     font-weight: 800;
     font-style: normal;
+    font-display: block;
+}
+/* Alias 900 → ExtraBold so Phaser "black" / 900 weights stay on Cause. */
+@font-face {
+    font-family: 'Cause';
+    src: url('./assets/fonts/Cause-ExtraBold.ttf') format('truetype');
+    font-weight: 900;
+    font-style: normal;
+    font-display: block;
 }
 
-body {
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+    width: 100%;
+    height: 100%;
     margin: 0;
     padding: 0;
     overflow: hidden;
     background-color: #000;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
+/* Mobile chrome-safe height: --vh is set from JS; 100dvh when supported. */
+html,
+body,
 #root {
-    width: 100%;
-    height: 100%;
+    height: calc(var(--vh, 1vh) * 100);
 }
 
-#game-division canvas {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    margin: 0 !important;
+@supports (height: 100dvh) {
+    html,
+    body,
+    #root {
+        height: 100dvh;
+    }
+}
+
+body {
+    font-family: 'Cause', sans-serif;
 }
 
 #game-division {
-    max-height: calc(var(--vh, 1vh) * 100);
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #000;
 }
 
-:root {
-    --vh: 1vh;
+/* Phaser Scale.FIT + CENTER_BOTH owns canvas size/margins — do not override. */
+#game-division canvas {
+    display: block;
 }

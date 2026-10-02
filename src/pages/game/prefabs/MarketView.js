@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { getRackBannerAsset } from '../config/bannerAssets.js';
 import config from '../utils/config.js';
+import { addCauseText } from '../utils/gameText.js';
 import { getMarketLayout, getRackPlacements, getRacksForView } from '../utils/rackConfig.js';
 import ProductRack from './ProductRack.js';
 
@@ -63,7 +64,9 @@ export default class MarketView extends Phaser.GameObjects.Container {
                 rackId: rackCfg.id,
                 category: rackCfg.category,
                 headerColor: rackCfg.headerColor,
-                layout: rackCfg.layout,
+                // Patched layout rows point at API sItemKeys; placements still
+                // carry the static shelf keys, which would skip downloaded art.
+                layout: suppliedRack?.layout ?? rackCfg.layout,
                 products: suppliedRack?.products ?? rackCfg.products,
                 onProductClick: (p) => this._onProductClick(p, rackCfg.id, i),
             });
@@ -230,8 +233,7 @@ export default class MarketView extends Phaser.GameObjects.Container {
 
         this._inner.add(bg);
 
-        const label = this.scene.add.text(cx, cy, category, {
-            fontFamily: 'Cause',
+        const label = addCauseText(this.scene, cx, cy, category, {
             fontSize: '32px',
             fontStyle: 'bold',
             color: '#ffffff',
@@ -253,6 +255,42 @@ export default class MarketView extends Phaser.GameObjects.Container {
     get scrollX ()    { return this._inner.x; }
     get scrollMinX () { return this._minX; }
     get scrollMaxX () { return this._maxX; }
+
+    /**
+     * Glow the sale item's shelf row and scroll that bay into view.
+     * @returns {boolean}
+     */
+    highlightSaleProduct (sItemKey) {
+        if (!sItemKey) return false;
+        let found = null;
+        for (const child of this._inner?.list ?? []) {
+            if (typeof child?.highlightSaleProduct !== 'function') continue;
+            const local = child.highlightSaleProduct(sItemKey);
+            if (!local) continue;
+            found = { rack: child, local };
+            break;
+        }
+        if (!found) return false;
+
+        const worldX = found.rack.x + found.local.x + this._inner.x;
+        const target = this._inner.x + (config.width * 0.5 - worldX);
+        this.scrollTo(target);
+        return true;
+    }
+
+    /**
+     * World position of a shelf product icon (for fly-to-cart animation).
+     * @returns {{x:number,y:number}|null}
+     */
+    getProductWorldPosition (product) {
+        for (const child of this._inner?.list ?? []) {
+            if (typeof child?.getProductWorldPosition === 'function') {
+                const pos = child.getProductWorldPosition(product);
+                if (pos) return pos;
+            }
+        }
+        return null;
+    }
 
     // ── Driven by WalkingCharacter — call each frame with character's dx ──────
     scrollBy (dx) {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { assets } from '../../utils/assets.js';
 import config from '../../utils/config.js';
+import { addCauseText, wrapCause } from '../../utils/gameText.js';
 
 export default class Info extends Phaser.GameObjects.Container {
     constructor(scene, x = 0, y = 0) {
@@ -18,8 +19,8 @@ export default class Info extends Phaser.GameObjects.Container {
         popup.setInteractive().on('pointerdown', () => { });
         this.add(popup);
 
-        this.title = this.scene.add.text(0, -180, ' How to play? ', {
-            fontSize: 44, color: '#51d6ff', align: 'center', fontFamily: config.fonts.text, fontStyle: 'bold'
+        this.title = addCauseText(this.scene, 0, -180, ' How to play? ', {
+            fontSize: 44, color: '#51d6ff', align: 'center', fontStyle: 'bold'
         }).setOrigin(0.5, 0.5);
         this.add(this.title);
 
@@ -30,9 +31,15 @@ export default class Info extends Phaser.GameObjects.Container {
             'Keep sorting until all tubes are color-sorted!'
         ]
         info.forEach((text, index) => {
-            const style = { fontSize: 34, color: '#ffffff', align: 'left', fontFamily: config.fonts.text, lineSpacing: 8 }
-            const bullet = this.scene.add.text(-320, -130 + index * 80, '⦿', { ...style, fontSize: 44, color: '#d86813' }).setOrigin(0, 0.2);
-            const message = this.scene.add.text(-280, -130 + index * 80, `${text}`, style).setOrigin(0, 0).setWordWrapWidth(popup.width - 200);
+            const style = { fontSize: 34, color: '#ffffff', align: 'left', lineSpacing: 8 }
+            const bullet = addCauseText(this.scene, -320, -130 + index * 80, '⦿', { ...style, fontSize: 44, color: '#d86813' }).setOrigin(0, 0.2);
+            const message = addCauseText(
+                this.scene,
+                -280,
+                -130 + index * 80,
+                wrapCause(this.scene, `${text}`, popup.width - 200, style),
+                style,
+            ).setOrigin(0, 0);
             this.add(bullet);
             this.add(message);
         })

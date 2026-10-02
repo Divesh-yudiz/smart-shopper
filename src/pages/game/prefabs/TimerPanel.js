@@ -1,119 +1,142 @@
 import Phaser from 'phaser';
 import { UI_TEXTURE_KEYS } from '../config/componentAssets.js';
-import config from '../utils/config.js';
+import { addCauseText, setCauseText } from '../utils/gameText.js';
 
-/** Timer-and-Coin-Base.png */
-const PANEL_NATIVE_W = 268;
-const PANEL_NATIVE_H = 110;
-const PANEL_DISPLAY_W = 155;
+/** timer-bg.png native size */
+const PANEL_NATIVE_W = 663;
+const PANEL_NATIVE_H = 376;
+const PANEL_DISPLAY_W = 240;
 
-function formatTime (totalSeconds) {
+/** timer-base-icon.png native size */
+const ICON_NATIVE_W = 98;
+const ICON_NATIVE_H = 120;
+
+const C_TIME = '#1A1A1A';
+const C_LABEL = '#2F8A3A';
+
+function formatTime(totalSeconds) {
     const s = Math.max(0, Math.floor(totalSeconds));
     const m = Math.floor(s / 60);
     const sec = s % 60;
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
-function addStopwatchIcon (scene, x, y, size) {
-    const g = scene.add.graphics();
-    const r = size * 0.42;
-    const knobW = size * 0.14;
-    const knobH = size * 0.1;
-
-    g.fillStyle(0xff8c1a, 1);
-    g.fillRoundedRect(x - knobW / 2, y - r - knobH - 2, knobW, knobH, 3);
-    g.fillCircle(x, y, r);
-    g.fillStyle(0xf5f5f5, 1);
-    g.fillCircle(x, y, r * 0.78);
-    g.lineStyle(Math.max(2, size * 0.05), 0x2a2a2a, 1);
-    g.lineBetween(x, y, x + r * 0.08, y - r * 0.55);
-    g.lineBetween(x, y, x + r * 0.42, y + r * 0.12);
-    g.fillStyle(0x2a2a2a, 1);
-    g.fillCircle(x, y, size * 0.05);
-    return g;
-}
-
-/** Top-right countdown timer (02:45 style). */
+/**
+ * Top-right countdown timer — cream pill + stopwatch icon + time / Remaining.
+ */
 export default class TimerPanel extends Phaser.GameObjects.Container {
-    constructor(scene, x, y, { startSeconds = 165, displayWidth = PANEL_DISPLAY_W, startPaused = false, onComplete = null, onTick = null } = {}) {
+    constructor(scene, x, y, {
+        startSeconds = 165,
+        displayWidth = PANEL_DISPLAY_W,
+        startPaused = false,
+        onComplete = null,
+        onTick = null,
+    } = {}) {
         super(scene, x, y);
         scene.add.existing(this);
         this.setDepth(300);
 
-        this._remaining   = startSeconds;
-        this._onComplete  = onComplete;
-        this._onTick      = onTick;
-        const displayW = displayWidth;
-        const scale = displayW / PANEL_NATIVE_W;
-        this._panelH = PANEL_NATIVE_H * scale;
+        this._remaining = Math.max(0, startSeconds);
+        this._onComplete = onComplete;
+        this._onTick = onTick;
+        this._completed = false;
 
-        const panel = scene.add.image(0, 0, UI_TEXTURE_KEYS.timerCoinBase);
+        const displayW = displayWidth;
+        this._panelH = displayW * (PANEL_NATIVE_H / PANEL_NATIVE_W);
+
+        const panel = scene.add.image(0, 0, UI_TEXTURE_KEYS.timerBg);
         panel.setOrigin(0.5, 0);
         panel.setDisplaySize(displayW, this._panelH);
         this.add(panel);
 
-        const centerY = this._panelH * 0.52;
-        const iconSize = this._panelH * 0.65;
-        const fontSize = Math.round(40 * scale);
-        const gap = 8 * scale;
-        const textHalfW = fontSize * 1.35;
-        const iconHalf = iconSize * 0.5;
-        const contentHalfW = iconHalf + gap + textHalfW;
+        const halfW = displayW / 2;
+        const padX = displayW * 0.10;
+        const contentY = this._panelH * 0.50;
 
-        const iconX = -contentHalfW + iconHalf;
-        const textX = iconX + iconHalf + gap + textHalfW;
+        // Icon on the left — leave clear room for the text block.
+        const iconH = this._panelH * 0.48;
+        const iconW = iconH * (ICON_NATIVE_W / ICON_NATIVE_H);
+        const iconX = -halfW + padX + iconW / 2;
 
-        const stopwatch = addStopwatchIcon(scene, iconX, centerY, iconSize);
-        this.add(stopwatch);
+        const icon = scene.add.image(iconX, contentY - this._panelH * 0.04, UI_TEXTURE_KEYS.timerBaseIcon);
+        icon.setOrigin(0.5, 0.5);
+        icon.setDisplaySize(iconW, iconH);
+        this.add(icon);
 
-        this._timeText = scene.add.text(textX, centerY, formatTime(this._remaining), {
-            fontFamily: config.fonts.text,
-            fontSize: `${fontSize}px`,
+        // Text stack centered in the space to the right of the icon.
+        const textLeft = iconX + iconW / 2 + displayW * 0.04;
+        const textRight = halfW - padX;
+        const textX = (textLeft + textRight) / 2;
+        const timeSize = Math.max(22, Math.round(this._panelH * 0.30));
+        const labelSize = Math.max(13, Math.round(this._panelH * 0.155));
+
+        this._timeText = addCauseText(scene, textX, contentY - labelSize * 0.62, formatTime(this._remaining), {
+            fontSize: `${timeSize}px`,
             fontStyle: 'bold',
-            color: '#ffffff',
+            color: C_TIME,
             align: 'center',
-            stroke: '#1a2d4a',
-            strokeThickness: 3,
         });
         this._timeText.setOrigin(0.5, 0.5);
         this.add(this._timeText);
+
+        this._labelText = addCauseText(scene, textX, contentY + timeSize * 0.55, 'Remaining', {
+            fontSize: `${labelSize}px`,
+            fontStyle: 'bold',
+            color: C_LABEL,
+            align: 'center',
+        });
+        this._labelText.setOrigin(0.5, 0.5);
+        this.add(this._labelText);
 
         this._tickEvent = scene.time.addEvent({
             delay: 1000,
             loop: true,
             callback: () => this._tick(),
         });
-        if (startPaused) this._tickEvent.paused = true;
+        if (startPaused) {
+            this._tickEvent.paused = true;
+        } else if (this._remaining <= 0) {
+            this._tickEvent.remove();
+            scene.time.delayedCall(0, () => this._fireComplete());
+        }
     }
 
-    resume () {
+    _fireComplete() {
+        if (this._completed) return;
+        this._completed = true;
+        this._tickEvent?.remove();
+        this._remaining = 0;
+        if (this._timeText) setCauseText(this._timeText, formatTime(0));
+        this._onComplete?.();
+    }
+
+    resume() {
         if (this._tickEvent) this._tickEvent.paused = false;
     }
 
-    pause () {
+    pause() {
         if (this._tickEvent) this._tickEvent.paused = true;
     }
 
-    _tick () {
+    _tick() {
         if (this._remaining <= 0) {
-            this._tickEvent?.remove();
+            this._fireComplete();
             return;
         }
         this._remaining -= 1;
-        this._timeText.setText(formatTime(this._remaining));
+        setCauseText(this._timeText, formatTime(this._remaining));
         this._onTick?.();
 
         if (this._remaining <= 0) {
-            this._tickEvent?.remove();
-            this._onComplete?.();
+            this._fireComplete();
         }
     }
 
-    getRemaining () {
+    getRemaining() {
         return this._remaining;
     }
 
-    destroy (fromScene) {
+    destroy(fromScene) {
         this._tickEvent?.remove();
         super.destroy(fromScene);
     }

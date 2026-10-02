@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import config from '../utils/config.js';
+import { addCauseText, wrapCause } from '../utils/gameText.js';
 
 const COLS = 4;
 const ROWS = 4;
@@ -67,13 +68,14 @@ export default class ProductGrid extends Phaser.GameObjects.Container {
         }
 
         // Label text
-        const label = this.scene.add.text(0, CELL_SIZE / 2 - 35, product.label, {
-            fontFamily: 'Cause',
-            fontSize: '28px',
-            color: '#ffffff',
-            align: 'center',
-            wordWrap: { width: CELL_SIZE - 20 },
-        });
+        const labelStyle = { fontSize: '28px', color: '#ffffff', align: 'center' };
+        const label = addCauseText(
+            this.scene,
+            0,
+            CELL_SIZE / 2 - 35,
+            wrapCause(this.scene, product.label, CELL_SIZE - 20, labelStyle),
+            labelStyle,
+        );
         label.setOrigin(0.5, 0.5);
         container.add(label);
 

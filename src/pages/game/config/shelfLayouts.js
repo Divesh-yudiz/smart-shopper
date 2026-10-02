@@ -25,6 +25,7 @@ export const RACK_SHELF_LAYOUTS = Object.freeze({
                 { product: 'carrots' },
             ],
             gap: 45,
+            offsetY: -12,
         },
         {
             shelfRow: 3,
@@ -36,7 +37,7 @@ export const RACK_SHELF_LAYOUTS = Object.freeze({
                 { product: 'onion' },
             ],
             gap: 45,
-            offsetY: 8,
+            offsetY: -14,
         },
     ]),
 

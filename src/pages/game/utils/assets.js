@@ -3,8 +3,17 @@ import home_bg from '../../../assets/images/home_bg.png';
 import game_bg from '../../../assets/images/game-bg.png';
 import { bannerAssetPaths, bannerAssets } from '../config/bannerAssets.js';
 import { componentAssetPaths, componentAssets } from '../config/componentAssets.js';
-import { productAssetPaths, productAssets } from '../config/productAssets.js';
 import { characterAssetPaths } from '../config/characterAssets.js';
+import { popupAssetPaths } from '../config/popupAssets.js';
+import { checkoutAssetPaths } from '../config/checkoutAssets.js';
+import { chooseProductAssetPaths } from '../config/chooseProductAssets.js';
+import { salePopupAssetPaths } from '../config/salePopupAssets.js';
+import { notEnoughCoinAssetPaths } from '../config/notEnoughCoinAssets.js';
+import { ecoMeterEmptyAssetPaths } from '../config/ecoMeterEmptyAssets.js';
+import { viewCartAssetPaths } from '../config/viewCartAssets.js';
+import { timesUpAssetPaths } from '../config/timesUpAssets.js';
+import { missionSuccessAssetPaths } from '../config/missionSuccessAssets.js';
+import { welcomeBackAssetPaths } from '../config/welcomeBackAssets.js';
 
 //* Add the path to the assets object.
 const assetPaths = Object.freeze({
@@ -14,8 +23,17 @@ const assetPaths = Object.freeze({
         { key: 'game_bg', path: game_bg },
         ...bannerAssetPaths,
         ...componentAssetPaths,
-        ...productAssetPaths,
         ...characterAssetPaths,
+        ...popupAssetPaths,
+        ...checkoutAssetPaths,
+        ...chooseProductAssetPaths,
+        ...salePopupAssetPaths,
+        ...notEnoughCoinAssetPaths,
+        ...ecoMeterEmptyAssetPaths,
+        ...viewCartAssetPaths,
+        ...timesUpAssetPaths,
+        ...missionSuccessAssetPaths,
+        ...welcomeBackAssetPaths,
     ],
     sounds: [
 
@@ -31,7 +49,6 @@ const assets = Object.freeze({
     game_bg: 'game_bg',
     ...bannerAssets,
     ...componentAssets,
-    ...productAssets,
 });
 
 export {
@@ -41,6 +58,4 @@ export {
     bannerAssetPaths,
     componentAssets,
     componentAssetPaths,
-    productAssets,
-    productAssetPaths,
 };
