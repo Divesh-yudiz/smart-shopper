@@ -16,14 +16,14 @@ const TYPE = Object.freeze({
     badge: 14,
     scoreLabel: 18,
     scoreValue: 48,
-    note: 16,
+    note: 20,
     statTitle: 24,
     statValue: 44,
     statOutOf: 20,
     statRemain: 22,
     alertTitle: 34,
     alertBody: 22,
-    button: 24,
+    button: 32,
 });
 
 const C_WHITE = '#ffffff';
@@ -315,17 +315,24 @@ export default class TimesUpPopup extends Phaser.GameObjects.Container {
 
         const scoreLabelFs = m.fs(compact ? TYPE.scoreLabel - 2 : TYPE.scoreLabel);
         const scoreValueFs = m.fs(compact ? TYPE.scoreValue - 8 : TYPE.scoreValue);
-        const noteFs = m.fs(compact ? TYPE.note - 1 : TYPE.note);
+        const noteFs = m.fs(TYPE.note);
+        const noteStyle = {
+            fontSize: `${noteFs}px`,
+            color: C_MUTED,
+        };
+        const noteStr = this._wrap(data.scoreNote, innerW * 0.82, noteStyle);
+        const noteProbe = this._text(0, 0, noteStr, noteStyle).setVisible(false);
+        const noteH = Math.max(noteFs, noteProbe.height);
+        noteProbe.destroy();
         const barH = m.H * (compact ? 0.014 : 0.018);
         const barBlockH = barH * 1.4;
         const evenGap = m.H * (compact ? 0.012 : 0.016);
 
         // Pin score block to bottom with equal gaps between each piece.
-        const noteH = noteFs;
         const valueH = scoreValueFs;
         const labelH = scoreLabelFs;
         const noteY = bottom - noteH / 2;
-        const barY = noteY - noteH / 2 - evenGap - barBlockH / 2;
+        const barY = noteY - noteH / 2 - evenGap - barBlockH / 2 - m.H * 0.012;
         const valueY = barY - barBlockH / 2 - evenGap - valueH / 2;
         const labelY = valueY - valueH / 2 - evenGap - labelH / 2;
         const scoreTop = labelY - labelH / 2 - evenGap;
@@ -371,11 +378,7 @@ export default class TimesUpPopup extends Phaser.GameObjects.Container {
         }
 
         const starS = m.H * (compact ? 0.02 : 0.024);
-        const note = this._text(cx, noteY, data.scoreNote, {
-            fontSize: `${noteFs}px`,
-            color: C_MUTED,
-        }).setOrigin(0.5, 0.5);
-        this._shrinkToWidth(note, innerW * 0.78);
+        const note = this._text(cx, noteY, noteStr, noteStyle).setOrigin(0.5, 0.5);
         this.add(note);
         const starL = this.scene.add.image(note.x - note.width / 2 - starS * 0.7, noteY, MS.starFilled);
         starL.setDisplaySize(starS, starS);
@@ -596,7 +599,22 @@ export default class TimesUpPopup extends Phaser.GameObjects.Container {
         const n = specs.length;
         const src = this.scene.textures.get(MISSION_DESC_KEYS.blueButton)?.getSourceImage?.();
         const ratio = (src?.width ?? 512) / Math.max(1, src?.height ?? 148);
-        let bw = btnH * ratio;
+        const fontSize = m.fs(TYPE.button);
+        const iconS = btnH * 0.42;
+        const iconGap = Math.max(6, m.W * 0.005);
+        const padX = btnH * 0.36;
+        let labelW = 0;
+        specs.forEach((spec) => {
+            const probe = this._text(0, 0, spec.label, {
+                fontSize: `${fontSize}px`,
+                fontStyle: WEIGHT.heavy,
+                color: C_WHITE,
+            });
+            labelW = Math.max(labelW, probe.width);
+            probe.destroy();
+        });
+        const needed = padX * 2 + iconS + iconGap + labelW;
+        let bw = Math.max(btnH * ratio, needed);
         let bh = btnH;
         let totalW = bw * n + btnGap * (n - 1);
         if (totalW > w) {
@@ -605,14 +623,16 @@ export default class TimesUpPopup extends Phaser.GameObjects.Container {
             bh *= scale;
             totalW = w;
         }
-        const fontSize = this._sharedButtonFontSize(
+        const fit = bh / btnH;
+        const textMax = Math.max(24, bw - padX * 2 * fit - iconS * fit - iconGap);
+        const drawFont = this._sharedButtonFontSize(
             specs.map((spec) => spec.label),
-            m.fs(TYPE.button),
-            bw * 0.68,
+            fontSize,
+            textMax,
         );
         let x = cx - totalW / 2;
         specs.forEach((spec) => {
-            this._drawFooterButton(m, x + bw / 2, y, bw, bh, { ...spec, fontSize });
+            this._drawFooterButton(m, x + bw / 2, y, bw, bh, { ...spec, fontSize: drawFont });
             x += bw + btnGap;
         });
     }
@@ -643,19 +663,17 @@ export default class TimesUpPopup extends Phaser.GameObjects.Container {
         }).setOrigin(0.5, 0.5);
 
         if (spec.icon && this.scene.textures.exists(spec.icon)) {
-            const iconS = displayH * 0.48;
+            const iconS = displayH * 0.42;
             const icon = this.scene.add.image(0, 0, spec.icon);
             this._fitContain(icon, iconS, iconS);
             if (spec.text === C_WHITE) icon.setTint(0xffffff);
-            const iconGap = m.W * 0.006;
-            this._shrinkToWidth(label, displayW * 0.72);
+            const iconGap = Math.max(6, m.W * 0.005);
             const total = icon.displayWidth + iconGap + label.width;
             icon.x = -total / 2 + icon.displayWidth / 2;
             label.x = icon.x + icon.displayWidth / 2 + iconGap + label.width / 2;
             btn.add(icon);
             btn.add(label);
         } else {
-            this._shrinkToWidth(label, displayW * 0.86);
             btn.add(label);
         }
 

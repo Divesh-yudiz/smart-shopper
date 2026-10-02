@@ -11,7 +11,7 @@ const TYPE = Object.freeze({
     missionTag: 20,
     missionName: 30,
     missionDesc: 21,
-    progressTitle: 24,
+    progressTitle: 32,
     progressCount: 34,
     itemLabel: 22,
     statLabel: 22,

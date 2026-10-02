@@ -277,8 +277,8 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         const score = mission.nScore;
         const showScore = score != null && status !== 'Not Played';
         const scoreFs = m.fs(TYPE.score);
-        const btnH = Math.max(m.fs(28), h * 0.085);
-        const btnW = Math.min(w * 0.46, innerW * 0.55);
+        const btnH = Math.max(m.fs(32), h * 0.098);
+        const btnW = Math.min(w * 0.34, innerW * 0.42);
         const starS = Math.max(m.fs(16), h * 0.048);
         const footerPad = padY;
         const contentBottom = top + h - footerPad;

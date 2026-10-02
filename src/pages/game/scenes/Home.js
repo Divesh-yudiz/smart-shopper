@@ -415,9 +415,9 @@ export default class Home extends Phaser.Scene {
         btn.setInteractive({ useHandCursor: true });
         cta.add(btn);
 
-        // Cause's glyph box sits below its visual center; a small downward
+        // The glossy rim is heavier along the bottom, so a small upward
         // nudge keeps the letters optically centered on the button.
-        btnLabel.setPosition(0, btnH * 0.01);
+        btnLabel.setPosition(0, -btnH * 0.035);
         cta.add(btnLabel);
 
         btn.on('pointerover', () => cta.setScale(1.05));

@@ -34,6 +34,7 @@ import cartIcon from '../../../assets/images/gameplay/Cart.png';
 import cartBarBase from '../../../assets/images/gameplay/BaR-bASE.png';
 import shelfPriceBase from '../../../assets/images/Components/Price-Base.png';
 import ecoIcon from '../../../assets/images/home/eco-icon.png';
+import saleTag from '../../../assets/images/gameplay/Sale.png';
 
 export const UI_TEXTURE_KEYS = Object.freeze({
     cartPanelBg: 'ui_cart_panel_bg',
@@ -66,6 +67,7 @@ export const UI_TEXTURE_KEYS = Object.freeze({
     ecoBar5: 'ui_eco_bar_5',
     ecoBar6: 'ui_eco_bar_6',
     shelfPriceBase: 'ui_shelf_price_base',
+    saleTag: 'ui_sale_tag',
     ecoIcon: 'ui_eco_icon',
     ecoMeterBg: 'ecoMeterBg',
     ecoMeterFill: 'ecoMeterFill',
@@ -102,6 +104,7 @@ export const componentAssetPaths = Object.freeze([
     { key: UI_TEXTURE_KEYS.ecoBar5, path: ecoBar5 },
     { key: UI_TEXTURE_KEYS.ecoBar6, path: ecoBar6 },
     { key: UI_TEXTURE_KEYS.shelfPriceBase, path: shelfPriceBase },
+    { key: UI_TEXTURE_KEYS.saleTag, path: saleTag },
     { key: UI_TEXTURE_KEYS.ecoIcon, path: ecoIcon },
     { key: UI_TEXTURE_KEYS.ecoMeterBg, path: objectBase },
     { key: UI_TEXTURE_KEYS.ecoMeterFill, path: budgetGreenBase },

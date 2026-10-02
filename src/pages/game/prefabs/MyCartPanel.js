@@ -120,7 +120,7 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
 
         // View Cart button on the right — use Green-Button asset (no arrow).
         const btnH = Math.max(28, this._panelH * 0.36);
-        const btnLabel = addCauseText(this.scene, 0, 0, 'View Cart', {
+        const btnLabel = addCauseText(this.scene, 0, -btnH * 0.08, 'View Cart', {
             fontSize: `${Math.round(17 * scale)}px`,
             fontStyle: 'bold',
             color: '#ffffff',

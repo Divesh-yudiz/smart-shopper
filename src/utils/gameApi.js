@@ -1,5 +1,5 @@
 import { PRODUCT_CATALOG, RACK_ASSET_CATEGORIES } from '../pages/game/config/productAssets.js';
-import { getProductShelfFit } from '../pages/game/config/productRowCounts.js';
+import { getProductShelfFit, isFruitOrVegetable } from '../pages/game/config/productRowCounts.js';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -174,6 +174,19 @@ const ITEM_KEY_MAP = {
     qualiflower: { rackId: 'fruits' },
     cauliflower: { rackId: 'fruits', label: 'Cauliflower' },
     grapes: { rackId: 'fruits' },
+    grape: { rackId: 'fruits' },
+    apple: { rackId: 'fruits', label: 'Apple' },
+    apples: { rackId: 'fruits', label: 'Apples' },
+    banana: { rackId: 'fruits', label: 'Banana' },
+    bananas: { rackId: 'fruits', label: 'Bananas' },
+    orange: { rackId: 'fruits', label: 'Orange' },
+    lemon: { rackId: 'fruits' },
+    lime: { rackId: 'fruits' },
+    mango: { rackId: 'fruits' },
+    strawberry: { rackId: 'fruits' },
+    lettuce: { rackId: 'fruits' },
+    cucumber: { rackId: 'fruits' },
+    broccoli: { rackId: 'fruits' },
 
     // ── candy ──────────────────────────────────────────────────────────────────
     lollipop: { rackId: 'candy' },
@@ -291,14 +304,21 @@ export function rackIdFromProductImageUrl(url) {
 }
 
 function resolveRackIdForApiItem(item, sItemKey) {
+    const mapped = ITEM_KEY_MAP[sItemKey]?.rackId ?? ROOT_ITEM_RACK[sItemKey] ?? null;
+    if (mapped) return mapped;
+
+    const name = item?.sName
+        ?? itemMetaBySItemKey[sItemKey]?.sName
+        ?? getItemVariants(sItemKey)?.sName
+        ?? null;
+    // Fruits and vegetables go on the produce stand even when the image folder is generic.
+    if (isFruitOrVegetable(sItemKey, name)) return 'fruits';
+
     const imageUrl = item?.oNormal?.sImage ?? item?.sImage
         ?? itemMetaBySItemKey[sItemKey]?.sImage
         ?? getItemVariants(sItemKey)?.standard?.image
         ?? null;
-    return rackIdFromProductImageUrl(imageUrl)
-        ?? ITEM_KEY_MAP[sItemKey]?.rackId
-        ?? ROOT_ITEM_RACK[sItemKey]
-        ?? 'ration';
+    return rackIdFromProductImageUrl(imageUrl) ?? 'ration';
 }
 
 /**
@@ -861,9 +881,8 @@ function placeOnRack(plan, item) {
 }
 
 /**
- * One normal product per shelf row, repeated across that row.
- * Category items fill their own bay first. Leftover items fill empty rows
- * in other bays so a short aisle does not stay blank while another aisle overflows.
+ * Fruits and vegetables fill the produce stand first.
+ * Everything else then fills the regular shelf rows, home bay first.
  * Eco art is not placed on racks.
  *
  * @param {Array<object>} aItems
@@ -889,7 +908,7 @@ export function patchRacksWithApiPrices(aItems, racksData) {
     const placed = new Set();
     const overflow = [];
 
-    slotPlan.forEach((plan) => {
+    const fillHomeRack = (plan) => {
         const local = byRack[plan.rack.id] ?? [];
         local.forEach((item) => {
             if (placed.has(item.sItemKey)) return;
@@ -899,18 +918,32 @@ export function patchRacksWithApiPrices(aItems, racksData) {
             }
             placed.add(item.sItemKey);
         });
+    };
+
+    const producePlan = slotPlan.find((plan) => plan.rack.id === 'fruits');
+    if (producePlan) fillHomeRack(producePlan);
+    slotPlan.forEach((plan) => {
+        if (plan.rack.id === 'fruits') return;
+        fillHomeRack(plan);
     });
 
     const rackHasRoom = (plan, item) => {
         const home = resolveRackIdForApiItem(item, item.sItemKey);
-        // Keep non-produce off the produce bay so those rows stay fruits/vegetables.
+        // The produce stand stays reserved for fruits and vegetables.
         if (plan.rack.id === 'fruits' && home !== 'fruits') return false;
         const capacity = rowCapacity(plan.rack.id);
         return plan.assigned.some((bucket, index) => index < plan.slots.length && (bucket?.length ?? 0) < capacity)
             || plan.assigned.length < plan.slots.length;
     };
 
-    for (const item of [...overflow, ...allItems]) {
+    const isProduce = (item) => resolveRackIdForApiItem(item, item.sItemKey) === 'fruits';
+    const waiting = [...overflow, ...allItems];
+    const laterRows = [
+        ...waiting.filter((item) => !isProduce(item)),
+        ...waiting.filter(isProduce),
+    ];
+
+    for (const item of laterRows) {
         if (placed.has(item.sItemKey)) continue;
         const plan = slotPlan.find((entry) => rackHasRoom(entry, item));
         if (!plan || !placeOnRack(plan, item)) continue;
@@ -954,6 +987,7 @@ export function patchRacksWithApiPrices(aItems, racksData) {
                 ...(fit.fitWidthCount != null ? { fitWidthCount: fit.fitWidthCount } : {}),
                 ...(fit.spanCount != null ? { spanCount: fit.spanCount } : {}),
                 ...(fit.gap != null ? { gap: fit.gap } : {}),
+                ...(fit.sideGap != null ? { sideGap: fit.sideGap } : {}),
                 // Shelf rows share one baseline. Product art no longer shifts the row.
                 offsetY: 0,
                 skip: false,

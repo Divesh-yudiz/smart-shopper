@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { UI_TEXTURE_KEYS } from '../config/componentAssets.js';
 import { getShelfRowsForRack } from '../config/shelfLayouts.js';
 import { addCauseText } from '../utils/gameText.js';
 import { getMarketLayout, normalizeRowBottomSpaces } from '../utils/rackConfig.js';
@@ -221,7 +222,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
     }
 
     /**
-     * Hang a SALE tag on the left of a flash-sale item's shelf row.
+     * Stand the SALE burst on the front lip of a flash-sale item's shelf row.
      * @returns {{x:number,y:number}|null} position in this rack's local space
      */
     highlightSaleProduct(sItemKey) {
@@ -241,35 +242,60 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         return { x: first.x, y: first.y };
     }
 
+    /**
+     * Sale.png is 256² with the burst painted in y 50–204. Origin sits on that
+     * red base so the sign rests on the shelf floor and overlaps the items.
+     */
     _addSaleBadge(matches) {
-        const w = 92;
-        const h = 34;
-        // Product cards live in this rack's local space (x grows to the right).
-        // The sprite origin is the shelf floor, so the row's left edge is the
-        // leftmost card minus half its icon width.
-        let left = matches[0].container;
-        for (const { container } of matches) {
-            if (container.x < left.x) left = container;
+        const key = UI_TEXTURE_KEYS.saleTag;
+        if (!this.scene.textures.exists(key)) {
+            console.warn('[ProductRack] Sale tag texture missing');
+            return;
         }
-        const img = left.list?.find((child) => child?.type === 'Image');
-        const iconW = Math.abs(img?.displayWidth ?? 0);
-        const iconH = Math.abs(img?.displayHeight ?? 0);
-        // Keep the tag on this row: a little right of the first item and above its middle.
-        const x = left.x - iconW / 2 + 34;
-        const y = left.y - iconH / 2 - 32;
 
-        const badge = this.scene.add.container(x, y);
-        const bg = this.scene.add.graphics();
-        bg.fillStyle(0x3CC45A, 1);
-        bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
-        const label = addCauseText(this.scene, 0, -1, 'SALE', {
-            fontSize: '18px',
-            fontStyle: '800',
-            color: '#ffffff',
-        });
-        label.setOrigin(0.5, 0.5);
-        badge.add([bg, label]);
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let iconH = 0;
+        for (const { container } of matches) {
+            minX = Math.min(minX, container.x);
+            maxX = Math.max(maxX, container.x);
+            const img = container.list?.find((child) => child?.type === 'Image');
+            iconH = Math.max(iconH, Math.abs(img?.displayHeight ?? 0));
+        }
+
+        const shelfY = matches[0].container.y;
+        const badge = this.scene.add.image((minX + maxX) / 2, shelfY, key);
+        badge.setOrigin(0.5, 205 / 256);
+        const visualH = Math.max(56, Math.min(74, (iconH || 70) * 0.72));
+        const display = visualH * (256 / 155);
+        badge.setDisplaySize(display, display);
         this.add(badge);
+        this._dropLabelsClearOfSale(badge);
+    }
+
+    /**
+     * Sale.png's painted burst ends on the shelf line (texture y 204, origin
+     * 205). Nameplates are centered just under that line, so the top of the
+     * plaque climbs into the burst. Push any plaque the badge covers downward.
+     */
+    _dropLabelsClearOfSale(badge) {
+        const artBottom = badge.y + badge.displayHeight * ((204 / 256) - badge.originY);
+        const badgeLeft = badge.x - badge.displayWidth * badge.originX;
+        const badgeRight = badge.x + badge.displayWidth * (1 - badge.originX);
+        const gap = 8;
+
+        for (const entry of this._shelfTags ?? []) {
+            const plate = entry.container;
+            if (!plate) continue;
+            const halfW = (entry.tagW ?? PRICE_TAG_W) / 2;
+            const left = plate.x - halfW;
+            const right = plate.x + halfW;
+            if (right < badgeLeft || left > badgeRight) continue;
+
+            const labelTop = plate.y - PRICE_TAG_H / 2;
+            const overlap = artBottom + gap - labelTop;
+            if (overlap > 0) plate.y += overlap;
+        }
     }
 
     _markSalePriceTags(sItemKey) {
@@ -382,9 +408,21 @@ export default class ProductRack extends Phaser.GameObjects.Container {
                 packedGap = (usableW - visualW * count) / (count - 1);
                 packedRowW = usableW;
             }
-            const rowW = spanCount > 0 ? allottedW : usableW;
+            // sideGap is the empty margin on each side. The space between
+            // copies grows so the row fills the bay inside those margins.
+            // The authored gap is the smallest space kept between copies.
+            const sideGap = Number.isFinite(rowCfg.sideGap) ? rowCfg.sideGap : null;
+            if (sideGap != null && count > 1) {
+                const minRowW = visualW * count + gap * (count - 1);
+                const targetRowW = usableW - sideGap * 2;
+                if (minRowW <= usableW) {
+                    packedRowW = Math.min(usableW, Math.max(minRowW, targetRowW));
+                    packedGap = (packedRowW - visualW * count) / (count - 1);
+                }
+            }
+            const rowW = sideGap != null || !(spanCount > 0) ? usableW : allottedW;
             const startX = rowStartX + (rowW - packedRowW) / 2 + visualW / 2
-                + (spanCount > 0 ? (usableW - allottedW) / 2 : 0);
+                + (sideGap == null && spanCount > 0 ? (usableW - allottedW) / 2 : 0);
             const step = count > 1 ? visualW + packedGap : 0;
 
             for (let i = 0; i < count; i++) {
@@ -577,7 +615,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
 
         const sItemKey = product?.sItemKey ?? product?.key ?? null;
         tagContainer.setData('sItemKey', sItemKey);
-        this._shelfTags.push({ sItemKey, label, plate: tag, paint });
+        this._shelfTags.push({ sItemKey, label, plate: tag, paint, container: tagContainer, tagW });
         this._tagLayer.add(tagContainer);
     }
 }

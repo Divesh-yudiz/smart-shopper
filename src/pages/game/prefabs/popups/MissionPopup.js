@@ -322,7 +322,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             lineSpacing: m.fs(4),
         };
         const wrappedTitle = this._wrap(title || 'Shopping Mission', hw * 0.82, titleStyle);
-        wrap.add(this._text(0, top + headerH * 0.52, wrappedTitle, titleStyle).setOrigin(0.5, 0.5));
+        wrap.add(this._text(0, top + headerH * 0.58, wrappedTitle, titleStyle).setOrigin(0.5, 0.5));
 
         const artKey = HERO_ARTS[Math.max(0, (missionOrder || 1) - 1) % HERO_ARTS.length];
         const artTop = top + headerH + hh * 0.02;
