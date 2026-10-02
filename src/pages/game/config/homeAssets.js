@@ -2,7 +2,7 @@ import logo from '../../../assets/images/logo.png';
 import bgB from '../../../assets/images/home-assets/BG-B.png';
 import backButton from '../../../assets/images/home-assets/Back-Button.png';
 import infoButton from '../../../assets/images/home-assets/Info-Button.png';
-import greenButton from '../../../assets/images/home-assets/Green-Button.png';
+import greenButton from '../../../assets/images/sale-popup/Green-Button.png';
 import uiBase from '../../../assets/images/home-assets/Ui-Base.png';
 import p1 from '../../../assets/images/home-assets/P1.png';
 import p2 from '../../../assets/images/home-assets/P2.png';

@@ -4,7 +4,6 @@ import { HOME_TEXTURE_KEYS } from '../../config/homeAssets.js';
 import { MISSION_SELECT_KEYS as MS } from '../../config/missionSelectAssets.js';
 import { MISSION_DESC_KEYS } from '../../config/missionDescriptionAssets.js';
 import { NOT_ENOUGH_COIN_KEYS as NEC } from '../../config/notEnoughCoinAssets.js';
-import { CHECKOUT_TEXTURE_KEYS as CK } from '../../config/checkoutAssets.js';
 import { CHOOSE_PRODUCT_KEYS as CP } from '../../config/chooseProductAssets.js';
 import { TIMES_UP_KEYS as TU } from '../../config/timesUpAssets.js';
 
@@ -198,6 +197,18 @@ export default class TimesUpPopup extends Phaser.GameObjects.Container {
         return this.scene.add.nineslice(x, y, key, undefined, w, h, cap, cap, cap, cap);
     }
 
+    /** Stretch a pill button horizontally without distorting the round ends. */
+    _pillSlice(x, y, key, w, h) {
+        const src = this.scene.textures.get(key)?.getSourceImage?.();
+        const tw = Math.max(1, src?.width ?? 512);
+        const th = Math.max(1, src?.height ?? 148);
+        const side = Math.max(8, Math.min(Math.floor(th * 0.48), Math.floor(tw / 2) - 1));
+        const srcW = Math.max(side * 2 + 8, Math.round(w * (th / Math.max(1, h))));
+        const img = this.scene.add.nineslice(x, y, key, undefined, srcW, th, side, side, 0, 0);
+        img.setDisplaySize(w, h);
+        return img;
+    }
+
     _round(x, y, w, h, color, radius, stroke = null, strokeW = 2) {
         const g = this.scene.add.graphics();
         const r = radius ?? Math.min(w, h) * 0.18;
@@ -246,19 +257,6 @@ export default class TimesUpPopup extends Phaser.GameObjects.Container {
             fontStyle: WEIGHT.heavy,
             color: C_WHITE,
         }).setOrigin(0.5, 0.5));
-
-        const closeS = m.H * 0.055;
-        const close = this.scene.add.image(
-            panelLeft + panelW - closeS * 0.55,
-            panelTop + closeS * 0.35,
-            CK.closeButton,
-        );
-        close.setDisplaySize(closeS, closeS);
-        close.setInteractive({ useHandCursor: true });
-        close.on('pointerover', () => close.setDisplaySize(closeS * 1.06, closeS * 1.06));
-        close.on('pointerout', () => close.setDisplaySize(closeS, closeS));
-        close.on('pointerup', () => this._close(() => this._onDashboard?.()));
-        this.add(close);
 
         // Lift subtitle + headline with the ribbon; keep body containers on the old baseline.
         const subtitleY = ribbon.y + ribbon.displayHeight * 0.3;
@@ -569,12 +567,8 @@ export default class TimesUpPopup extends Phaser.GameObjects.Container {
     }
 
     _drawFooter(m, cx, y, w, h, gap) {
-        const src = this.scene.textures.get(CP.optionBlue)?.getSourceImage?.();
-        const ratio = (src?.width ?? 256) / Math.max(1, src?.height ?? 68);
         const btnH = Math.min(h, m.H * 0.078);
         const btnGap = gap;
-        const btnW = Math.min(btnH * ratio, (w - btnGap * 2) / 3, m.W * 0.24);
-        const totalW = btnW * 3 + btnGap * 2;
         const specs = [
             {
                 label: 'Back to Dashboard',
@@ -586,69 +580,115 @@ export default class TimesUpPopup extends Phaser.GameObjects.Container {
             },
             {
                 label: 'New Mission',
-                key: CP.optionBlue,
+                key: MISSION_DESC_KEYS.blueButton,
                 text: C_WHITE,
                 icon: HOME_TEXTURE_KEYS.trackIcon,
                 onClick: () => this._close(() => this._onNewMission?.()),
             },
             {
                 label: 'Retry Mission',
-                key: CP.optionGreen,
+                key: HOME_TEXTURE_KEYS.greenButton,
                 text: C_WHITE,
                 icon: TU.restartBtn,
                 onClick: () => this._close(() => this._onRetry?.()),
             },
         ];
-        specs.forEach((spec, i) => {
-            const x = cx - totalW / 2 + btnW / 2 + i * (btnW + btnGap);
-            this._drawFooterButton(m, x, y, btnW, btnH, spec);
+        const n = specs.length;
+        const src = this.scene.textures.get(MISSION_DESC_KEYS.blueButton)?.getSourceImage?.();
+        const ratio = (src?.width ?? 512) / Math.max(1, src?.height ?? 148);
+        let bw = btnH * ratio;
+        let bh = btnH;
+        let totalW = bw * n + btnGap * (n - 1);
+        if (totalW > w) {
+            const scale = w / totalW;
+            bw *= scale;
+            bh *= scale;
+            totalW = w;
+        }
+        const fontSize = this._sharedButtonFontSize(
+            specs.map((spec) => spec.label),
+            m.fs(TYPE.button),
+            bw * 0.68,
+        );
+        let x = cx - totalW / 2;
+        specs.forEach((spec) => {
+            this._drawFooterButton(m, x + bw / 2, y, bw, bh, { ...spec, fontSize });
+            x += bw + btnGap;
         });
     }
 
     _drawFooterButton(m, cx, cy, maxW, maxH, spec) {
         const displayW = maxW;
         const displayH = maxH;
+        const btn = this.scene.add.container(cx, cy);
+        this.add(btn);
+
         if (spec.key) {
-            const img = this._slice(cx, cy, spec.key, displayW, displayH, 28);
-            this.add(img);
-            const hitScale = (s = 1) => {
-                img.setSize(displayW * s, displayH * s);
-            };
-            const hit = this.scene.add.rectangle(cx, cy, displayW, displayH, 0, 0);
-            hit.setInteractive({ useHandCursor: true });
-            hit.on('pointerover', () => hitScale(1.04));
-            hit.on('pointerout', () => hitScale());
-            hit.on('pointerup', spec.onClick);
-            this.add(hit);
+            btn.add(this._pillSlice(0, 0, spec.key, displayW, displayH));
         } else {
-            this._round(cx, cy, displayW, displayH, spec.fill, displayH * 0.5, spec.stroke, Math.max(2, Math.round(3 * m.s)));
-            const hit = this.scene.add.rectangle(cx, cy, displayW, displayH, 0, 0);
-            hit.setInteractive({ useHandCursor: true });
-            hit.on('pointerup', spec.onClick);
-            this.add(hit);
+            const g = this.scene.add.graphics();
+            const r = displayH * 0.5;
+            const strokeW = Math.max(2, Math.round(3 * m.s));
+            g.fillStyle(spec.fill, 1);
+            g.fillRoundedRect(-displayW / 2, -displayH / 2, displayW, displayH, r);
+            g.lineStyle(strokeW, spec.stroke, 1);
+            g.strokeRoundedRect(-displayW / 2, -displayH / 2, displayW, displayH, r);
+            btn.add(g);
         }
 
-        const label = this._text(cx, cy, spec.label, {
-            fontSize: `${m.fs(TYPE.button)}px`,
+        const label = this._text(0, 0, spec.label, {
+            fontSize: `${spec.fontSize ?? m.fs(TYPE.button)}px`,
             fontStyle: WEIGHT.heavy,
             color: spec.text,
         }).setOrigin(0.5, 0.5);
-        this.add(label);
 
         if (spec.icon && this.scene.textures.exists(spec.icon)) {
             const iconS = displayH * 0.48;
-            const icon = this.scene.add.image(cx, cy, spec.icon);
+            const icon = this.scene.add.image(0, 0, spec.icon);
             this._fitContain(icon, iconS, iconS);
             if (spec.text === C_WHITE) icon.setTint(0xffffff);
-            this.add(icon);
             const iconGap = m.W * 0.006;
             this._shrinkToWidth(label, displayW * 0.72);
             const total = icon.displayWidth + iconGap + label.width;
-            icon.x = cx - total / 2 + icon.displayWidth / 2;
+            icon.x = -total / 2 + icon.displayWidth / 2;
             label.x = icon.x + icon.displayWidth / 2 + iconGap + label.width / 2;
+            btn.add(icon);
+            btn.add(label);
         } else {
             this._shrinkToWidth(label, displayW * 0.86);
+            btn.add(label);
         }
+
+        const hit = this.scene.add.rectangle(0, 0, displayW, displayH, 0, 0);
+        hit.setInteractive({ useHandCursor: true });
+        const hover = (scale) => {
+            this.scene.tweens.add({
+                targets: btn,
+                scaleX: scale,
+                scaleY: scale,
+                duration: 100,
+                ease: 'Quad.easeOut',
+            });
+        };
+        hit.on('pointerover', () => hover(1.05));
+        hit.on('pointerout', () => hover(1));
+        hit.on('pointerup', spec.onClick);
+        btn.add(hit);
+    }
+
+    _sharedButtonFontSize(labels, startSize, maxW) {
+        let size = startSize;
+        labels.forEach((label) => {
+            const probe = this._text(0, 0, label, {
+                fontSize: `${startSize}px`,
+                fontStyle: WEIGHT.heavy,
+                color: C_WHITE,
+            });
+            this._shrinkToWidth(probe, maxW);
+            size = Math.min(size, parseInt(probe.style.fontSize, 10) || size);
+            probe.destroy();
+        });
+        return size;
     }
 
     _shrinkToWidth(text, maxW) {

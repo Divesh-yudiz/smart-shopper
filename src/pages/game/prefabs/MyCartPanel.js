@@ -120,7 +120,15 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
 
         // View Cart button on the right — use Green-Button asset (no arrow).
         const btnH = Math.max(28, this._panelH * 0.36);
-        const btnW = Math.max(132, this._panelW * 0.26);
+        const btnLabel = addCauseText(this.scene, 0, 0, 'View Cart', {
+            fontSize: `${Math.round(17 * scale)}px`,
+            fontStyle: 'bold',
+            color: '#ffffff',
+            align: 'center',
+        }).setOrigin(0.5, 0.5).setStroke('#1a6b28', 3);
+        // Extra inset so the label sits in the flat middle, not the pill caps.
+        const btnSidePad = Math.max(20, btnH * 0.7);
+        const btnW = Math.max(132, btnLabel.width + btnSidePad * 2);
         const btnX = this._panelW / 2 - padX - btnW / 2;
         const bodyCenterY = -this._panelH * 0.38;
         this._bodyCenterY = bodyCenterY;
@@ -136,13 +144,7 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
         const btnImg = this.scene.add.image(0, 0, btnKey);
         btnImg.setDisplaySize(btnW, btnH);
         btnWrap.add(btnImg);
-
-        btnWrap.add(addCauseText(this.scene, 0, 0, 'View Cart', {
-            fontSize: `${Math.round(17 * scale)}px`,
-            fontStyle: 'bold',
-            color: '#ffffff',
-            align: 'center',
-        }).setOrigin(0.5, 0.5).setStroke('#1a6b28', 3));
+        btnWrap.add(btnLabel);
 
         const btnHit = this.scene.add.rectangle(0, 0, btnW, btnH, 0, 0);
         btnHit.setInteractive({ useHandCursor: true });

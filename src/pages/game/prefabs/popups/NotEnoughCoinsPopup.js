@@ -251,20 +251,6 @@ export default class NotEnoughCoinsPopup extends Phaser.GameObjects.Container {
         this._drawHeroCopy(m, colCx, contentTop, heroBottom, colW, data);
         this._drawStats(m, innerLeft + innerW / 2, statY, innerW, statH, data);
         this._drawFooter(m, m.cx, footerY, footerW, footerH, data);
-
-        const leafS = m.W * 0.034;
-        const leftLeaf = this.scene.add.image(panelLeft, panelBottom, MISSION_DESC_KEYS.leafIcon);
-        leftLeaf.setOrigin(0, 1);
-        this._fitContain(leftLeaf, leafS, leafS);
-        leftLeaf.setPosition(panelLeft, panelBottom);
-        leftLeaf.setFlipX(true);
-        this.add(leftLeaf);
-
-        const rightLeaf = this.scene.add.image(panelLeft + panelW, panelBottom, MISSION_DESC_KEYS.leafIcon);
-        rightLeaf.setOrigin(1, 1);
-        this._fitContain(rightLeaf, leafS, leafS);
-        rightLeaf.setPosition(panelLeft + panelW, panelBottom);
-        this.add(rightLeaf);
     }
 
     _drawHeroCopy(m, cx, top, bottom, colW, data) {

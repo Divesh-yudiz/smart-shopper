@@ -237,7 +237,6 @@ export default class EcoMeterEmptyPopup extends Phaser.GameObjects.Container {
 
         const panelTop = panelY - panelH / 2;
         const panelLeft = m.cx - panelW / 2;
-        this._cornerLeaves(m, panelLeft, panelTop, panelW, panelH);
 
         const ribbon = this.scene.add.image(m.cx, panelTop + ribbonOverlap - ribbonLift, MS.ribbon);
         this._fitW(ribbon, ribbonW);
@@ -277,26 +276,6 @@ export default class EcoMeterEmptyPopup extends Phaser.GameObjects.Container {
         this._drawSection(m, m.cx, sectionY, innerW * 0.92);
         this._drawResources(m, m.cx, resY, innerW, resH, data);
         this._drawViewCart(m, m.cx, btnY, Math.min(innerW * 0.46, m.W * 0.24), btnH);
-    }
-
-    _cornerLeaves (m, left, top, w, h) {
-        const size = m.W * 0.036;
-        const insetX = size * 1.25;
-        const insetY = size * 1.15;
-        const spots = [
-            { x: left + insetX, y: top + insetY, flipX: true, alpha: 0.55, rot: -0.55 },
-            { x: left + w - insetX, y: top + insetY, flipX: false, alpha: 0.55, rot: 0.5 },
-            { x: left + insetX, y: top + h - insetY, flipX: true, alpha: 0.7, rot: -0.25 },
-            { x: left + w - insetX, y: top + h - insetY, flipX: false, alpha: 0.7, rot: 0.2 },
-        ];
-        spots.forEach((spot) => {
-            const leaf = this.scene.add.image(spot.x, spot.y, EME.ecoLeaf);
-            this._fitContain(leaf, size, size);
-            leaf.setFlipX(spot.flipX);
-            leaf.setAlpha(spot.alpha);
-            leaf.setRotation(spot.rot);
-            this.add(leaf);
-        });
     }
 
     _drawStatRow (m, cx, y, w, h, data) {

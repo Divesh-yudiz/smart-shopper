@@ -171,6 +171,18 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
         return this.scene.add.nineslice(x, y, key, undefined, w, h, cap, cap, cap, cap);
     }
 
+    /** Widen a pill button by stretching only the middle, keeping the round ends. */
+    _pillSlice(x, y, key, w, h) {
+        const src = this.scene.textures.get(key)?.getSourceImage?.();
+        const tw = Math.max(1, src?.width ?? 568);
+        const th = Math.max(1, src?.height ?? 128);
+        const side = Math.max(8, Math.min(Math.floor(th * 0.48), Math.floor(tw / 2) - 1));
+        const srcW = Math.max(side * 2 + 8, Math.round(w * (th / Math.max(1, h))));
+        const img = this.scene.add.nineslice(x, y, key, undefined, srcW, th, side, side, 0, 0);
+        img.setDisplaySize(w, h);
+        return img;
+    }
+
     _drawChrome(m) {
         const backH = m.H * 0.078;
         const back = this.scene.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
@@ -557,13 +569,15 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
             },
         ).setOrigin(0, 0.5));
 
-        const maxW = w * 0.22;
         const maxH = h * 0.56;
-        const wrap = this.scene.add.container(x + w * 0.79, y + h * 0.5);
+        const src = this.scene.textures.get(HOME_TEXTURE_KEYS.greenButton)?.getSourceImage?.();
+        const nativeRatio = (src?.width ?? 568) / Math.max(1, src?.height ?? 128);
+        const btnH = maxH;
+        const btnW = Math.min(w * 0.30, btnH * nativeRatio * 1.38);
+        const wrap = this.scene.add.container(x + w * 0.78, y + h * 0.5);
         this.add(wrap);
 
-        const btn = this.scene.add.image(0, 0, HOME_TEXTURE_KEYS.greenButton);
-        this._fitContain(btn, maxW, maxH);
+        const btn = this._pillSlice(0, 0, HOME_TEXTURE_KEYS.greenButton, btnW, btnH);
         wrap.add(btn);
 
         const label = this._text(0, 0, 'Add To Cart', {
@@ -582,7 +596,7 @@ export default class ProductInfoPopup extends Phaser.GameObjects.Container {
 
         const gap = m.W * 0.01;
         const innerMax = btn.displayWidth * 0.72;
-        const labelLift = btn.displayHeight * 0.06;
+        const labelLift = btn.displayHeight * 0.02;
         label.y = -labelLift;
         if (cart) cart.y = -labelLift;
         let fontSize = m.fs(TYPE.button);

@@ -43,18 +43,18 @@ export const RACK_SHELF_LAYOUTS = Object.freeze({
 
     /** Bay 3 — Beverages: 4 per row, kept left of center pillar (see shelfAlignment insetRight) */
     beverages: Object.freeze([
-        { product: 'milk', count: 7, gap: 6, priceTagOffsetY: 15 },
-        { product: 'orangeJuice', count: 7, gap: 6, priceTagOffsetY: 18 },
+        { product: 'milk', count: 8, gap: 22, priceTagOffsetY: 15 },
+        { product: 'orangeJuice', count: 9, gap: 18, priceTagOffsetY: 18 },
         { product: 'grapeJuice', count: 7, gap: 6, priceTagOffsetY: 16 },
-        { product: 'alowveraJuice', count: 7, gap: 6, priceTagOffsetY: 14 },
+        { product: 'alowveraJuice', count: 10, gap: 12, priceTagOffsetY: 14 },
     ]),
 
     /** Bay 4 — Toys: teddy → car → rings → ball */
     toys: Object.freeze([
-        { product: 'teddybear', count: 5, iconSlotFill: 1.30, priceTagOffsetY: 20 },
-        { product: 'toyCar', count: 4, iconSlotFill: 1.15, priceTagOffsetY: 2 },
+        { product: 'teddybear', count: 6, iconSlotFill: 1.22, shelfHeightFactor: 1.12, gap: 18, priceTagOffsetY: 20 },
+        { product: 'toyCar', count: 4, iconSlotFill: 1.15, fitWidthCount: 5, gap: 16, offsetY: 0, priceTagOffsetY: 2 },
         { product: 'rings', count: 6, iconSlotFill: 1.30, priceTagOffsetY: 16 },
-        { product: 'ball', count: 4, shelfHeightFactor: 0.85, iconSlotFill: 1.35, gap: 20, priceTagOffsetY: 14 },
+        { product: 'ball', count: 5, shelfHeightFactor: 0.85, iconSlotFill: 1.35, gap: 20, priceTagOffsetY: 14 },
     ]),
 
     /** Bay 5 — Chips: red → yellow → green → blue bags */
@@ -69,21 +69,21 @@ export const RACK_SHELF_LAYOUTS = Object.freeze({
     cakes: Object.freeze([
         { product: 'vanillaCake', count: 4, priceTagOffsetY: 16 },
         { product: 'chocolateCake', count: 4, offsetY: -12, priceTagOffsetY: 16 },
-        { product: 'breads', count: 4, priceTagOffsetY: 4 },
-        { product: 'cookies', count: 4, offsetY: -12, priceTagOffsetY: 12 },
+        { product: 'breads', count: 5, priceTagOffsetY: 4 },
+        { product: 'cookies', count: 5, offsetY: -22, priceTagOffsetY: 12 },
     ]),
 
     /** Bay 7 — Cleaning: spray → dish → hand → paper */
     toiletaries: Object.freeze([
         { product: 'cleaner', count: 6, iconSlotFill: 1.75, gap: 20, priceTagOffsetY: 14 },
-        { product: 'dishwash', count: 7, offsetY: -12, iconSlotFill: 1.95, priceTagOffsetY: 12 },
+        { product: 'dishwash', count: 8, offsetY: -12, iconSlotFill: 1.95, priceTagOffsetY: 12 },
         { product: 'handwash', count: 6, offsetY: -12, iconSlotFill: 1.75, priceTagOffsetY: 12 },
-        { product: 'paper', count: 6, offsetY: -18, gap: 10, shelfHeightFactor: 0.70, priceTagOffsetY: 10 },
+        { product: 'paper', count: 4, offsetY: -18, gap: 18, shelfHeightFactor: 0.70, priceTagOffsetY: 10 },
     ]),
 
     /** Bay 8 — Electronics: laptop → mobile → headphones → gift */
     electronics: Object.freeze([
-        { product: 'laptop', count: 4, priceTagOffsetY: 8 },
+        { product: 'laptop', count: 5, fitWidthCount: 4, priceTagOffsetY: 8 },
         { product: 'mobile', count: 5, offsetY: -15, shelfHeightFactor: 0.65, iconSlotFill: 1.80, gap: 30, priceTagOffsetY: 16 },
         { product: 'headphones', count: 5, offsetY: -15, shelfHeightFactor: 0.65, iconSlotFill: 1.80, gap: 20, priceTagOffsetY: 16 },
         { product: 'gift', count: 6, offsetY: -15, shelfHeightFactor: 0.75, iconSlotFill: 1.80, gap: 25, priceTagOffsetY: 10 },
@@ -91,10 +91,10 @@ export const RACK_SHELF_LAYOUTS = Object.freeze({
 
     /** Bay 9 — Grocery: cola → donuts → ice cream → rice/bags */
     ration: Object.freeze([
-        { product: 'cola', count: 6, gap: -25, priceTagOffsetY: 10 },
+        { product: 'cola', count: 6, gap: 18, shelfHeightFactor: 1.15, iconSlotFill: 1.55, iconScale: 1.70, fitWidthCount: 6, spanCount: 8, priceTagOffsetY: 10 },
         { product: 'donuts', count: 5, shelfHeightFactor: 0.65, iconSlotFill: 1.20, priceTagOffsetY: 4 },
         { product: 'icecream', count: 6, offsetY: -15, gap: -5, priceTagOffsetY: 10 },
-        { product: 'rice', count: 5, offsetY: -15, gap: -15, priceTagOffsetY: 10 },
+        { product: 'rice', count: 5, offsetY: -15, gap: 16, priceTagOffsetY: 10 },
     ]),
 });
 
@@ -102,7 +102,7 @@ export const RACK_SHELF_LAYOUTS = Object.freeze({
  * @param {string} rackId — key from MARKET_RACK_ORDER
  * @returns {Array<ShelfRowRepeat | ShelfRowMixed>}
  */
-export function getShelfRowsForRack (rackId) {
+export function getShelfRowsForRack(rackId) {
     const rows = RACK_SHELF_LAYOUTS[rackId];
     if (!rows) {
         console.warn(`[shelfLayouts] No shelf layout for rack "${rackId}"`);
@@ -112,6 +112,6 @@ export function getShelfRowsForRack (rackId) {
 }
 
 /** Number of shelf rows for a rack (drives vertical layout). */
-export function getShelfRowCount (rackId) {
+export function getShelfRowCount(rackId) {
     return getShelfRowsForRack(rackId).length;
 }

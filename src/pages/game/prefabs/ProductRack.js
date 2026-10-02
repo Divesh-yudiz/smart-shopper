@@ -6,27 +6,6 @@ import { getMarketLayout, normalizeRowBottomSpaces } from '../utils/rackConfig.j
 const { rackWidth: RACK_W, rackHeight: RACK_H, productIconScale: DEFAULT_ICON_SCALE } = getMarketLayout();
 export { RACK_W, RACK_H };
 
-const DEFAULT_LAYOUT = {
-    productsPerRow: 4,
-    shelfRows: 4,
-    gridXOffset: 0,
-    gridYOffset: 0,
-    rowGap: 0,
-    rowBottomSpace: 0,
-    insetLeft: 50,
-    insetRight: 36,
-    shelfSurfaceInset: 10,
-    rowYAdjust: [],
-    rowXAdjust: [],
-    iconScale: null,
-    shelfHeightFactor: 0.88,
-    iconAspect: 1,
-    iconSlotFill: 0.92,
-    keepAspect: false,
-    spreadFullBay: false,
-    rowSidePad: 24,
-};
-
 const PROD_GAP = 6;
 
 /** Wide enough for names like "Dish Washing Soap" at full label size. */
@@ -45,8 +24,32 @@ const PRICE_TAG_SALE = 0xFFD24A;
 const PRICE_TAG_SALE_EDGE = 0xC98412;
 /** Default hang below shelf plank; lower = up, higher = down (per-row override in shelfLayouts.js) */
 const DEFAULT_PRICE_TAG_OFFSET_Y = 10;
+/** Leave room so the plaque from the shelf above does not cover the product. */
+const DEFAULT_TAG_CLEARANCE = PRICE_TAG_H + DEFAULT_PRICE_TAG_OFFSET_Y + 6;
 
-function paintShelfTag (graphics, fill, edge, width = PRICE_TAG_W) {
+const DEFAULT_LAYOUT = {
+    productsPerRow: 4,
+    shelfRows: 4,
+    gridXOffset: 0,
+    gridYOffset: 0,
+    rowGap: 0,
+    rowBottomSpace: 0,
+    insetLeft: 50,
+    insetRight: 36,
+    shelfSurfaceInset: 10,
+    rowYAdjust: [],
+    rowXAdjust: [],
+    iconScale: null,
+    shelfHeightFactor: 0.88,
+    iconAspect: 1,
+    iconSlotFill: 0.92,
+    keepAspect: true,
+    spreadFullBay: false,
+    rowSidePad: 24,
+    tagClearance: DEFAULT_TAG_CLEARANCE,
+};
+
+function paintShelfTag(graphics, fill, edge, width = PRICE_TAG_W) {
     graphics.clear();
     graphics.fillStyle(0x5A3818, 0.28);
     graphics.fillRoundedRect(
@@ -68,11 +71,11 @@ function paintShelfTag (graphics, fill, edge, width = PRICE_TAG_W) {
     );
 }
 
-function shelfLabelText (product, rowCfg) {
+function shelfLabelText(product, rowCfg) {
     return rowCfg?.label ?? product?.label ?? '-';
 }
 
-function buildGridLayout (
+function buildGridLayout(
     {
         productsPerRow,
         shelfRows,
@@ -90,10 +93,11 @@ function buildGridLayout (
         shelfHeightFactor = 0.88,
         iconAspect = 1,
         iconSlotFill = 0.92,
-        keepAspect = false,
+        keepAspect = true,
         spreadFullBay = false,
         rowSidePad = 24,
         shelfPlankOffset,
+        tagClearance = DEFAULT_TAG_CLEARANCE,
     },
     rackWidth = RACK_W,
     rackHeight = RACK_H
@@ -145,12 +149,13 @@ function buildGridLayout (
         spreadFullBay,
         rowSidePad,
         shelfPlankOffset,
+        tagClearance,
     };
 }
 
 const PALETTE = [0xE74C3C, 0xF39C12, 0x27AE60, 0x2980B9, 0x8E44AD, 0xE67E22, 0x16A085, 0xC0392B, 0xD35400];
 
-function normalizeProductMap (products, category, count) {
+function normalizeProductMap(products, category, count) {
     if (!products) return defaultProducts(category, count);
     if (Array.isArray(products)) {
         const map = {};
@@ -162,7 +167,7 @@ function normalizeProductMap (products, category, count) {
     return products;
 }
 
-function defaultProducts (category, count) {
+function defaultProducts(category, count) {
     return Array.from({ length: count }, (_, i) => ({
         id: i,
         label: `${category} ${i + 1}`,
@@ -219,7 +224,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
      * Hang a SALE tag on the left of a flash-sale item's shelf row.
      * @returns {{x:number,y:number}|null} position in this rack's local space
      */
-    highlightSaleProduct (sItemKey) {
+    highlightSaleProduct(sItemKey) {
         if (!sItemKey) return null;
         const matches = this._productCards.filter(({ product }) => (
             product?.sItemKey === sItemKey || product?.key === sItemKey
@@ -236,7 +241,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         return { x: first.x, y: first.y };
     }
 
-    _addSaleBadge (matches) {
+    _addSaleBadge(matches) {
         const w = 92;
         const h = 34;
         // Product cards live in this rack's local space (x grows to the right).
@@ -267,14 +272,14 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         this.add(badge);
     }
 
-    _markSalePriceTags (sItemKey) {
+    _markSalePriceTags(sItemKey) {
         for (const entry of this._shelfTags ?? []) {
             if (entry.sItemKey !== sItemKey) continue;
             entry.paint?.(PRICE_TAG_SALE, PRICE_TAG_SALE_EDGE);
         }
     }
 
-    _rowSpan (layout) {
+    _rowSpan(layout) {
         const { insetLeft, insetRight, rackWidth, gridXOffset, spreadFullBay, rowSidePad = 24 } = layout;
         if (spreadFullBay) {
             const padL = layout.rowSidePadLeft ?? rowSidePad;
@@ -286,7 +291,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         return { usableW, startX: -(rackWidth / 2) + insetLeft + gridXOffset };
     }
 
-    _buildGridProducts (products) {
+    _buildGridProducts(products) {
         const { shelfRows, productsPerRow, colX, rowY, productW } = this._layout;
         const max = shelfRows * productsPerRow;
         const rowCenterX = (colX[0] + colX[productsPerRow - 1]) / 2;
@@ -307,7 +312,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         }
     }
 
-    _buildRowProducts (productMap, rows) {
+    _buildRowProducts(productMap, rows) {
         const catalog = productMap;
         const layout = this._layout;
         const { rowY, sectionH } = layout;
@@ -344,19 +349,54 @@ export default class ProductRack extends Phaser.GameObjects.Container {
 
             const count = Math.max(1, rowCfg.count ?? 1);
             const gap = rowCfg.gap ?? PROD_GAP;
-            const slotW = count > 1 ? (usableW - gap * (count - 1)) / count : usableW;
-            const startX = rowStartX + slotW / 2;
+            const sizeCount = Math.max(1, rowCfg.fitWidthCount ?? count);
+            const sizeSlotW = sizeCount > 1
+                ? (usableW - gap * (sizeCount - 1)) / sizeCount
+                : usableW;
+
+            const scale = rowCfg.iconScale ?? this._layout.iconScale ?? DEFAULT_ICON_SCALE;
+            const heightFactor = rowCfg.shelfHeightFactor ?? this._layout.shelfHeightFactor ?? 0.88;
+            const slotFill = rowCfg.iconSlotFill ?? this._layout.iconSlotFill ?? 0.92;
+            const maxW = Math.max(24, sizeSlotW * slotFill * scale);
+            const maxH = Math.max(28, sectionH * heightFactor * scale);
+            const visualW = Math.min(maxW, maxH * this._productAspect(product));
+
+            // If the product object allots a span (spanCount slots of this bay),
+            // arrange copies inside that width. Otherwise pack by drawn icon
+            // width. Never shrink the item — only the gap may tighten.
+            const spanCount = Number.isFinite(rowCfg.spanCount) ? rowCfg.spanCount : null;
+            const allottedW = spanCount > 0
+                ? Math.min(usableW, (usableW / spanCount) * Math.max(spanCount, count))
+                : usableW;
+            let packedGap = gap;
+            let packedRowW = visualW * count + packedGap * Math.max(0, count - 1);
+            if (count > 1 && spanCount > 0) {
+                const evenGap = (allottedW - visualW * count) / (count - 1);
+                packedGap = Number.isFinite(rowCfg.gap) ? Math.max(gap, evenGap) : evenGap;
+                packedRowW = visualW * count + packedGap * (count - 1);
+                if (packedRowW > allottedW) {
+                    packedGap = evenGap;
+                    packedRowW = allottedW;
+                }
+            } else if (count > 1 && packedRowW > usableW) {
+                packedGap = (usableW - visualW * count) / (count - 1);
+                packedRowW = usableW;
+            }
+            const rowW = spanCount > 0 ? allottedW : usableW;
+            const startX = rowStartX + (rowW - packedRowW) / 2 + visualW / 2
+                + (spanCount > 0 ? (usableW - allottedW) / 2 : 0);
+            const step = count > 1 ? visualW + packedGap : 0;
 
             for (let i = 0; i < count; i++) {
-                const cx = startX + i * (slotW + gap);
-                this.add(this._createCard(product, cx, shelfY, slotW, sectionH, rowCfg));
+                const cx = startX + i * step;
+                this.add(this._createCard(product, cx, shelfY, sizeSlotW, sectionH, rowCfg));
             }
 
             this._queueShelfRowPriceTag(rowStartX + rowOffsetX + usableW / 2, shelfY, product, rowCfg);
         });
     }
 
-    _buildMixedShelfRow (catalog, stacks, shelfY, sectionH, usableW, rowStartX, gap = PROD_GAP, rowOverrides = {}) {
+    _buildMixedShelfRow(catalog, stacks, shelfY, sectionH, usableW, rowStartX, gap = PROD_GAP, rowOverrides = {}) {
         const slotCount = Math.max(stacks.length, rowOverrides.slotCount ?? stacks.length);
         const slotW = slotCount > 1 ? (usableW - gap * (slotCount - 1)) / slotCount : usableW;
         const usedW = stacks.length * slotW + Math.max(0, stacks.length - 1) * gap;
@@ -388,39 +428,54 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         }
     }
 
-    _createCard (product, cx, shelfY, productW, sectionH, rowOverrides = {}) {
+    _productAspect(product) {
+        const key = product?.textureKey;
+        if (key && this.scene.textures.exists(key)) {
+            const src = this.scene.textures.get(key)?.getSourceImage?.();
+            if (src?.width > 0 && src?.height > 0) return src.width / src.height;
+        }
+        return 0.45;
+    }
+
+    _createCard(product, cx, shelfY, productW, sectionH, rowOverrides = {}) {
         const container = this.scene.add.container(cx, shelfY);
         const slotW = Number.isFinite(productW) ? productW : RACK_W / 4;
         const scale = rowOverrides.iconScale ?? this._layout.iconScale ?? DEFAULT_ICON_SCALE;
         const heightFactor = rowOverrides.shelfHeightFactor ?? this._layout.shelfHeightFactor ?? 0.88;
-        const aspect = rowOverrides.iconAspect ?? this._layout.iconAspect ?? 1;
         const slotFill = rowOverrides.iconSlotFill ?? this._layout.iconSlotFill ?? 0.92;
+        const keepAspect = rowOverrides.keepAspect ?? this._layout.keepAspect ?? true;
 
-        const maxH = sectionH * heightFactor * scale;
-        const maxW = slotW * slotFill * scale;
-        let iconH = Math.max(28, maxH);
-        let iconW = Math.max(24, maxW);
-        if (aspect > 1) {
-            iconW = iconH / aspect;
-            if (iconW > maxW) {
-                iconW = maxW;
-                iconH = iconW * aspect;
-            }
-        } else if (aspect < 1) {
-            iconH = iconW / aspect;
-            if (iconH > maxH) {
-                iconH = maxH;
-                iconW = iconH * aspect;
+        const maxW = Math.max(24, slotW * slotFill * scale);
+        let maxH = Math.max(28, sectionH * heightFactor * scale);
+        const clearance = rowOverrides.tagClearance ?? this._layout.tagClearance ?? 0;
+        if (clearance > 0) {
+            maxH = Math.min(maxH, Math.max(28, sectionH - clearance));
+        }
+
+        let iconH = maxH;
+        let iconW = maxW;
+        if (keepAspect === false) {
+            const aspect = rowOverrides.iconAspect ?? this._layout.iconAspect ?? 1;
+            if (aspect > 1) {
+                iconW = iconH / aspect;
+                if (iconW > maxW) {
+                    iconW = maxW;
+                    iconH = iconW * aspect;
+                }
+            } else if (aspect < 1) {
+                iconH = iconW / aspect;
+                if (iconH > maxH) {
+                    iconH = maxH;
+                    iconW = iconH * aspect;
+                }
             }
         }
 
         if (product.textureKey && this.scene.textures.exists(product.textureKey)) {
             const img = this.scene.add.image(0, 0, product.textureKey);
             img.setOrigin(0.5, 1);
-            const keepAspect = rowOverrides.keepAspect ?? this._layout.keepAspect;
-            if (keepAspect && img.width > 0 && img.height > 0) {
-                const fit = Math.min(iconW / img.width, iconH / img.height);
-                img.setScale(fit);
+            if (keepAspect !== false && img.width > 0 && img.height > 0) {
+                img.setScale(Math.min(iconW / img.width, iconH / img.height));
                 img.setAngle(0);
             } else {
                 img.setDisplaySize(iconW, iconH);
@@ -471,7 +526,7 @@ export default class ProductRack extends Phaser.GameObjects.Container {
      * World-space center of the first shelf card matching this product.
      * @returns {{x:number,y:number}|null}
      */
-    getProductWorldPosition (product) {
+    getProductWorldPosition(product) {
         if (!product) return null;
         const match = this._productCards.find(({ product: p }) => (
             p === product
@@ -484,18 +539,18 @@ export default class ProductRack extends Phaser.GameObjects.Container {
         return { x: matrix.tx, y: matrix.ty - 40 };
     }
 
-    _queueShelfRowPriceTag (centerX, shelfY, product, rowCfg = {}) {
+    _queueShelfRowPriceTag(centerX, shelfY, product, rowCfg = {}) {
         if (!product && rowCfg.label == null) return;
         this._pendingShelfTags.push({ centerX, shelfY, product, rowCfg });
     }
 
-    _flushShelfPriceTags () {
+    _flushShelfPriceTags() {
         this._pendingShelfTags.forEach((tag) => this._createShelfRowPriceTag(tag));
         this._pendingShelfTags = [];
     }
 
     /** Wooden nameplate — one per shelf row, or one per product on produce rows. */
-    _createShelfRowPriceTag ({ centerX, shelfY, product, rowCfg }) {
+    _createShelfRowPriceTag({ centerX, shelfY, product, rowCfg }) {
         const text = shelfLabelText(product, rowCfg);
         const tagOffsetY = rowCfg.priceTagOffsetY ?? DEFAULT_PRICE_TAG_OFFSET_Y;
         const tagY = shelfY + tagOffsetY;

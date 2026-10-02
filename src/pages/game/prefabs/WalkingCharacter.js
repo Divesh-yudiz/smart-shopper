@@ -97,6 +97,7 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         this._marketView = marketView;
         this._marginLeft = marginLeft;
         this._marginRight = marginRight;
+        this._rightLimit = null;
 
         this.setDepth(155);
 
@@ -232,6 +233,17 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         this._idleImg.setVisible(true);
     }
 
+    /**
+     * Extra right wall in world X (character origin). Used so the player
+     * cannot walk under the expanded shopping-list panel. Pass null to clear.
+     */
+    setRightLimit (x) {
+        this._rightLimit = Number.isFinite(x) ? x : null;
+        if (this._rightLimit != null && this.x > this._rightLimit) {
+            this.x = this._rightLimit;
+        }
+    }
+
     setInputEnabled (enabled) {
         this._inputEnabled = enabled !== false;
         if (!this._inputEnabled) {
@@ -288,7 +300,10 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         const atLeftWall = !mv || mv.scrollX >= mv.scrollMaxX - 1;
         const atRightWall = !mv || mv.scrollX <= mv.scrollMinX + 1;
         const effectiveLeft = atLeftWall ? SPRITE_HALF_W : this._marginLeft;
-        const effectiveRight = atRightWall ? config.width - SPRITE_HALF_W : this._marginRight;
+        let effectiveRight = atRightWall ? config.width - SPRITE_HALF_W : this._marginRight;
+        if (this._rightLimit != null) {
+            effectiveRight = Math.min(effectiveRight, this._rightLimit);
+        }
 
         this.x = Phaser.Math.Clamp(this.x + dx, effectiveLeft, effectiveRight);
         const overflow = dx - (this.x - prevX);

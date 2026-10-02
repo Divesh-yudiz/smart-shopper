@@ -220,6 +220,21 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         return img;
     }
 
+    /** Scale a rounded-rect sprite without stretching its corners or border. */
+    _slice(x, y, key, w, h, preferredCap = 110) {
+        const src = this.scene.textures.get(key)?.getSourceImage?.();
+        const tw = src?.width ?? 256;
+        const th = src?.height ?? 256;
+        const maxCap = Math.min(Math.floor(tw / 2) - 1, Math.floor(th / 2) - 1);
+        const cap = Math.max(8, Math.min(
+            preferredCap,
+            maxCap,
+            Math.floor(w / 2) - 2,
+            Math.floor(h / 2) - 2,
+        ));
+        return this.scene.add.nineslice(x, y, key, undefined, w, h, cap, cap, cap, cap);
+    }
+
     _shrinkToWidth(text, maxW) {
         let size = parseInt(text.style.fontSize, 10) || 16;
         while (text.width > maxW && size > 11) {
@@ -246,8 +261,7 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         const panelH = m.H * 0.84;
         const panelY = m.y(0.54);
 
-        const panel = this.scene.add.image(m.cx, panelY, MS.pop);
-        panel.setDisplaySize(panelW, panelH);
+        const panel = this._slice(m.cx, panelY, MS.pop, panelW, panelH, 110);
         this.add(panel);
 
         const padX = panelW * 0.032;
@@ -322,13 +336,17 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         oval.fillStyle(0x1A0833, 0.45);
         oval.fillEllipse(
             art.x + art.displayWidth * 0.03,
-            art.y + art.displayHeight * 0.48,
+            art.y + art.displayHeight * 0.36,
             art.displayWidth * 0.72,
-            art.displayHeight * 0.16,
+            art.displayHeight * 0.13,
         );
         wrap.add(oval);
 
-        const drop = this.scene.add.image(art.x + hw * 0.022, art.y + hh * 0.02, artKey);
+        const drop = this.scene.add.image(
+            art.x + art.displayWidth * 0.02,
+            art.y + art.displayHeight * 0.012,
+            artKey,
+        );
         drop.setDisplaySize(art.displayWidth, art.displayHeight);
         drop.setTint(0x14061F);
         drop.setAlpha(0.38);
@@ -601,7 +619,8 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
         card.add(nameText);
 
         const qtyFs = m.fs(TYPE.itemQty);
-        const qtyY = h - Math.max(h * 0.075, qtyFs * 0.7);
+        // Extra bottom inset so "1 Pack" / "1 Piece" is not flush with the card edge.
+        const qtyY = h - Math.max(h * 0.15, qtyFs * 1.40);
         const nameGap = Math.max(m.fs(10), h * 0.07);
         const imageTop = nameY + nameText.height + nameGap;
         const imageBottom = qtyY - qtyFs * 0.7;
@@ -680,56 +699,76 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
     _drawActions(m, x, top, w, h) {
         const btnH = Math.min(m.H * 0.074, h * 0.74);
         const gap = w * 0.03;
+        const maxEach = (w * 0.96 - gap) / 2;
+        // Inset past the pill caps so the label has clear space on both sides.
+        const padX = Math.max(m.W * 0.028, btnH * 0.85);
+        let fontSize = m.fs(TYPE.button);
 
-        // Size from height using native aspect so buttons stay pill-shaped.
+        const style = { fontSize: `${fontSize}px`, fontStyle: WEIGHT.heavy, letterSpacing: 0 };
+        const probeOther = this._text(0, 0, 'Choose Another Mission', style).setVisible(false);
+        const probeStart = this._text(0, 0, 'Start Shopping', style).setVisible(false);
+        const iconGap = Math.max(m.fs(7), btnH * 0.1);
+        const iconSize = Math.min(btnH * 0.42, probeStart.height * 0.92);
+        const contentW = Math.max(
+            probeOther.width,
+            probeStart.width + iconGap + iconSize,
+        );
+        probeOther.destroy();
+        probeStart.destroy();
+
         const blueSrc = this.scene.textures.get(K.blueButton)?.getSourceImage?.();
         const greenSrc = this.scene.textures.get(HOME_TEXTURE_KEYS.greenButton)?.getSourceImage?.();
         const blueRatio = (blueSrc?.width ?? 565) / Math.max(1, blueSrc?.height ?? 123);
         const greenRatio = (greenSrc?.width ?? 568) / Math.max(1, greenSrc?.height ?? 128);
-        let otherW = btnH * blueRatio;
-        let startW = btnH * greenRatio;
-        const maxPair = w * 0.92;
-        if (otherW + gap + startW > maxPair) {
-            const scale = maxPair / (otherW + gap + startW);
-            otherW *= scale;
-            startW *= scale;
+        const nativeW = btnH * Math.max(blueRatio, greenRatio);
+        const btnW = Math.min(maxEach, Math.max(nativeW, contentW + padX * 2));
+
+        const maxContent = Math.max(8, btnW - padX * 2);
+        if (contentW > maxContent) {
+            fontSize = Math.max(11, Math.floor(fontSize * (maxContent / contentW)));
         }
-        const pairW = otherW + gap + startW;
+
+        const pairW = btnW * 2 + gap;
         const pairLeft = x + (w - pairW) / 2;
         const rowY = top + h * 0.52;
-        const otherX = pairLeft + otherW / 2;
-        const startX = pairLeft + otherW + gap + startW / 2;
 
-        this._imageButton(m, otherX, rowY, otherW, btnH, K.blueButton, 'Choose Another Mission', {
+        this._imageButton(m, pairLeft + btnW / 2, rowY, btnW, btnH, K.blueButton, 'Choose Another Mission', {
             color: C_WHITE,
+            fontSize,
             onClick: () => this._chooseAnother(),
         });
-        this._imageButton(m, startX, rowY, startW, btnH, HOME_TEXTURE_KEYS.greenButton, 'Start Shopping', {
+        this._imageButton(m, pairLeft + btnW + gap + btnW / 2, rowY, btnW, btnH, HOME_TEXTURE_KEYS.greenButton, 'Start Shopping', {
             color: C_WHITE,
+            fontSize,
             icon: MS.basketIcon,
             onClick: () => this._start(),
         });
     }
 
-    _imageButton(m, cx, cy, maxW, maxH, key, label, { color, icon, onClick }) {
-        const img = this.scene.add.image(cx, cy, key);
-        const ratio = img.width / Math.max(1, img.height);
-        let h = maxH;
-        let w = h * ratio;
-        if (w > maxW) {
-            w = maxW;
-            h = w / ratio;
-        }
+    _pillSlice(x, y, key, w, h) {
+        const src = this.scene.textures.get(key)?.getSourceImage?.();
+        const tw = Math.max(1, src?.width ?? 568);
+        const th = Math.max(1, src?.height ?? 128);
+        const side = Math.max(8, Math.min(Math.floor(th * 0.48), Math.floor(tw / 2) - 1));
+        const srcW = Math.max(side * 2 + 8, Math.round(w * (th / Math.max(1, h))));
+        const img = this.scene.add.nineslice(x, y, key, undefined, srcW, th, side, side, 0, 0);
         img.setDisplaySize(w, h);
+        return img;
+    }
+
+    _imageButton(m, cx, cy, maxW, maxH, key, label, { color, icon, onClick, fontSize }) {
+        const h = maxH;
+        const w = maxW;
+        const img = this._pillSlice(cx, cy, key, w, h);
         this.add(img);
 
-        // Label + icon are one centered run, lifted together so Cause's glyph
+        // Label + icon are one centered run, nudged down so Cause's glyph
         // box sits in the middle of the pill.
-        const group = this.scene.add.container(cx, cy - h * 0.06);
+        const group = this.scene.add.container(cx, cy - h * 0.02);
         this.add(group);
 
         const txt = this._text(0, 0, label, {
-            fontSize: `${m.fs(TYPE.button)}px`,
+            fontSize: `${fontSize ?? m.fs(TYPE.button)}px`,
             fontStyle: WEIGHT.heavy,
             color,
             letterSpacing: 0,
@@ -741,6 +780,9 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             iconImg = this.scene.add.image(0, 0, icon).setOrigin(0, 0.5);
             group.add(iconImg);
         }
+
+        const padX = Math.max(m.W * 0.04, h * 1.2);
+        const maxContent = Math.max(8, w - padX * 2);
 
         const layout = () => {
             const gap = iconImg ? Math.max(m.fs(7), h * 0.1) : 0;
@@ -755,13 +797,17 @@ export default class MissionPopup extends Phaser.GameObjects.Container {
             if (iconImg) iconImg.x = txt.x + txt.width + gap;
         };
 
-        this._shrinkToWidth(txt, w * (iconImg ? 0.68 : 0.82));
+        // Shared fontSize is already fitted for both buttons — do not shrink
+        // one label independently or the pair will look mismatched.
+        if (fontSize == null) {
+            const iconReserve = iconImg ? Math.max(m.fs(7), h * 0.1) + Math.min(h * 0.42, txt.height * 0.92) : 0;
+            this._shrinkToWidth(txt, maxContent - iconReserve);
+        }
         layout();
-        const maxContent = w * 0.86;
         const contentW = iconImg
             ? (iconImg.x + iconImg.displayWidth) - txt.x
             : txt.width;
-        const baseScale = contentW > maxContent ? maxContent / contentW : 1;
+        const baseScale = (fontSize == null && contentW > maxContent) ? maxContent / contentW : 1;
         group.setScale(baseScale);
 
         const hover = (scale) => {

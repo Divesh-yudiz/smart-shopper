@@ -3,7 +3,6 @@ import { addCauseText, setCauseText, wrapCause } from '../../utils/gameText.js';
 import { HOME_TEXTURE_KEYS } from '../../config/homeAssets.js';
 import { MISSION_SELECT_KEYS as MS } from '../../config/missionSelectAssets.js';
 import { MISSION_DESC_KEYS } from '../../config/missionDescriptionAssets.js';
-import { CHOOSE_PRODUCT_KEYS as CP } from '../../config/chooseProductAssets.js';
 import { SALE_POPUP_KEYS as SP } from '../../config/salePopupAssets.js';
 
 /** Keep the sentence after a question mark on its own line, then wrap each part. */
@@ -318,20 +317,6 @@ export default class SalePopup extends Phaser.GameObjects.Container {
         this._dashedHr(m.cx, dashY, barW);
         this._round(this, m.cx, barY, barW, barH, 0xFFF8F2, barH * 0.5, 0xE8D8C4, 2);
         this._drawResources(m, m.cx, barY, coinsRemaining, ecoRemaining);
-
-        const leafS = m.W * 0.024;
-        const leafInsetX = m.W * 0.024;
-        const leafInsetY = m.H * 0.044;
-        [-1, 1].forEach((side) => {
-            const leaf = this.scene.add.image(
-                m.cx + side * (panelW / 2 - leafInsetX),
-                panelBottom - leafInsetY,
-                CP.leaf,
-            );
-            this._fitContain(leaf, leafS, leafS);
-            if (side < 0) leaf.setFlipX(true);
-            this.add(leaf);
-        });
 
         this._drawActions(m, actionsY, btnW);
     }
