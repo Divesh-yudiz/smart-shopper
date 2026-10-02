@@ -41,7 +41,8 @@ export default class MissionTitlePanel extends Phaser.GameObjects.Container {
         const subtitleY = h * 0.62;
         const titleSize = Math.max(22, Math.round(h * 0.28));
         const subtitleSize = Math.max(14, Math.round(h * 0.175));
-        const strokeW = Math.max(3, Math.round(h * 0.045));
+        const titleStrokeW = Math.max(2, Math.round(h * 0.022));
+        const subtitleStrokeW = Math.max(2, Math.round(h * 0.045) - 1);
 
         this._titleText = addCauseText(scene, 0, titleY, '', {
             fontSize: `${titleSize}px`,
@@ -49,8 +50,8 @@ export default class MissionTitlePanel extends Phaser.GameObjects.Container {
             color: TITLE_COLOR,
             align: 'center',
         }).setOrigin(0.5, 0.5);
-        this._titleText.setStroke(STROKE_COLOR, strokeW);
-        this._titleText.setShadow(0, 2, '#000000', 4, true, true);
+        this._titleText.setStroke(STROKE_COLOR, titleStrokeW);
+        this._titleText.setShadow(0, 1, '#000000', 2, true, true);
         this.add(this._titleText);
 
         this._subtitleText = addCauseText(scene, 0, subtitleY, '', {
@@ -59,7 +60,7 @@ export default class MissionTitlePanel extends Phaser.GameObjects.Container {
             color: SUBTITLE_COLOR,
             align: 'center',
         }).setOrigin(0.5, 0.5);
-        this._subtitleText.setStroke(STROKE_COLOR, Math.max(2, strokeW - 1));
+        this._subtitleText.setStroke(STROKE_COLOR, subtitleStrokeW);
         this.add(this._subtitleText);
 
         this.setMission(missionOrder, missionName);

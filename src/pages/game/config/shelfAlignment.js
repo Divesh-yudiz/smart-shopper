@@ -4,8 +4,9 @@
  * rackOffsetX — moves the whole ProductRack left/right (applied in getRackPlacements).
  * Banner left/right/up/down — see config/bannerAlignment.js (not rackOffsetX).
  * rowYAdjust[n] — positive = row moves DOWN; negative = UP (per shelf, top index 0).
+ * The same four plank lines run across every bay, so rowYAdjust, gridYOffset,
+ * and shelfSurfaceInset stay identical. Per-product offsetY is not applied.
  * rowXAdjust[n] — positive = row moves RIGHT; negative = LEFT.
- * Per-row fine-tune in shelfLayouts.js: offsetX, offsetY (added on top of rowX/YAdjust).
  */
 
 /** @type {Record<string, object>} */
@@ -15,10 +16,10 @@ export const RACK_ALIGNMENT = Object.freeze({
         insetRight: 68,
         gridXOffset: -28,
         gridYOffset: 8,
-        shelfSurfaceInset: 15,
+        shelfSurfaceInset: 12,
         shelfHeightFactor: 0.80,
         iconSlotFill: 1.75,
-        rowYAdjust: [6, 20, 22, 28],
+        rowYAdjust: [16, 25, 28, 28],
         iconScale: 1.00,
         rackOffsetX: -10,
     }),
@@ -35,15 +36,16 @@ export const RACK_ALIGNMENT = Object.freeze({
         iconSlotFill: 1.30,
         shelfHeightFactor: 1.50,
         keepAspect: true,
+        tagClearance: 0,
         rackOffsetX: 6,
     }),
     beverages: Object.freeze({
         insetLeft: 0,
         insetRight: 90,
         gridXOffset: -70,
-        gridYOffset: 14,
-        shelfSurfaceInset: 8,
-        rowYAdjust: [20, 20, 20, 20],
+        gridYOffset: 8,
+        shelfSurfaceInset: 12,
+        rowYAdjust: [26, 35, 28, 28],
         iconScale: 1.62,
         shelfHeightFactor: 1.04,
         iconSlotFill: 1.38,
@@ -56,7 +58,7 @@ export const RACK_ALIGNMENT = Object.freeze({
         gridXOffset: -12,
         gridYOffset: 8,
         shelfSurfaceInset: 12,
-        rowYAdjust: [26, 48, 30, 28],
+        rowYAdjust: [26, 35, 28, 28],
         iconScale: 0.95,
         shelfHeightFactor: 0.85,
         iconSlotFill: 1.00,
@@ -70,8 +72,7 @@ export const RACK_ALIGNMENT = Object.freeze({
         shelfHeightFactor: 0.75,
         iconSlotFill: 1.45,
         shelfSurfaceInset: 12,
-        shelfPlankOffset: 34,
-        rowYAdjust: [0, 4, 0, 0],
+        rowYAdjust: [26, 35, 28, 28],
         rowXAdjust: [0, 0, 0, 0],
         iconScale: 1.05,
         rackOffsetX: 20,
@@ -81,9 +82,10 @@ export const RACK_ALIGNMENT = Object.freeze({
         insetRight: 48,
         gridXOffset: -28,
         gridYOffset: 8,
-        shelfHeightFactor: 0.75,
-        iconSlotFill: 1.00,
-        rowYAdjust: [26, 45, 48, 48],
+        shelfHeightFactor: 0.58,
+        iconSlotFill: 0.92,
+        keepAspect: true,
+        rowYAdjust: [26, 35, 28, 28],
         iconScale: 1.05,
         rackOffsetX: -10,
     }),
@@ -94,7 +96,7 @@ export const RACK_ALIGNMENT = Object.freeze({
         gridYOffset: 8,
         shelfHeightFactor: 0.80,
         iconSlotFill: 1.35,
-        rowYAdjust: [26, 45, 48, 48],
+        rowYAdjust: [26, 35, 28, 28],
         iconScale: 1.05,
         rackOffsetX: 20,
     }),
@@ -105,7 +107,7 @@ export const RACK_ALIGNMENT = Object.freeze({
         gridYOffset: 8,
         shelfHeightFactor: 0.85,
         iconSlotFill: 1.20,
-        rowYAdjust: [36, 45, 48, 48],
+        rowYAdjust: [26, 35, 28, 28],
         iconScale: 1.02,
         rackOffsetX: -35,
     }),
@@ -116,7 +118,7 @@ export const RACK_ALIGNMENT = Object.freeze({
         gridYOffset: 8,
         shelfHeightFactor: 0.65,
         iconSlotFill: 1.00,
-        rowYAdjust: [26, 45, 48, 48],
+        rowYAdjust: [26, 35, 28, 28],
         iconScale: 1.05,
         rackOffsetX: -25,
     }),
@@ -134,6 +136,7 @@ const DEFAULT_ALIGNMENT = Object.freeze({
     shelfHeightFactor: 0.92,
     iconAspect: 1,
     iconSlotFill: 1.02,
+    keepAspect: true,
     rackOffsetX: 190,
 });
 

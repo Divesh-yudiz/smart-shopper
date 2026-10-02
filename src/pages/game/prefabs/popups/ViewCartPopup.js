@@ -344,7 +344,7 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         const bodyTop = statY + statH / 2 + gap;
         const leftX = innerLeft + leftW / 2;
         const rightX = innerLeft + leftW + colGap + rightW / 2;
-        this._drawCartColumn(m, leftX, bodyTop, leftW, rowH, rowGap, sectionH, wellPadY);
+        this._drawCartColumn(m, leftX, bodyTop, leftW, rowH, rowGap, sectionH, wellPadY, bodyH);
         this._drawNeededColumn(m, rightX, bodyTop, rightW, {
             stillNeeded: data.stillNeeded,
             sectionH,
@@ -438,10 +438,36 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         return { top, bottom: top + h, h, radius };
     }
 
-    _drawCartColumn (m, cx, top, w, rowH, rowGap, sectionH, wellPadY) {
+    _drawCartColumn (m, cx, top, w, rowH, rowGap, sectionH, wellPadY, bodyH) {
         const padX = w * 0.028;
         const innerW = w - padX * 2;
         const count = this._cartItems.length;
+
+        if (count === 0) {
+            const wellBottom = top + bodyH;
+            this._columnWell(m, cx, top + sectionH * 0.28, wellBottom, w);
+            this._sectionPill(m, cx - w / 2 + m.W * 0.055, top + sectionH / 2, 'IN CART');
+            const emptyStyle = {
+                fontSize: `${m.fs(TYPE.name)}px`,
+                fontStyle: WEIGHT.heavy,
+                color: C_MUTED,
+                align: 'center',
+            };
+            const message = this._wrap(
+                'Add the required products to your cart',
+                innerW * 0.78,
+                emptyStyle,
+            );
+            const wellTop = top + sectionH * 0.28;
+            this.add(this._text(
+                cx,
+                wellTop + (wellBottom - wellTop) / 2,
+                message,
+                emptyStyle,
+            ).setOrigin(0.5, 0.5));
+            return;
+        }
+
         const visible = Math.min(VISIBLE_CART, Math.max(1, count));
         const listTop = top + sectionH + wellPadY;
         const viewH = visible * rowH + Math.max(0, visible - 1) * rowGap;

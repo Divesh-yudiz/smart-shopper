@@ -4,7 +4,7 @@ import baseB from '../../../assets/images/mission-description-assets/BAse-B.png'
 import baseY from '../../../assets/images/mission-description-assets/Base-y.png';
 import baseN from '../../../assets/images/mission-description-assets/Base-N.png';
 import yellowRibbon from '../../../assets/images/mission-description-assets/Yellow-Ribbon.png';
-import blueButton from '../../../assets/images/mission-description-assets/Blue-Button.png';
+import blueButton from '../../../assets/images/sale-popup/Blue-Button.png';
 import noteBase from '../../../assets/images/mission-description-assets/Note-Text-Base.png';
 import coinIcon from '../../../assets/images/mission-description-assets/ZCoin-Icon.png';
 import leafIcon from '../../../assets/images/mission-description-assets/Leaf-Icon.png';

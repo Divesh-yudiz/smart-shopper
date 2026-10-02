@@ -1,9 +1,9 @@
 /**
- * Batch-imports walk-cycle frames from assets/images/character/character-2/
+ * Batch-imports walk-cycle frames from assets/images/character/character-1/
  * via Vite's import.meta.glob so the bundler processes each PNG.
  */
 const _mods = import.meta.glob(
-    '../../../assets/images/character/character-2/*.png',
+    '../../../assets/images/character/character-1/*.png',
     { eager: true }
 );
 
@@ -23,7 +23,7 @@ export const characterAssetPaths = Object.entries(_mods)
 
 export const CHARACTER_FRAME_COUNT = characterAssetPaths.length;
 
-/** Standing / idle pose (walk_13.png) — not part of the walk cycle. */
+/** Standing / idle pose (13.png) — not part of the walk cycle. */
 export const IDLE_STAND_FRAME = 13;
 export const IDLE_TEXTURE_KEY = `char_walk_${IDLE_STAND_FRAME}`;
 

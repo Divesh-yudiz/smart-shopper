@@ -88,6 +88,17 @@ function itemIconKey(item, index) {
     return ITEM_ICON_FALLBACKS[index % ITEM_ICON_FALLBACKS.length];
 }
 
+/** Stable Phaser key for a shopping-list image URL. Shared with the mission brief. */
+function listImageTextureKey(url) {
+    let hash = 2166136261;
+    const s = String(url);
+    for (let i = 0; i < s.length; i += 1) {
+        hash ^= s.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `ms_list_${(hash >>> 0).toString(36)}`;
+}
+
 /**
  * Welcome Back — resume unfinished mission (Artboard welcome-back).
  */
@@ -125,6 +136,8 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         this._onResume = onResume;
         this._onNewMission = onNewMission;
         this._onClose = onClose;
+        this._itemImageGen = (this._itemImageGen ?? 0) + 1;
+        this._itemImageJobs = [];
 
         this.removeAll(true);
         this.setScale(1);
@@ -150,6 +163,7 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
                 name: it.name ?? it.label ?? `Item ${i + 1}`,
                 done: !!(it.done ?? ((it.collected ?? 0) >= (it.required ?? 1))),
                 textureKey: itemIconKey(it, i),
+                sImage: it.sImage || it.imageUrl || null,
             })),
             itemsFound,
             itemsTotal: Math.max(1, itemsTotal),
@@ -276,10 +290,11 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         y += statsH + m.H * 0.03;
 
         // Action buttons — Start New Mission (blue) + Resume Mission (green).
-        const btnH = m.H * 0.072;
+        const btnH = m.H * 0.082;
         const panelBot = panelY + panelH / 2;
-        const btnCy = Math.min(y + btnH / 2, panelBot - btnH / 2 - m.H * 0.042);
+        const btnCy = Math.min(y + btnH / 2, panelBot - btnH / 2 - m.H * 0.038);
         this._drawActionButtons(m, m.cx, btnCy, innerW, btnH);
+        this._loadItemImages();
     }
 
     _drawTitleDecor(m, cx, y, title) {
@@ -499,11 +514,86 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
         this._shrinkToWidth(label, w * 0.78);
         this.add(label);
 
-        const iconKey = item.textureKey;
-        if (iconKey && this.scene.textures.exists(iconKey)) {
-            const icon = this.scene.add.image(cx, cy + h * 0.12, iconKey);
-            this._fitContain(icon, w * 0.72, h * 0.55);
-            this.add(icon);
+        const maxW = w * 0.72;
+        const maxH = h * 0.48;
+        const imageY = cy + h * 0.16;
+        const imageUrl = item.sImage || null;
+        const imageKey = imageUrl ? listImageTextureKey(imageUrl) : null;
+        const localKey = item.textureKey && this.scene.textures.exists(item.textureKey)
+            ? item.textureKey
+            : null;
+        const readyKey = (imageKey && this.scene.textures.exists(imageKey)) ? imageKey : localKey;
+        const placeholder = readyKey
+            || (this.scene.textures.exists(MD.bowlIcon) ? MD.bowlIcon : null);
+        if (!placeholder) return;
+
+        const icon = this.scene.add.image(cx, imageY, placeholder);
+        this._fitContain(icon, maxW, maxH);
+        if (!readyKey) icon.setVisible(false);
+        this.add(icon);
+
+        if (imageKey && readyKey !== imageKey) {
+            this._itemImageJobs = this._itemImageJobs ?? [];
+            this._itemImageJobs.push({
+                key: imageKey,
+                url: imageUrl,
+                apply: () => {
+                    if (!icon.active || !this.scene?.textures.exists(imageKey)) return;
+                    icon.setTexture(imageKey);
+                    this._fitContain(icon, maxW, maxH);
+                    icon.setVisible(true);
+                },
+            });
+        }
+    }
+
+    /**
+     * Shopping-list art comes from each item's sImage on the cart response.
+     * Local icons stay hidden until that URL is in the texture cache.
+     */
+    _loadItemImages() {
+        const jobs = this._itemImageJobs ?? [];
+        this._itemImageJobs = [];
+        if (!jobs.length || !this.scene) return;
+
+        const gen = this._itemImageGen;
+        const scene = this.scene;
+        const applyAll = () => {
+            if (gen !== this._itemImageGen) return;
+            jobs.forEach((job) => job.apply());
+        };
+
+        const missing = [];
+        const queued = new Set();
+        jobs.forEach((job) => {
+            if (scene.textures.exists(job.key)) return;
+            if (queued.has(job.key)) return;
+            queued.add(job.key);
+            missing.push(job);
+        });
+        if (!missing.length) {
+            applyAll();
+            return;
+        }
+
+        const start = () => {
+            if (gen !== this._itemImageGen || !this.scene) return;
+            scene.load.setCORS('anonymous');
+            missing.forEach(({ key, url }) => {
+                if (!scene.textures.exists(key)) scene.load.image(key, url);
+            });
+            if (!scene.load.list.size) {
+                applyAll();
+                return;
+            }
+            scene.load.once(Phaser.Loader.Events.COMPLETE, applyAll);
+            scene.load.start();
+        };
+
+        if (scene.load.isLoading()) {
+            scene.load.once(Phaser.Loader.Events.COMPLETE, start);
+        } else {
+            start();
         }
     }
 
@@ -584,52 +674,80 @@ export default class WelcomeBackPopup extends Phaser.GameObjects.Container {
     }
 
     _drawActionButtons(m, cx, cy, innerW, btnH) {
-        const gap = m.W * 0.018;
-        const blueSrc = this.scene.textures.get(MD.blueButton)?.getSourceImage?.();
-        const greenSrc = this.scene.textures.get(HOME_TEXTURE_KEYS.greenButton)?.getSourceImage?.();
-        const blueRatio = (blueSrc?.width ?? 565) / Math.max(1, blueSrc?.height ?? 123);
-        const greenRatio = (greenSrc?.width ?? 568) / Math.max(1, greenSrc?.height ?? 128);
-        let newW = btnH * blueRatio;
-        let resumeW = btnH * greenRatio;
+        const gap = m.W * 0.022;
         const maxPair = innerW * 0.92;
-        if (newW + gap + resumeW > maxPair) {
-            const scale = maxPair / (newW + gap + resumeW);
-            newW *= scale;
-            resumeW *= scale;
-        }
-        const pairW = newW + gap + resumeW;
-        const leftX = cx - pairW / 2 + newW / 2;
-        const rightX = cx + pairW / 2 - resumeW / 2;
+        const btnW = Math.min((maxPair - gap) / 2, btnH * 4.5);
+        const pairW = btnW * 2 + gap;
+        const leftX = cx - pairW / 2 + btnW / 2;
+        const rightX = cx + pairW / 2 - btnW / 2;
+        const padX = Math.max(m.W * 0.014, btnW * 0.13);
+        const fontSize = this._sharedButtonFontSize(
+            ['Start New Mission', 'Resume Mission'],
+            m.fs(TYPE.button),
+            btnW - padX * 2,
+        );
+        const opts = { yMul: -0.06, padMul: 0.13, fontSize };
 
-        this._pillButton(m, leftX, cy, newW, btnH, MD.blueButton, 'Start New Mission', () => {
+        this._pillButton(m, leftX, cy, btnW, btnH, MD.blueButton, 'Start New Mission', () => {
             this._close(() => this._onNewMission?.());
-        });
-        this._pillButton(m, rightX, cy, resumeW, btnH, HOME_TEXTURE_KEYS.greenButton, 'Resume Mission', () => {
+        }, opts);
+        this._pillButton(m, rightX, cy, btnW, btnH, HOME_TEXTURE_KEYS.greenButton, 'Resume Mission', () => {
             this._close(() => this._onResume?.());
-        });
+        }, opts);
     }
 
-    _pillButton(m, cx, cy, w, h, key, label, onClick) {
-        const wrap = this.scene.add.container(cx, cy);
-        this.add(wrap);
+    _sharedButtonFontSize(labels, startSize, maxW) {
+        let size = startSize;
+        labels.forEach((label) => {
+            const probe = this._text(0, 0, label, {
+                fontSize: `${startSize}px`,
+                fontStyle: WEIGHT.heavy,
+                color: C_WHITE,
+            });
+            this._shrinkToWidth(probe, maxW);
+            size = Math.min(size, parseInt(probe.style.fontSize, 10) || size);
+            probe.destroy();
+        });
+        return size;
+    }
 
-        const btn = this.scene.add.image(0, 0, key);
-        this._fitContain(btn, w, h);
-        const displayW = btn.displayWidth;
-        btn.setInteractive({ useHandCursor: true });
-        wrap.add(btn);
+    /** Stretch a pill button horizontally without distorting the round ends. */
+    _pillSlice(x, y, key, w, h) {
+        const src = this.scene.textures.get(key)?.getSourceImage?.();
+        const tw = Math.max(1, src?.width ?? 568);
+        const th = Math.max(1, src?.height ?? 128);
+        const side = Math.max(8, Math.min(Math.floor(th * 0.48), Math.floor(tw / 2) - 1));
+        const srcW = Math.max(side * 2 + 8, Math.round(w * (th / Math.max(1, h))));
+        const img = this.scene.add.nineslice(x, y, key, undefined, srcW, th, side, side, 0, 0);
+        img.setDisplaySize(w, h);
+        return img;
+    }
 
-        const txt = this._text(0, -h * 0.06, label, {
-            fontSize: `${m.fs(TYPE.button)}px`,
+    _pillButton(m, cx, cy, maxW, maxH, key, label, onClick, opts = {}) {
+        const w = maxW;
+        const h = maxH;
+        const img = this._pillSlice(cx, cy, key, w, h);
+        this.add(img);
+
+        const padX = Math.max(m.W * 0.014, w * (opts.padMul ?? 0.13));
+        const txt = this._text(cx, cy + h * (opts.yMul ?? -0.06), label, {
+            fontSize: `${opts.fontSize ?? m.fs(TYPE.button)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_WHITE,
         }).setOrigin(0.5, 0.5);
-        this._shrinkToWidth(txt, displayW * 0.82);
-        wrap.add(txt);
+        this._shrinkToWidth(txt, w - padX * 2);
+        this.add(txt);
 
-        btn.on('pointerover', () => wrap.setScale(1.05));
-        btn.on('pointerout', () => wrap.setScale(1));
-        btn.on('pointerup', onClick);
+        const hover = (scale) => {
+            img.setDisplaySize(w * scale, h * scale);
+            txt.setScale(scale);
+        };
+        const hit = this.scene.add.rectangle(cx, cy, w, h, 0, 0);
+        hit.setInteractive({ useHandCursor: true });
+        hit.on('pointerover', () => hover(1.04));
+        hit.on('pointerout', () => hover(1));
+        hit.on('pointerup', onClick);
+        this.add(hit);
     }
 
     _close(afterClose = null) {

@@ -14,7 +14,7 @@ import CoinsPanel from "../prefabs/CoinsPanel.js";
 import EcoMeterPanel from "../prefabs/EcoMeterPanel.js";
 import CheckoutPanel from "../prefabs/popups/CheckoutPanel.js";
 import { getRackByIndex, getRacksForView, getRackPlacements } from "../utils/rackConfig.js";
-import { patchRacksWithApiPrices, buildShoppingListEntries, buildCartItemsFromApi, buildViewCartRowsFromApi, applyCartCollectedToEntries, addToCart, removeFromCart, fetchCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId, setSessionId, setMissionId, setItemVariants, getItemVariants, getItemId, fetchItemVariants, startMission, mergeStartSessionIntoConfig, apiNormalTextureKey, apiEcoTextureKey, cartVariantOf } from "../../../utils/gameApi.js";
+import { patchRacksWithApiPrices, buildShoppingListEntries, buildCartItemsFromApi, buildViewCartRowsFromApi, applyCartCollectedToEntries, addToCart, removeFromCart, fetchCart, resolveItem, resolveItemKeyFromProduct, checkoutGame, setGameId, setSessionId, setMissionId, setItemVariants, getItemVariants, getItemId, fetchItemVariants, startMission, mergeStartSessionIntoConfig, fetchMissionItems, missionIdFromResponse, apiNormalTextureKey, apiEcoTextureKey, cartVariantOf } from "../../../utils/gameApi.js";
 import ProductInfoPopup from "../prefabs/popups/ProductInfoPopup.js";
 import SalePopup from "../prefabs/popups/SalePopup.js";
 import NotEnoughCoinsPopup from "../prefabs/popups/NotEnoughCoinsPopup.js";
@@ -138,7 +138,10 @@ class Level extends Phaser.Scene {
             {
                 size: hud.shoppingListBtnSize,
                 expanded: true,
-                onToggle: (expanded) => this.oShoppingList?.setExpanded(expanded),
+                onToggle: (expanded) => {
+                    this.oShoppingList?.setExpanded(expanded);
+                    this._syncListWalkBound();
+                },
             }
         );
         this.oShoppingList?.setExpandOrigin(hud.shoppingListBtnX, hud.shoppingListBtnY);
@@ -167,6 +170,7 @@ class Level extends Phaser.Scene {
         });
         // Seed trolley visuals from any restored cart items
         this.oCharacter.setCartItems(this.oMyCart?.getItems() ?? []);
+        this._syncListWalkBound();
 
         this.oCheckout = new CheckoutPanel(this);
         this.oMissionSuccess = new MissionSuccessPopup(this);
@@ -593,8 +597,10 @@ class Level extends Phaser.Scene {
                 textureKey: entry.textureKey,
             };
         });
-        this.oTimesUp.open({
+        const popupPayload = {
             items: listItems.length ? listItems : undefined,
+            score: 0,
+            scoreMax: 100,
             coinsUsed: spent,
             coinsMax: budget,
             ecoUsed: Math.max(0, ecoMax - ecoLeft),
@@ -614,11 +620,23 @@ class Level extends Phaser.Scene {
                 this._timesUpOpen = false;
                 this._restartMission();
             },
-        });
+        };
+        this.oTimesUp.open(popupPayload);
 
         try {
-            await checkoutGame({
+            const json = await checkoutGame({
                 nTimeRemaining: this.oTimer?.getRemaining() ?? 0,
+            });
+            this._rememberCheckoutMissionId(json);
+            if (!this._timesUpOpen) return;
+            const fromApi = this._successPayloadFromCheckout(json);
+            const score = fromApi.score ?? 0;
+            if (score === 0 && fromApi.scoreMax == null && !fromApi.scoreNote) return;
+            this.oTimesUp.open({
+                ...popupPayload,
+                score,
+                scoreMax: fromApi.scoreMax ?? 100,
+                ...(fromApi.scoreNote ? { scoreNote: fromApi.scoreNote } : {}),
             });
         } catch (err) {
             console.error('[Times Up] Checkout API error:', err);
@@ -815,6 +833,7 @@ class Level extends Phaser.Scene {
     }
 
     create({ isMusic, isSound, gameConfig = null } = {}) {
+        this._restartingMission = false;
         this.oSoundManager = new SoundManager(this);
         this.oGameManager = new GameManager(this);
         this.oSoundManager.isMusic = isMusic;
@@ -893,21 +912,57 @@ class Level extends Phaser.Scene {
         this.scene.start('Home');
     }
 
+    _rememberCheckoutMissionId (json) {
+        const id = missionIdFromResponse(json);
+        if (!id) return;
+        this._checkoutMissionId = id;
+        setMissionId(id);
+        if (this._gameConfig) {
+            this._gameConfig = { ...this._gameConfig, missionId: id };
+        }
+    }
+
     async _restartMission () {
+        if (this._restartingMission) return;
         this._clearSavedState();
         const pending = this._gameConfig;
-        const missionId = pending?.missionId;
+        const missionId = this._checkoutMissionId ?? pending?.missionId;
         if (!missionId) {
             console.error('[Level] Missing missionId — cannot restart mission');
             return;
         }
+
+        this._restartingMission = true;
         try {
             if (pending?.gameId) setGameId(pending.gameId);
+            setMissionId(missionId);
             const startJson = await startMission(missionId);
-            const gameConfig = mergeStartSessionIntoConfig(pending, startJson);
+            const started = mergeStartSessionIntoConfig({ ...pending, missionId }, startJson);
+            const nextMissionId = started.missionId ?? missionIdFromResponse(startJson) ?? missionId;
+            setMissionId(nextMissionId);
+
+            let items = [];
+            try {
+                items = await fetchMissionItems(nextMissionId);
+            } catch (itemErr) {
+                console.error('[Level] Failed to fetch mission items:', itemErr);
+            }
+
+            const gameConfig = {
+                ...started,
+                missionId: nextMissionId,
+                items: items.length ? items : (started.items ?? pending?.items ?? []),
+            };
+
+            if (!items.length || this._missingProductTextures(items).length) {
+                this.scene.start('Preload', { gameConfig });
+                return;
+            }
+
             this.scene.restart({ isMusic: true, isSound: true, gameConfig });
         } catch (err) {
             console.error('[Level] Mission start API failed:', err);
+            this._restartingMission = false;
         }
     }
 
@@ -984,6 +1039,19 @@ class Level extends Phaser.Scene {
     _syncShoppingListButton () {
         const { done, total } = this.oShoppingList?.getProgress?.() ?? { done: 0, total: 0 };
         this.oShoppingListBtn?.setProgress(done, total);
+    }
+
+    /** Keep the player from walking under the expanded shopping-list notepad. */
+    _syncListWalkBound () {
+        const list = this.oShoppingList;
+        if (!this.oCharacter) return;
+        if (!list?.isExpanded?.()) {
+            this.oCharacter.setRightLimit(null);
+            return;
+        }
+        // Character origin is chest-center; trolley sits ~160px to the right when facing right.
+        const clearance = 168;
+        this.oCharacter.setRightLimit(list.getBlockingLeft() - clearance);
     }
 
     /** Reconciles cart / shopping list / eco / coins from a cart add/remove API response. */
@@ -1066,6 +1134,7 @@ class Level extends Phaser.Scene {
                 textureKey: this._checkoutItemTexture(item),
             };
         });
+        const finalScore = Number(data.nFinalScore);
         return {
             title: data.sTitle,
             subtitle: data.sSubtitle,
@@ -1073,7 +1142,7 @@ class Level extends Phaser.Scene {
             items: items.length ? items : undefined,
             stars: data.nStars,
             maxStars: data.nMaxStars,
-            score: data.nFinalScore,
+            score: Number.isFinite(finalScore) ? finalScore : 0,
             scoreMax: data.nMaxScore,
             scoreNote: data.sFeedback,
             accuracyMatched: accuracy.nValue,
@@ -1118,7 +1187,6 @@ class Level extends Phaser.Scene {
         const overBudget = budget > 0 && spent > budget;
         const pct = matched / total;
         const stars = (pct >= 1 && !overBudget) ? 3 : (pct >= 1 ? 2 : (pct >= 0.5 ? 1 : 0));
-        const score = Math.round(pct * 70 + (1 - ecoUsed / Math.max(1, ecoMax)) * 20 + (overBudget ? 0 : 10));
         const sustainability = Math.max(0, Math.min(total, Math.round((1 - ecoUsed / Math.max(1, ecoMax)) * total)));
         const missionName = this._gameConfig?.category || this._gameConfig?.sName || 'Family Grocery Basket';
 
@@ -1127,7 +1195,7 @@ class Level extends Phaser.Scene {
             missionName,
             items: listItems.length ? listItems : undefined,
             stars,
-            score: Math.min(100, Math.max(0, score)),
+            score: 0,
             scoreMax: 100,
             accuracyMatched: matched,
             accuracyTotal: total,
@@ -1144,6 +1212,7 @@ class Level extends Phaser.Scene {
             const json = await checkoutGame({
                 nTimeRemaining: this.oTimer?.getRemaining() ?? 0,
             });
+            this._rememberCheckoutMissionId(json);
             const fromApi = this._successPayloadFromCheckout(json);
             payload = {
                 ...payload,

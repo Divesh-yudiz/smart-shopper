@@ -8,7 +8,7 @@ import { getRackAlignment } from '../config/shelfAlignment.js';
 const GRID_LAYOUT_KEYS = [
     'productsPerRow', 'shelfRows', 'gridXOffset', 'gridYOffset', 'rowGap', 'rowBottomSpace', 'rows',
     'insetLeft', 'insetRight', 'shelfSurfaceInset', 'rowYAdjust', 'iconScale',
-    'shelfHeightFactor', 'iconAspect', 'iconSlotFill', 'keepAspect', 'spreadFullBay', 'rowSidePad', 'rowXAdjust', 'shelfPlankOffset',
+    'shelfHeightFactor', 'iconAspect', 'iconSlotFill', 'keepAspect', 'tagClearance', 'spreadFullBay', 'rowSidePad', 'rowXAdjust', 'shelfPlankOffset',
 ];
 
 function resolveGridValue(rack, grid, key) {

@@ -135,15 +135,57 @@ export default class Home extends Phaser.Scene {
             saved.ecoValue = ecoLeft;
         }
 
-        if (Array.isArray(aCartItems)) {
-            cfg.initialCartItems = aCartItems;
+        const apiList = data?.oMission?.aShoppingList
+            ?? session?.oMission?.aShoppingList
+            ?? null;
+        if (Array.isArray(apiList) && apiList.length) {
+            const byKey = new Map(
+                apiList.filter((it) => it?.sItemKey).map((it) => [it.sItemKey, it]),
+            );
+            if (Array.isArray(cfg.shoppingList) && cfg.shoppingList.length) {
+                cfg.shoppingList = cfg.shoppingList.map((it) => {
+                    const api = byKey.get(it?.sItemKey);
+                    if (!api) return it;
+                    return {
+                        ...it,
+                        sImage: api.sImage || it.sImage || null,
+                        sName: api.sName || it.sName,
+                    };
+                });
+            } else {
+                cfg.shoppingList = apiList;
+            }
+        }
+
+        if (Array.isArray(aCartItems) || (Array.isArray(apiList) && apiList.length)) {
+            if (Array.isArray(aCartItems)) cfg.initialCartItems = aCartItems;
             const baseEntries = saved.shoppingEntries?.length
                 ? saved.shoppingEntries
                 : (cfg.shoppingList?.length ? buildShoppingListEntries(cfg.shoppingList) : null);
             if (baseEntries) {
-                saved.shoppingEntries = applyCartCollectedToEntries(baseEntries, aCartItems);
+                let entries = Array.isArray(aCartItems)
+                    ? applyCartCollectedToEntries(baseEntries, aCartItems)
+                    : baseEntries;
+                if (Array.isArray(apiList) && apiList.length) {
+                    const byKey = new Map(
+                        apiList.filter((it) => it?.sItemKey).map((it) => [it.sItemKey, it]),
+                    );
+                    entries = entries.map((entry) => {
+                        if (!entry) return entry;
+                        const api = byKey.get(entry.sItemKey) ?? byKey.get(entry.key);
+                        if (!api) return entry;
+                        return {
+                            ...entry,
+                            sImage: api.sImage || entry.sImage || null,
+                            label: api.sName || entry.label,
+                        };
+                    });
+                }
+                saved.shoppingEntries = entries;
             }
-            saved.cartItems = buildCartItemsFromApi(aCartItems);
+            if (Array.isArray(aCartItems)) {
+                saved.cartItems = buildCartItemsFromApi(aCartItems);
+            }
         }
 
         try {
@@ -178,6 +220,7 @@ export default class Home extends Phaser.Scene {
                 done: (e.collected ?? 0) >= (e.required ?? 1),
                 textureKey: e.textureKey,
                 sItemKey: e.sItemKey,
+                sImage: e.sImage || null,
             }))
             : undefined;
 
@@ -349,14 +392,6 @@ export default class Home extends Phaser.Scene {
             taglineStyle,
         ).setOrigin(0.5, 0.5));
 
-        const btnW = m.W * 0.20;
-        const cta = this.add.container(m.cx, m.y(0.600));
-        const btn = this.add.image(0, 0, HOME_TEXTURE_KEYS.greenButton);
-        btn.setOrigin(0.5, 0.5);
-        this._fitW(btn, btnW);
-        btn.setInteractive({ useHandCursor: true });
-        cta.add(btn);
-
         const btnLabel = this._text(0, 0, 'Select Mission', {
             fontSize: `${m.fs(44)}px`,
             fontStyle: 'bold',
@@ -364,9 +399,25 @@ export default class Home extends Phaser.Scene {
             align: 'center',
         });
         btnLabel.setOrigin(0.5, 0.5);
-        // Cause's glyph box sits below its visual center, so lift the label
-        // until the letters sit in the middle of the button.
-        btnLabel.setPosition(0, -btn.displayHeight * 0.065);
+
+        const src = this.textures.get(HOME_TEXTURE_KEYS.greenButton)?.getSourceImage?.();
+        const tw = Math.max(1, src?.width ?? 512);
+        const th = Math.max(1, src?.height ?? 148);
+        const side = Math.max(8, Math.min(Math.floor(th * 0.48), Math.floor(tw / 2) - 1));
+        const btnH = m.W * 0.20 * (th / tw);
+        const sidePad = Math.max(m.W * 0.028, btnH * 0.55);
+        const btnW = Math.max(m.W * 0.26, btnLabel.width + sidePad * 2);
+        const srcW = Math.max(side * 2 + 8, Math.round(btnW * (th / btnH)));
+
+        const cta = this.add.container(m.cx, m.y(0.600));
+        const btn = this.add.nineslice(0, 0, HOME_TEXTURE_KEYS.greenButton, undefined, srcW, th, side, side, 0, 0);
+        btn.setDisplaySize(btnW, btnH);
+        btn.setInteractive({ useHandCursor: true });
+        cta.add(btn);
+
+        // Cause's glyph box sits below its visual center; a small downward
+        // nudge keeps the letters optically centered on the button.
+        btnLabel.setPosition(0, btnH * 0.01);
         cta.add(btnLabel);
 
         btn.on('pointerover', () => cta.setScale(1.05));

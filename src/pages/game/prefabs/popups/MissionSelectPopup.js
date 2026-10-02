@@ -153,6 +153,21 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         return img;
     }
 
+    /** Scale a rounded-rect sprite without stretching its corners or border. */
+    _slice(x, y, key, w, h, preferredCap = 110) {
+        const src = this.scene.textures.get(key)?.getSourceImage?.();
+        const tw = src?.width ?? 256;
+        const th = src?.height ?? 256;
+        const maxCap = Math.min(Math.floor(tw / 2) - 1, Math.floor(th / 2) - 1);
+        const cap = Math.max(8, Math.min(
+            preferredCap,
+            maxCap,
+            Math.floor(w / 2) - 2,
+            Math.floor(h / 2) - 2,
+        ));
+        return this.scene.add.nineslice(x, y, key, undefined, w, h, cap, cap, cap, cap);
+    }
+
     _drawChrome(m) {
         const backH = m.H * 0.078;
         const back = this.scene.add.image(m.x(0.078), m.y(0.058), HOME_TEXTURE_KEYS.backButton);
@@ -170,8 +185,7 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         const panelH = m.H * 0.82;
         const panelY = m.y(0.54);
 
-        const panel = this.scene.add.image(m.cx, panelY, K.pop);
-        panel.setDisplaySize(panelW, panelH);
+        const panel = this._slice(m.cx, panelY, K.pop, panelW, panelH, 110);
         this.add(panel);
 
         const ribbonW = m.W * 0.42;
@@ -245,12 +259,12 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         const gapSm = h * 0.012;
         const gapMd = h * 0.018;
 
-        // Stretch art to the shared card box so every card is identical size.
-        const card = this.scene.add.image(0, 0, theme.card);
-        card.setDisplaySize(w, h);
+        // Nineslice so every card shares one size without stretching the corners.
+        const card = this._slice(0, 0, theme.card, w, h, 56);
         wrap.add(card);
 
-        const corner = Math.min(w, h) * 0.085;
+        // Match the nineslice cap so the mask does not clip the rounded frame.
+        const corner = 56;
         const maskG = this.scene.add.graphics();
         maskG.fillStyle(0xffffff, 1);
         maskG.fillRoundedRect(cx + left, cy + top, w, h, corner);
@@ -389,9 +403,10 @@ export default class MissionSelectPopup extends Phaser.GameObjects.Container {
         ));
 
         if (showScore) {
+            const scoreLift = m.fs(8);
             wrap.add(this._text(
                 left + padX,
-                contentBottom - scoreFs,
+                contentBottom - scoreFs - scoreLift,
                 this._clampLines(`Score: ${score}/100`, innerW * 0.5, { fontSize: `${scoreFs}px` }, 1),
                 { fontSize: `${scoreFs}px`, color: C_RATING },
             ).setOrigin(0, 0));

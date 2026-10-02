@@ -1,4 +1,5 @@
 import { PRODUCT_CATALOG, RACK_ASSET_CATEGORIES } from '../pages/game/config/productAssets.js';
+import { getProductShelfFit } from '../pages/game/config/productRowCounts.js';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -15,7 +16,7 @@ const authHeaders = () => ({
  * Resolve the player user id for mission-list requests.
  * Prefer `?userId=` / `?iUserId=` on the page URL, then VITE_USER_ID.
  */
-export function getUserId () {
+export function getUserId() {
     if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         const fromQuery = params.get('userId') || params.get('iUserId');
@@ -41,7 +42,7 @@ export function getSessionId() { return sessionId; }
 export function setMissionId(id) { missionId = id; }
 export function getMissionId() { return missionId; }
 
-function sessionPayload (extra = {}) {
+function sessionPayload(extra = {}) {
     const body = { ...extra };
     if (gameId) body.iMiniGameId = gameId;
     if (sessionId) body.iSessionId = sessionId;
@@ -112,7 +113,7 @@ export async function fetchItemVariants(itemId) {
  * @param {string} missionId
  * @returns {Promise<Array<object>>}
  */
-export async function fetchMissionItems (missionId) {
+export async function fetchMissionItems(missionId) {
     if (!missionId) throw new Error('fetchMissionItems requires a missionId');
     const res = await fetch(
         `${BASE_URL}/smart-shopper/items?iMissionId=${encodeURIComponent(missionId)}`,
@@ -134,13 +135,13 @@ export async function fetchMissionItems (missionId) {
 }
 
 /** Phaser texture key for an API item's normal (shelf) image. */
-export function apiNormalTextureKey (sItemKey) {
+export function apiNormalTextureKey(sItemKey) {
     if (!sItemKey) return null;
     return `api_item_${String(sItemKey).replace(/[^a-zA-Z0-9_-]/g, '_')}_normal`;
 }
 
 /** Phaser texture key for an API item's eco image. */
-export function apiEcoTextureKey (sItemKey) {
+export function apiEcoTextureKey(sItemKey) {
     if (!sItemKey) return null;
     return `api_item_${String(sItemKey).replace(/[^a-zA-Z0-9_-]/g, '_')}_eco`;
 }
@@ -280,7 +281,7 @@ const ROOT_ITEM_RACK = Object.freeze({
  * Infer market rack from an items-API image URL
  * (…/products/normal|eco/<category>/<file>.png).
  */
-export function rackIdFromProductImageUrl (url) {
+export function rackIdFromProductImageUrl(url) {
     if (!url) return null;
     const withFolder = String(url).match(/\/products\/(?:normal|eco)\/([^/]+)\/[^/?#]+/i);
     if (withFolder?.[1] && URL_CATEGORY_TO_RACK[withFolder[1]]) {
@@ -289,7 +290,7 @@ export function rackIdFromProductImageUrl (url) {
     return null;
 }
 
-function resolveRackIdForApiItem (item, sItemKey) {
+function resolveRackIdForApiItem(item, sItemKey) {
     const imageUrl = item?.oNormal?.sImage ?? item?.sImage
         ?? itemMetaBySItemKey[sItemKey]?.sImage
         ?? getItemVariants(sItemKey)?.standard?.image
@@ -305,19 +306,19 @@ function resolveRackIdForApiItem (item, sItemKey) {
  * @param {string} sItemKey
  * @param {{ eco?: boolean }} [opts]
  */
-export function resolveItemTextureKey (sItemKey, { eco = false } = {}) {
+export function resolveItemTextureKey(sItemKey, { eco = false } = {}) {
     if (!sItemKey) return null;
     return eco ? apiEcoTextureKey(sItemKey) : apiNormalTextureKey(sItemKey);
 }
 
-function humanizeItemKey (sItemKey) {
+function humanizeItemKey(sItemKey) {
     return String(sItemKey ?? 'Item')
         .replace(/_/g, ' ')
         .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /** @param {string} sItemKey @param {{ eco?: boolean }} [opts] */
-export function resolveItem (sItemKey, { eco = false } = {}) {
+export function resolveItem(sItemKey, { eco = false } = {}) {
     if (!sItemKey) return null;
     const textureKey = resolveItemTextureKey(sItemKey, { eco });
     const mapped = ITEM_KEY_MAP[sItemKey];
@@ -361,7 +362,7 @@ export function resolveItemKeyFromProduct(product) {
  * GET /cart?iMissionId=… — current cart details for View Cart.
  * @param {string} [iMissionId]
  */
-export async function fetchCart (iMissionId) {
+export async function fetchCart(iMissionId) {
     const mission = iMissionId ?? missionId;
     if (!mission) throw new Error('fetchCart requires iMissionId');
     const res = await fetch(
@@ -373,13 +374,13 @@ export async function fetchCart (iMissionId) {
 }
 
 /** Cart line variant sent to /cart/add and /cart/remove. */
-export function cartVariantOf (entry) {
+export function cartVariantOf(entry) {
     if (entry?.eVariant === 'sale' || entry?.isSaleVariant) return 'sale';
     if (entry?.eVariant === 'eco' || entry?.isEcoVariant) return 'eco';
     return 'normal';
 }
 
-function resolveCartVariant (eVariant) {
+function resolveCartVariant(eVariant) {
     if (eVariant === 'eco' || eVariant === 'sale') return eVariant;
     return 'normal';
 }
@@ -388,7 +389,7 @@ function resolveCartVariant (eVariant) {
  * POST /cart/add — body: { iMissionId, iItemId, eVariant }.
  * @param {{ iItemId: string, eVariant?: 'eco'|'normal'|'sale', iMissionId?: string }} opts
  */
-export async function addToCart ({ iItemId, eVariant = 'normal', iMissionId } = {}) {
+export async function addToCart({ iItemId, eVariant = 'normal', iMissionId } = {}) {
     const mission = iMissionId ?? missionId;
     if (!mission) throw new Error('addToCart requires iMissionId');
     if (!iItemId) throw new Error('addToCart requires iItemId');
@@ -428,7 +429,7 @@ export async function addToCart ({ iItemId, eVariant = 'normal', iMissionId } = 
  * POST /checkout — body: { iMissionId, iMiniGameId, nTimeRemaining }.
  * @param {{ iMissionId?: string, iMiniGameId?: string, nTimeRemaining?: number }} [opts]
  */
-export async function checkoutGame ({ iMissionId, iMiniGameId, nTimeRemaining } = {}) {
+export async function checkoutGame({ iMissionId, iMiniGameId, nTimeRemaining } = {}) {
     const mission = iMissionId ?? missionId;
     const miniGame = iMiniGameId ?? gameId;
     if (!mission) throw new Error('checkoutGame requires iMissionId');
@@ -447,11 +448,24 @@ export async function checkoutGame ({ iMissionId, iMiniGameId, nTimeRemaining } 
     return res.json();
 }
 
+/** Mission id from checkout / start payloads (`data.iMissionId`, session, or nested mission). */
+export function missionIdFromResponse(json) {
+    const data = json?.data ?? json ?? {};
+    return data.iMissionId
+        ?? data.missionId
+        ?? data.session?.iMissionId
+        ?? data.oMission?._id
+        ?? data.oMission?.iMissionId
+        ?? data.mission?._id
+        ?? data.mission?.iMissionId
+        ?? null;
+}
+
 /**
  * POST /cart/remove — body: { iMissionId, iItemId, eVariant }.
  * @param {{ iItemId: string, eVariant?: 'eco'|'normal'|'sale', iMissionId?: string }} opts
  */
-export async function removeFromCart ({ iItemId, eVariant = 'normal', iMissionId } = {}) {
+export async function removeFromCart({ iItemId, eVariant = 'normal', iMissionId } = {}) {
     const mission = iMissionId ?? missionId;
     if (!mission) throw new Error('removeFromCart requires iMissionId');
     if (!iItemId) throw new Error('removeFromCart requires iItemId');
@@ -528,7 +542,7 @@ function normalizeMission(m = {}, index = 0) {
  * Shown in Choose Your Mission.
  * @returns {Promise<{gameId: string, ageCategory: string, name: string, missions: Array}>}
  */
-export async function fetchMissions () {
+export async function fetchMissions() {
     const res = await fetch(`${BASE_URL}/smart-shopper/missions`, { headers: authHeaders() });
     if (!res.ok) throw new Error(`Missions API ${res.status}: ${res.statusText}`);
     const json = await res.json();
@@ -554,7 +568,7 @@ export async function fetchMissions () {
  * @param {string} missionId
  * @returns {Promise<{gameId: string, ageCategory: string, name: string, mission: object}>}
  */
-export async function fetchMissionBrief (missionId) {
+export async function fetchMissionBrief(missionId) {
     if (!missionId) throw new Error('fetchMissionBrief requires a missionId');
     const res = await fetch(`${BASE_URL}/smart-shopper/missions/${missionId}`, { headers: authHeaders() });
     if (!res.ok) throw new Error(`Mission brief ${res.status}: ${res.statusText}`);
@@ -578,7 +592,7 @@ export async function fetchMissionBrief (missionId) {
  * `:id` is the mission's `_id`. Call when entering gameplay (not on resume).
  * @param {string} missionId
  */
-export async function startMission (missionId) {
+export async function startMission(missionId) {
     if (!missionId) throw new Error('startMission requires a missionId');
     const res = await fetch(`${BASE_URL}/smart-shopper/missions/${missionId}/start`, {
         method: 'POST',
@@ -600,7 +614,7 @@ export async function startMission (missionId) {
  * Merge POST .../missions/:id/start response into the brief gameConfig so Level
  * boots with the server session (timer, coins, eco, cart, shopping list).
  */
-export function mergeStartSessionIntoConfig (baseConfig = {}, startJson = {}) {
+export function mergeStartSessionIntoConfig(baseConfig = {}, startJson = {}) {
     const data = startJson?.data ?? startJson ?? {};
     const session = data.session ?? {};
 
@@ -645,7 +659,9 @@ export function mergeStartSessionIntoConfig (baseConfig = {}, startJson = {}) {
         ecoMeterMax: ecoMax,
         ecoMeter: ecoRemaining ?? baseConfig.ecoMeter ?? ecoMax,
         shoppingList,
-        items: items.length ? items : (baseConfig.items ?? []),
+        items: (baseConfig.items?.length > items.length)
+            ? baseConfig.items
+            : (items.length ? items : (baseConfig.items ?? [])),
         category: data.sName ?? baseConfig.category,
         description: data.sDescription ?? baseConfig.description,
         coinsRemaining: session.nCoinsRemaining ?? null,
@@ -655,7 +671,7 @@ export function mergeStartSessionIntoConfig (baseConfig = {}, startJson = {}) {
 }
 
 /** Flash-sale shelf item from POST .../missions/:id/start (`oSale`). */
-function normalizeSaleOffer (raw) {
+function normalizeSaleOffer(raw) {
     if (!raw || typeof raw !== 'object' || !raw.sItemKey) return null;
     const salePrice = raw.nSalePrice ?? raw.nCoins ?? null;
     return {
@@ -744,7 +760,7 @@ export async function fetchGameConfig() {
     };
 }
 
-function toShelfProduct (item, index) {
+function toShelfProduct(item, index) {
     const key = item.sItemKey;
     const normalImage = item.oNormal?.sImage || item.sImage || null;
     return {
@@ -766,12 +782,12 @@ function toShelfProduct (item, index) {
 /** Produce rows hold up to three different fruits/vegetables. Every other bay is one product. */
 const PRODUCE_PER_ROW = 3;
 
-function rowCapacity (rackId) {
+function rowCapacity(rackId) {
     return rackId === 'fruits' ? PRODUCE_PER_ROW : 1;
 }
 
 /** One template per visual plank. Produce keeps its authored planks (under the awning). */
-function shelfSlotTemplates (rack) {
+function shelfSlotTemplates(rack) {
     const baseRows = (rack.layout?.rows ?? []).filter((row) => row && !row.skip);
 
     if (rack.id === 'fruits') {
@@ -834,7 +850,7 @@ function shelfSlotTemplates (rack) {
     return slots;
 }
 
-function placeOnRack (plan, item) {
+function placeOnRack(plan, item) {
     const capacity = rowCapacity(plan.rack.id);
     let index = plan.assigned.findIndex((bucket) => (bucket?.length ?? 0) < capacity);
     if (index === -1) index = plan.assigned.length;
@@ -910,17 +926,38 @@ export function patchRacksWithApiPrices(aItems, racksData) {
             items.forEach((item, itemIndex) => {
                 products[item.sItemKey] = toShelfProduct(item, index * 10 + itemIndex);
             });
-            if (produce) {
+            if (produce && items.length > 1) {
                 return {
                     ...slot,
                     stacks: items.map((item) => ({ product: item.sItemKey })),
                     priceTagPerItem: true,
                     // Crate width stays one-third of the shelf. Empty spots are not filled.
                     slotCount: PRODUCE_PER_ROW,
+                    keepAspect: true,
+                    // Same plank line for every product. Ignore authored per-item nudges.
+                    offsetY: 0,
                     skip: false,
                 };
             }
-            return { ...slot, product: items[0].sItemKey, skip: false };
+            const item = items[0];
+            const fit = getProductShelfFit(item.sItemKey, item.sName);
+            return {
+                ...slot,
+                stacks: undefined,
+                priceTagPerItem: false,
+                product: item.sItemKey,
+                count: fit.count,
+                keepAspect: true,
+                ...(fit.shelfHeightFactor != null ? { shelfHeightFactor: fit.shelfHeightFactor } : {}),
+                ...(fit.iconSlotFill != null ? { iconSlotFill: fit.iconSlotFill } : {}),
+                ...(fit.iconScale != null ? { iconScale: fit.iconScale } : {}),
+                ...(fit.fitWidthCount != null ? { fitWidthCount: fit.fitWidthCount } : {}),
+                ...(fit.spanCount != null ? { spanCount: fit.spanCount } : {}),
+                ...(fit.gap != null ? { gap: fit.gap } : {}),
+                // Shelf rows share one baseline. Product art no longer shifts the row.
+                offsetY: 0,
+                skip: false,
+            };
         });
 
         return {
@@ -964,6 +1001,7 @@ export function buildShoppingListEntries(aShoppingList) {
             required: item.nQuantity ?? 1,
             collected: 0,
             sItemKey: item.sItemKey,
+            sImage: item.sImage || null,
             rackId: resolved.rackId,
         };
     });
@@ -972,7 +1010,7 @@ export function buildShoppingListEntries(aShoppingList) {
 }
 
 /** Mark shopping-list collected counts from session/cart quantities. */
-export function applyCartCollectedToEntries (entries, aCartItems) {
+export function applyCartCollectedToEntries(entries, aCartItems) {
     const collectedByKey = {};
     for (const cart of aCartItems ?? []) {
         if (!cart?.sItemKey) continue;
@@ -1030,7 +1068,7 @@ export function buildCartItemsFromApi(aCartItems) {
  * @param {Array<object>} aCartItems
  * @param {Set<string>} [requiredKeys] — sItemKey / product keys on the shopping list
  */
-export function buildViewCartRowsFromApi (aCartItems, requiredKeys = null) {
+export function buildViewCartRowsFromApi(aCartItems, requiredKeys = null) {
     const rows = [];
     for (const entry of aCartItems ?? []) {
         if (!entry?.sItemKey) continue;

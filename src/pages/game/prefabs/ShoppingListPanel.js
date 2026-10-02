@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { UI_TEXTURE_KEYS } from '../config/componentAssets.js';
+import { HOME_TEXTURE_KEYS } from '../config/homeAssets.js';
 import {
     SHOPPING_LIST_ENTRIES,
     SHOPPING_LIST_SLOT_COUNT,
@@ -21,16 +22,13 @@ const SLICE_BOTTOM = 40;
 const TITLE_COLOR = '#ffffff';
 const LABEL_COLOR = '#1a1a1a';
 const LABEL_DONE = '#1b7a3d';
-const CHECKOUT_FILL = 0x4a4a4a;
-const CHECKOUT_FILL_HOVER = 0x5a5a5a;
-const CHECKOUT_HIGHLIGHT = 0x6e6e6e;
 
 /**
  * Right-center shopping list HUD — notepad panel with checkbox rows + checkout.
  * Height always reserves room for SHOPPING_LIST_SLOT_COUNT (6) items.
  */
 export default class ShoppingListPanel extends Phaser.GameObjects.Container {
-    constructor (scene, x, y, {
+    constructor(scene, x, y, {
         displayWidth = PANEL_DISPLAY_W,
         entries = null,
         onCheckout = null,
@@ -47,6 +45,8 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
 
         this._slotViews = [];
         this._onCheckout = onCheckout;
+        this._checkoutReady = false;
+        this._checkoutHovered = false;
 
         this.setDepth(300);
         this._displayWidth = displayWidth;
@@ -61,12 +61,12 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
     }
 
     /** World point the panel emerges from / collapses into (the toggle button). */
-    setExpandOrigin (x, y) {
+    setExpandOrigin(x, y) {
         this._originX = x;
         this._originY = y;
     }
 
-    _buildPanel () {
+    _buildPanel() {
         // Always size for 6 slots so the cream body grows via nine-slice, not the header.
         const slotCount = SHOPPING_LIST_SLOT_COUNT;
 
@@ -171,32 +171,58 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
     }
 
 
-    _buildCheckoutButton (x, y, btnW, btnH, scale) {
+    /** Stretch the shared green pill horizontally without distorting the round ends. */
+    _pillSlice(x, y, key, w, h) {
+        const src = this.scene.textures.get(key)?.getSourceImage?.();
+        const tw = Math.max(1, src?.width ?? 512);
+        const th = Math.max(1, src?.height ?? 148);
+        const side = Math.max(8, Math.min(Math.floor(th * 0.48), Math.floor(tw / 2) - 1));
+        const srcW = Math.max(side * 2 + 8, Math.round(w * (th / Math.max(1, h))));
+        const img = this.scene.add.nineslice(x, y, key, undefined, srcW, th, side, side, 0, 0);
+        img.setOrigin(0.5, 0.5);
+        img.setDisplaySize(w, h);
+        return img;
+    }
+
+    _setCheckoutLook(ready) {
+        const pill = this._checkoutPill;
+        if (!pill) return;
+        if (ready) {
+            if (this._checkoutGreyFx) {
+                pill.postFX?.remove(this._checkoutGreyFx);
+                this._checkoutGreyFx = null;
+            }
+            pill.clearTint();
+            pill.setAlpha(1);
+            return;
+        }
+        if (!this._checkoutGreyFx && pill.postFX) {
+            this._checkoutGreyFx = pill.postFX.addColorMatrix();
+        }
+        // Same pill art, lifted so the inactive state stays a readable grey.
+        this._checkoutGreyFx?.grayscale(1);
+        this._checkoutGreyFx?.brightness(1.55, true);
+        pill.setAlpha(1);
+    }
+
+    _buildCheckoutButton(x, y, btnW, btnH, scale) {
         const btn = this.scene.add.container(x, y);
         this.add(btn);
 
-        const radius = btnH / 2;
-        const gfx = this.scene.add.graphics();
-        btn.add(gfx);
+        const key = HOME_TEXTURE_KEYS.greenButton;
+        const pill = this.scene.textures.exists(key)
+            ? this._pillSlice(0, 0, key, btnW, btnH)
+            : null;
+        if (pill) btn.add(pill);
+        this._checkoutPill = pill;
 
-        const draw = (hover) => {
-            gfx.clear();
-            gfx.fillStyle(0x000000, 0.22);
-            gfx.fillRoundedRect(-btnW / 2 + 2, -btnH / 2 + 3, btnW, btnH, radius);
-            gfx.fillStyle(hover ? CHECKOUT_FILL_HOVER : CHECKOUT_FILL, 1);
-            gfx.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, radius);
-            gfx.fillStyle(CHECKOUT_HIGHLIGHT, 0.45);
-            gfx.fillRoundedRect(
-                -btnW / 2 + 3,
-                -btnH / 2 + 3,
-                btnW - 6,
-                btnH * 0.42,
-                { tl: radius - 2, tr: radius - 2, bl: 0, br: 0 },
-            );
+        const draw = () => {
+            this._setCheckoutLook(this._checkoutReady);
         };
-        draw(false);
+        draw();
+        this._drawCheckout = draw;
 
-        const label = addCauseText(this.scene, 0, 0, 'Checkout', {
+        const label = addCauseText(this.scene, 0, -btnH * 0.02, 'Checkout', {
             fontSize: `${Math.round(22 * scale)}px`,
             fontStyle: 'bold',
             color: '#ffffff',
@@ -207,6 +233,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         const hit = this.scene.add.rectangle(0, 0, btnW, btnH, 0, 0);
         hit.setInteractive({ useHandCursor: true });
         hit.on('pointerover', () => {
+            this._checkoutHovered = true;
             draw(true);
             this.scene.tweens.add({
                 targets: btn,
@@ -217,6 +244,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
             });
         });
         hit.on('pointerout', () => {
+            this._checkoutHovered = false;
             draw(false);
             this.scene.tweens.add({
                 targets: btn,
@@ -232,7 +260,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         this._checkoutBtn = btn;
     }
 
-    _drawBullet (view, complete) {
+    _drawBullet(view, complete) {
         const { bullet, bulletRadius: r } = view;
         bullet.clear();
         if (complete) {
@@ -252,7 +280,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         }
     }
 
-    _fitIcon (icon, textureKey, size) {
+    _fitIcon(icon, textureKey, size) {
         if (!textureKey || !this.scene.textures.exists(textureKey)) {
             icon.setVisible(false);
             return;
@@ -266,7 +294,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         icon.setVisible(true);
     }
 
-    _formatLabel (entry) {
+    _formatLabel(entry) {
         const name = entry.label ?? entry.key ?? '';
         const qty = entry.required ?? 1;
         const unit = qty === 1 ? 'Pack' : 'Pcs';
@@ -274,7 +302,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
     }
 
     /** Returns a shallow copy of the current entries (for checkout comparison). */
-    getEntries () {
+    getEntries() {
         return this._entries.map((e) => (e ? { ...e } : null));
     }
 
@@ -283,7 +311,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
      * @param {Array<{sItemKey?:string, nQuantity?:number}>} aCartItems
      * @param {(entries: Array, aCartItems: Array) => Array} applyFn
      */
-    syncCollectedFromCart (aCartItems, applyFn) {
+    syncCollectedFromCart(aCartItems, applyFn) {
         if (typeof applyFn !== 'function') return;
         this._entries = applyFn(this._entries, aCartItems);
         while (this._entries.length < SHOPPING_LIST_SLOT_COUNT) this._entries.push(null);
@@ -292,7 +320,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
     }
 
     /** Call when player removes a product from the cart. */
-    onProductRemoved (product) {
+    onProductRemoved(product) {
         let changed = false;
 
         this._entries.forEach((entry) => {
@@ -307,7 +335,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         if (changed) this._refresh();
     }
 
-    _matchesProduct (entry, product) {
+    _matchesProduct(entry, product) {
         const key = product.key ?? product.textureKey;
         return (
             entry.key === key ||
@@ -319,26 +347,26 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
     }
 
     /** True when the product is on the list and still needs collecting. */
-    isProductNeeded (product) {
+    isProductNeeded(product) {
         return this._entries.some(
             (entry) => entry && this._matchesProduct(entry, product) && entry.collected < entry.required
         );
     }
 
     /** True when the product appears anywhere on the shopping list. */
-    isProductOnList (product) {
+    isProductOnList(product) {
         return this._entries.some((entry) => entry && this._matchesProduct(entry, product));
     }
 
     /** How many more of this product the list still needs (null if not on list). */
-    getRemainingForProduct (product) {
+    getRemainingForProduct(product) {
         const entry = this._entries.find((e) => e && this._matchesProduct(e, product));
         if (!entry) return null;
         return Math.max(0, entry.required - entry.collected);
     }
 
     /** Call when player picks a product (e.g. added to cart). */
-    onProductCollected (product) {
+    onProductCollected(product) {
         let changed = false;
 
         this._entries.forEach((entry) => {
@@ -354,7 +382,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         return changed;
     }
 
-    _refresh () {
+    _refresh() {
         const active = this._entries.filter(Boolean);
         this._slotViews.forEach((view, i) => {
             const entry = active[i];
@@ -378,20 +406,34 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
             this._fitIcon(view.icon, entry.textureKey, view.iconSize);
             this._drawBullet(view, complete);
         });
+        this._syncCheckoutReady();
     }
 
-    getProgress () {
+    _syncCheckoutReady() {
+        const { done, total } = this.getProgress();
+        const ready = total > 0 && done === total;
+        if (this._checkoutReady === ready) return;
+        this._checkoutReady = ready;
+        this._drawCheckout?.(this._checkoutHovered);
+    }
+
+    getProgress() {
         const active = this._entries.filter(Boolean);
         const done = active.filter((e) => e.collected >= e.required).length;
         return { done, total: active.length };
     }
 
-    isExpanded () {
+    isExpanded() {
         return this._expanded;
     }
 
+    /** Left edge of the notepad at its rest position (world X). */
+    getBlockingLeft() {
+        return this._restX - this._panelW / 2;
+    }
+
     /** Show / hide the full shopping list, emerging from / collapsing into the toggle button. */
-    setExpanded (expanded, { animate = true } = {}) {
+    setExpanded(expanded, { animate = true } = {}) {
         if (this._expanded === expanded && this.visible === expanded) return;
         this._expanded = expanded;
 
@@ -452,7 +494,7 @@ export default class ShoppingListPanel extends Phaser.GameObjects.Container {
         }
     }
 
-    toggleExpanded (opts) {
+    toggleExpanded(opts) {
         this.setExpanded(!this._expanded, opts);
         return this._expanded;
     }
