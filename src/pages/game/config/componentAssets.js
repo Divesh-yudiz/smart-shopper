@@ -35,6 +35,8 @@ import cartBarBase from '../../../assets/images/gameplay/BaR-bASE.png';
 import shelfPriceBase from '../../../assets/images/Components/Price-Base.png';
 import ecoIcon from '../../../assets/images/home/eco-icon.png';
 import saleTag from '../../../assets/images/gameplay/Sale.png';
+import leftArrow from '../../../assets/images/gameplay/left-arrow.png';
+import rightArrow from '../../../assets/images/gameplay/right-arrow.png';
 
 export const UI_TEXTURE_KEYS = Object.freeze({
     cartPanelBg: 'ui_cart_panel_bg',
@@ -71,6 +73,8 @@ export const UI_TEXTURE_KEYS = Object.freeze({
     ecoIcon: 'ui_eco_icon',
     ecoMeterBg: 'ecoMeterBg',
     ecoMeterFill: 'ecoMeterFill',
+    leftArrow: 'ui_left_arrow',
+    rightArrow: 'ui_right_arrow',
 });
 
 export const componentAssetPaths = Object.freeze([
@@ -108,6 +112,8 @@ export const componentAssetPaths = Object.freeze([
     { key: UI_TEXTURE_KEYS.ecoIcon, path: ecoIcon },
     { key: UI_TEXTURE_KEYS.ecoMeterBg, path: objectBase },
     { key: UI_TEXTURE_KEYS.ecoMeterFill, path: budgetGreenBase },
+    { key: UI_TEXTURE_KEYS.leftArrow, path: leftArrow },
+    { key: UI_TEXTURE_KEYS.rightArrow, path: rightArrow },
 ]);
 
 export const componentAssets = Object.freeze(

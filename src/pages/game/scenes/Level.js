@@ -23,6 +23,7 @@ import ViewCartPopup from "../prefabs/popups/ViewCartPopup.js";
 import TimesUpPopup from "../prefabs/popups/TimesUpPopup.js";
 import MissionSuccessPopup from "../prefabs/popups/MissionSuccessPopup.js";
 import WalkingCharacter from "../prefabs/WalkingCharacter.js";
+import WalkControls from "../prefabs/WalkControls.js";
 import { buildEcoVariantPair } from "../config/ecoConfig.js";
 
 const SAVE_KEY = 'ss_gameState';
@@ -171,6 +172,19 @@ class Level extends Phaser.Scene {
         // Seed trolley visuals from any restored cart items
         this.oCharacter.setCartItems(this.oMyCart?.getItems() ?? []);
         this._syncListWalkBound();
+
+        this.oWalkControls = new WalkControls(this, {
+            onHold: (direction, held) => this.oCharacter?.setMoveHold(direction, held),
+        });
+        this.oCharacter.on('inputenabled', (enabled) => this.oWalkControls?.setPlayable(enabled));
+        this._onWalkControlsViewport = () => this.oWalkControls?.syncVisibility();
+        window.addEventListener('resize', this._onWalkControlsViewport);
+        window.visualViewport?.addEventListener('resize', this._onWalkControlsViewport);
+        this.events.once('shutdown', () => {
+            window.removeEventListener('resize', this._onWalkControlsViewport);
+            window.visualViewport?.removeEventListener('resize', this._onWalkControlsViewport);
+            this.oWalkControls?.release();
+        });
 
         this.oCheckout = new CheckoutPanel(this);
         this.oMissionSuccess = new MissionSuccessPopup(this);

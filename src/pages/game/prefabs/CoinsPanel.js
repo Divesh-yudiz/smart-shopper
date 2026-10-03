@@ -25,7 +25,11 @@ export default class CoinsPanel extends Phaser.GameObjects.Container {
         this.setDepth(300);
 
         this._amount = Math.max(0, Math.round(amount));
+        this._displayAmount = this._amount;
         this._max = Math.max(1, Math.round(max));
+        this._roll = { value: this._displayAmount };
+        this._rollToken = 0;
+        this._flashToken = 0;
 
         const w = displayWidth;
         const h = w * (PANEL_NATIVE_H / PANEL_NATIVE_W);
@@ -48,10 +52,12 @@ export default class CoinsPanel extends Phaser.GameObjects.Container {
         const coin = scene.add.image(iconX, topY, UI_TEXTURE_KEYS.ecoGoldIcon);
         coin.setDisplaySize(iconSize, iconSize);
         this.add(coin);
+        this._coin = coin;
 
         const textX = iconX + iconSize / 2 + w * 0.035;
         const valueSize = Math.max(28, Math.round(h * 0.28));
         const labelSize = Math.max(13, Math.round(h * 0.13));
+        this._valueSize = valueSize;
 
         this._valueText = addCauseText(scene, textX, topY - labelSize * 0.55, `${this._amount}`, {
             fontSize: `${valueSize}px`,
@@ -94,7 +100,7 @@ export default class CoinsPanel extends Phaser.GameObjects.Container {
     }
 
     _ratio () {
-        return Phaser.Math.Clamp(this._amount / this._max, 0, 1);
+        return Phaser.Math.Clamp(this._displayAmount / this._max, 0, 1);
     }
 
     _drawBar () {
@@ -124,10 +130,97 @@ export default class CoinsPanel extends Phaser.GameObjects.Container {
     }
 
     setAmount (amount, max = this._max) {
-        this._amount = Math.max(0, Math.round(amount));
-        if (max != null) this._max = Math.max(1, Math.round(max));
-        setCauseText(this._valueText, `${this._amount}`);
-        this._drawBar();
+        const nextMax = max != null ? Math.max(1, Math.round(max)) : this._max;
+        const next = Math.max(0, Math.round(amount));
+        const maxChanged = nextMax !== this._max;
+        this._max = nextMax;
+
+        if (next === this._amount) {
+            if (maxChanged) this._drawBar();
+            return;
+        }
+
+        const delta = next - this._amount;
+        this._amount = next;
+        this._rollTo(next);
+        this._flashValue(delta);
+        this._pulse(this._coin);
+        this._pulse(this._valueText);
+        this._pulse(this._tipCoin);
+        this._floatDelta(delta);
+    }
+
+    _rollTo (target) {
+        const token = ++this._rollToken;
+        this.scene.tweens.killTweensOf(this._roll);
+        this._roll.value = this._displayAmount;
+        const distance = Math.abs(target - this._displayAmount);
+        this.scene.tweens.add({
+            targets: this._roll,
+            value: target,
+            duration: Phaser.Math.Clamp(240 + distance * 16, 320, 900),
+            ease: 'Cubic.easeOut',
+            onUpdate: () => {
+                if (!this.active || token !== this._rollToken) return;
+                this._displayAmount = this._roll.value;
+                setCauseText(this._valueText, `${Math.round(this._displayAmount)}`);
+                this._drawBar();
+            },
+            onComplete: () => {
+                if (!this.active || token !== this._rollToken) return;
+                this._displayAmount = target;
+                setCauseText(this._valueText, `${Math.round(target)}`);
+                this._drawBar();
+            },
+        });
+    }
+
+    _flashValue (delta) {
+        const token = ++this._flashToken;
+        this._valueText.setColor(delta < 0 ? '#E04545' : '#1B8C34');
+        this.scene.time.delayedCall(340, () => {
+            if (this.active && token === this._flashToken) this._valueText.setColor(C_VALUE);
+        });
+    }
+
+    _pulse (obj) {
+        if (!obj?.active) return;
+        const baseX = obj._pulseBaseX ?? obj.scaleX;
+        const baseY = obj._pulseBaseY ?? obj.scaleY;
+        obj._pulseBaseX = baseX;
+        obj._pulseBaseY = baseY;
+        this.scene.tweens.killTweensOf(obj);
+        obj.setScale(baseX, baseY);
+        this.scene.tweens.add({
+            targets: obj,
+            scaleX: baseX * 1.16,
+            scaleY: baseY * 1.16,
+            duration: 140,
+            yoyo: true,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                if (obj.active) obj.setScale(baseX, baseY);
+            },
+        });
+    }
+
+    _floatDelta (delta) {
+        if (!delta) return;
+        const label = delta > 0 ? `+${delta}` : `${delta}`;
+        const floater = addCauseText(this.scene, this._valueText.x + this._valueText.width + 8, this._valueText.y, label, {
+            fontSize: `${Math.max(16, Math.round(this._valueSize * 0.55))}px`,
+            fontStyle: 'bold',
+            color: delta > 0 ? '#1B8C34' : '#E04545',
+        }).setOrigin(0, 0.5);
+        this.add(floater);
+        this.scene.tweens.add({
+            targets: floater,
+            y: floater.y - 26,
+            alpha: 0,
+            duration: 700,
+            ease: 'Cubic.easeOut',
+            onComplete: () => floater.destroy(),
+        });
     }
 
     getAmount () {

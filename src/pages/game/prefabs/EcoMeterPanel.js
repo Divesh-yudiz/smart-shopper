@@ -36,7 +36,12 @@ export default class EcoMeterPanel extends Phaser.GameObjects.Container {
         this.setDepth(300);
 
         this._value = Math.max(0, value);
+        this._displayValue = this._value;
         this._max = Math.max(1, max);
+        this._roll = { value: this._displayValue };
+        this._rollToken = 0;
+        this._flashToken = 0;
+        this._shownLit = null;
 
         const w = displayWidth;
         const h = w * (PANEL_NATIVE_H / PANEL_NATIVE_W);
@@ -58,6 +63,7 @@ export default class EcoMeterPanel extends Phaser.GameObjects.Container {
         const icon = scene.add.image(iconX, topY, UI_TEXTURE_KEYS.ecoGreenIcon);
         icon.setDisplaySize(iconSize, iconSize);
         this.add(icon);
+        this._icon = icon;
 
         const textX = iconX + iconSize / 2 + w * 0.028;
         const textRight = halfW - insetX;
@@ -65,6 +71,7 @@ export default class EcoMeterPanel extends Phaser.GameObjects.Container {
 
         const titleSize = Math.max(17, Math.round(h * 0.17));
         const bodySize = Math.max(14, Math.round(h * 0.145));
+        this._bodySize = bodySize;
 
         this.add(addCauseText(scene, textX, topY - h * 0.06, 'Eco Meter', {
             fontSize: `${titleSize}px`,
@@ -119,7 +126,7 @@ export default class EcoMeterPanel extends Phaser.GameObjects.Container {
     }
 
     _statusLabel () {
-        const v = Math.round(this._value);
+        const v = Math.round(this._displayValue);
         const m = Math.round(this._max);
         return `${v} remaining out of ${m}`;
     }
@@ -134,28 +141,171 @@ export default class EcoMeterPanel extends Phaser.GameObjects.Container {
     }
 
     _litSegments () {
-        if (this._value <= 0) return 0;
+        if (this._displayValue <= 0) return 0;
         const parts = BAR_CHUNK_KEYS.length;
         return Phaser.Math.Clamp(
-            Math.ceil((this._value / this._max) * parts),
+            Math.ceil((this._displayValue / this._max) * parts),
             0,
             parts,
         );
     }
 
     _drawBar () {
+        this._syncChunks(false);
+    }
+
+    _syncChunks (animate) {
         const lit = this._litSegments();
+        if (this._shownLit === lit) return;
+        const prev = this._shownLit ?? lit;
+        this._shownLit = lit;
+
         this._barChunks.forEach((chunk, index) => {
-            chunk.setVisible(index < lit);
+            const show = index < lit;
+            this.scene.tweens.killTweensOf(chunk);
+            if (!animate) {
+                chunk.setVisible(show);
+                chunk.setAlpha(1);
+                return;
+            }
+            if (show && index >= prev) {
+                chunk.setVisible(true);
+                chunk.setAlpha(0.25);
+                this.scene.tweens.add({
+                    targets: chunk,
+                    alpha: 1,
+                    duration: 200,
+                    ease: 'Quad.easeOut',
+                });
+                return;
+            }
+            if (!show && index < prev) {
+                chunk.setVisible(true);
+                this.scene.tweens.add({
+                    targets: chunk,
+                    alpha: 0,
+                    duration: 160,
+                    ease: 'Quad.easeIn',
+                    onComplete: () => {
+                        if (index >= this._litSegments()) {
+                            chunk.setVisible(false);
+                            chunk.setAlpha(1);
+                        }
+                    },
+                });
+                return;
+            }
+            chunk.setVisible(show);
+            chunk.setAlpha(1);
         });
     }
 
     setProgress (value, max = this._max) {
-        if (max != null) this._max = Math.max(1, max);
-        this._value = Phaser.Math.Clamp(value, 0, this._max);
+        const nextMax = max != null ? Math.max(1, max) : this._max;
+        const next = Phaser.Math.Clamp(value, 0, nextMax);
+        const maxChanged = nextMax !== this._max;
+        this._max = nextMax;
+
+        if (Math.abs(next - this._value) < 0.001) {
+            if (maxChanged) {
+                this._shownLit = null;
+                this._publishStatus();
+                this._drawBar();
+            }
+            return;
+        }
+
+        const delta = Math.round(next) - Math.round(this._value);
+        this._value = next;
+        this._rollTo(next);
+        if (delta !== 0) {
+            this._flashStatus(delta);
+            this._pulse(this._icon);
+            this._floatDelta(delta);
+        }
+    }
+
+    _publishStatus () {
         setCauseText(this._statusText, this._statusLabel());
         this._fitStatusText();
-        this._drawBar();
+    }
+
+    _rollTo (target) {
+        const token = ++this._rollToken;
+        this.scene.tweens.killTweensOf(this._roll);
+        this._roll.value = this._displayValue;
+        const distance = Math.abs(target - this._displayValue);
+        this.scene.tweens.add({
+            targets: this._roll,
+            value: target,
+            duration: Phaser.Math.Clamp(240 + distance * 16, 320, 900),
+            ease: 'Cubic.easeOut',
+            onUpdate: () => {
+                if (!this.active || token !== this._rollToken) return;
+                this._displayValue = this._roll.value;
+                this._publishStatus();
+                this._syncChunks(true);
+            },
+            onComplete: () => {
+                if (!this.active || token !== this._rollToken) return;
+                this._displayValue = target;
+                this._publishStatus();
+                this._syncChunks(true);
+            },
+        });
+    }
+
+    _flashStatus (delta) {
+        const token = ++this._flashToken;
+        this._statusText.setColor(delta < 0 ? '#E04545' : '#1B8C34');
+        this.scene.time.delayedCall(340, () => {
+            if (this.active && token === this._flashToken) this._statusText.setColor(C_BODY);
+        });
+    }
+
+    _pulse (obj) {
+        if (!obj?.active) return;
+        const baseX = obj._pulseBaseX ?? obj.scaleX;
+        const baseY = obj._pulseBaseY ?? obj.scaleY;
+        obj._pulseBaseX = baseX;
+        obj._pulseBaseY = baseY;
+        this.scene.tweens.killTweensOf(obj);
+        obj.setScale(baseX, baseY);
+        this.scene.tweens.add({
+            targets: obj,
+            scaleX: baseX * 1.16,
+            scaleY: baseY * 1.16,
+            duration: 140,
+            yoyo: true,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                if (obj.active) obj.setScale(baseX, baseY);
+            },
+        });
+    }
+
+    _floatDelta (delta) {
+        const label = delta > 0 ? `+${delta}` : `${delta}`;
+        const floater = addCauseText(
+            this.scene,
+            this._icon.x,
+            this._icon.y - this._icon.displayHeight * 0.42,
+            label,
+            {
+                fontSize: `${Math.max(14, Math.round(this._bodySize * 0.95))}px`,
+                fontStyle: 'bold',
+                color: delta > 0 ? '#1B8C34' : '#E04545',
+            },
+        ).setOrigin(0.5, 1);
+        this.add(floater);
+        this.scene.tweens.add({
+            targets: floater,
+            y: floater.y - 22,
+            alpha: 0,
+            duration: 700,
+            ease: 'Cubic.easeOut',
+            onComplete: () => floater.destroy(),
+        });
     }
 
     getValue () { return this._value; }

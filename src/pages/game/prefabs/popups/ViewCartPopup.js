@@ -96,6 +96,8 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         this._onQtyChange = onQtyChange;
         this._onClose = onClose;
         this._timerText = null;
+        this._timerLayout = null;
+        this._stopScrollHint();
         this._cartItems = cartItems.map((item) => ({
             ...item,
             qty: Math.max(0, Math.round(item.qty ?? 1)),
@@ -208,7 +210,7 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         return obj;
     }
 
-    _scrollList (m, cx, listTop, viewW, viewH, contentH) {
+    _scrollList (m, cx, listTop, viewW, viewH, contentH, onScroll) {
         const list = this.scene.add.container(cx, listTop);
         this.add(list);
 
@@ -222,14 +224,16 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
 
         const maxScroll = Math.max(0, contentH - viewH);
         let offset = 0;
+        // Stay over the visible window as the list moves, so hits never cover
+        // the buttons drawn underneath.
+        const dragPad = this.scene.add.rectangle(0, viewH / 2, viewW, viewH, 0, 0);
+        list.add(dragPad);
         const apply = (next) => {
             offset = Phaser.Math.Clamp(next, 0, maxScroll);
             list.y = listTop - offset;
+            dragPad.y = offset + viewH / 2;
+            onScroll?.(offset, maxScroll);
         };
-
-        const padH = Math.max(viewH, contentH);
-        const dragPad = this.scene.add.rectangle(0, padH / 2, viewW, padH, 0, 0);
-        list.add(dragPad);
 
         if (maxScroll > 0) {
             dragPad.setInteractive({ useHandCursor: false });
@@ -291,10 +295,13 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         const btnMaxH = m.H * 0.064;
         const linkH = m.H * 0.036;
         const noteH = m.H * 0.028;
-        const needVisible = Math.min(VISIBLE_NEEDED, Math.max(1, (data.stillNeeded?.length || 0)));
+        const stackGap = m.H * 0.008;
+        const needCount = data.stillNeeded?.length || 0;
+        const needVisible = Math.min(VISIBLE_NEEDED, Math.max(1, needCount));
+        const scrollHintH = needCount > VISIBLE_NEEDED ? m.H * 0.03 : 0;
         const rightBody = sectionH + wellPadY
             + needVisible * needH + Math.max(0, needVisible - 1) * rowGap
-            + gap + btnMaxH + gap * 0.4 + linkH + gap + btnMaxH + noteH + wellPadY;
+            + scrollHintH + gap + btnMaxH + stackGap + linkH + stackGap + btnMaxH + stackGap + noteH + wellPadY;
         const bodyH = Math.max(leftBody, rightBody);
 
         const ribbonSrc = this.scene.textures.get(MS.ribbon)?.getSourceImage?.();
@@ -353,6 +360,8 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
             gap,
             btnMaxH,
             linkH,
+            stackGap,
+            scrollHintH,
             wellPadY,
         });
     }
@@ -376,34 +385,53 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         const radius = Math.min(w, h) * 0.22;
         this._round(x, y, w, h, card.fill, radius, card.stroke, Math.max(2, Math.round(2.5 * m.s)));
         const iconS = Math.min(w * 0.28, h * 0.42);
-        const icon = this.scene.add.image(x - w * 0.22, y, card.icon);
+        const gap = w * 0.045;
+        const icon = this.scene.add.image(0, y, card.icon);
         this._fitContain(icon, iconS, iconS);
-        this.add(icon);
 
-        const textX = icon.x + icon.displayWidth / 2 + w * 0.04;
-        const title = this._text(textX, y - h * 0.16, card.title, {
+        const title = this._text(0, y - h * 0.16, card.title, {
             fontSize: `${m.fs(TYPE.statTitle)}px`,
             fontStyle: WEIGHT.heavy,
             color: card.titleColor,
         }).setOrigin(0, 0.5);
-        const value = this._text(textX, y + h * 0.16, card.value, {
+        const value = this._text(0, y + h * 0.16, card.value, {
             fontSize: `${m.fs(TYPE.statValue)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_NAVY,
         }).setOrigin(0, 0.5);
+        this.add(icon);
         this.add(title);
         this.add(value);
-        if (card.liveTimer) this._timerText = value;
+
+        const layout = { icon, title, value, centerX: x, gap };
+        this._centerStatContent(layout);
+        if (card.liveTimer) {
+            this._timerText = value;
+            this._timerLayout = layout;
+        }
+    }
+
+    _centerStatContent ({ icon, title, value, centerX, gap }) {
+        const textW = Math.max(title.width, value.width);
+        const contentW = icon.displayWidth + gap + textW;
+        const left = centerX - contentW / 2;
+        icon.x = left + icon.displayWidth / 2;
+        const textX = left + icon.displayWidth + gap;
+        title.x = textX;
+        value.x = textX;
     }
 
     setTimerRemaining (seconds) {
         if (!this.visible || !this._timerText?.active) return;
         setCauseText(this._timerText, formatClock(seconds));
+        if (this._timerLayout) this._centerStatContent(this._timerLayout);
     }
 
     dismiss () {
         this.scene.tweens.killTweensOf(this);
+        this._stopScrollHint();
         this._timerText = null;
+        this._timerLayout = null;
         this.setVisible(false);
         this.setAlpha(1);
     }
@@ -601,7 +629,7 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
     }
 
     _drawNeededColumn (m, cx, top, w, layout) {
-        const { stillNeeded, sectionH, needH, rowGap, gap, btnMaxH, linkH, wellPadY } = layout;
+        const { stillNeeded, sectionH, needH, rowGap, gap, btnMaxH, linkH, stackGap, scrollHintH, wellPadY } = layout;
         const padX = w * 0.07;
         const innerW = w - padX * 2;
         const items = stillNeeded?.length ? stillNeeded : [];
@@ -610,19 +638,26 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         const viewH = visible * needH + Math.max(0, visible - 1) * rowGap;
         const contentH = Math.max(viewH, items.length * needH + Math.max(0, items.length - 1) * rowGap);
         const afterRows = listTop + viewH;
-        const continueY = afterRows + gap + btnMaxH / 2;
-        const linkY = continueY + btnMaxH / 2 + gap * 0.6 + linkH / 2;
-        const checkoutY = linkY + linkH / 2 + gap + btnMaxH / 2;
-        const noteBottom = checkoutY + btnMaxH / 2 + m.H * 0.034;
+        const hintH = items.length > VISIBLE_NEEDED ? scrollHintH : 0;
+        const continueY = afterRows + hintH + gap + btnMaxH / 2;
+        const linkY = continueY + btnMaxH / 2 + stackGap + linkH / 2;
+        const checkoutY = linkY + linkH / 2 + stackGap + btnMaxH / 2;
+        const noteY = checkoutY + btnMaxH / 2 + stackGap;
+        const noteBottom = noteY + m.H * 0.02;
         this._columnWell(m, cx, top + sectionH * 0.28, noteBottom + wellPadY, w);
 
         this._sectionPill(m, cx, top + sectionH / 2, 'STILL NEEDED');
 
-        const list = this._scrollList(m, cx, listTop, innerW + padX * 0.5, viewH, contentH);
+        let hint = null;
+        const list = this._scrollList(m, cx, listTop, innerW + padX * 0.5, viewH, contentH, (offset, maxScroll) => {
+            if (!hint?.active) return;
+            hint.setVisible(offset < maxScroll - 1);
+        });
         items.forEach((item, i) => {
             const y = needH / 2 + i * (needH + rowGap);
             this._drawNeededRow(m, list, 0, y, innerW, needH, item);
         });
+        if (hintH > 0) hint = this._drawScrollHint(m, cx, afterRows + hintH * 0.55);
 
         this._drawActionButton(m, cx, continueY, innerW, btnMaxH, SP.blueButton, 'CONTINUE', NEC.cart, () => {
             this._close(() => this._onContinue?.());
@@ -637,10 +672,62 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         });
 
         const missing = items.length;
-        this.add(this._text(cx, checkoutY + btnMaxH / 2 + m.H * 0.016, `${missing} Items still needed`, {
+        this.add(this._text(cx, noteY, `${missing} Items still needed`, {
             fontSize: `${m.fs(TYPE.note)}px`,
             color: C_MUTED,
         }).setOrigin(0.5, 0));
+    }
+
+    _drawScrollHint (m, x, y) {
+        const size = Math.max(8, m.H * 0.009);
+        const wrap = this.scene.add.container(x, y);
+        const g = this.scene.add.graphics();
+        const thick = Math.max(3.2, 3.6 * m.s);
+        const arm = (x1, y1, x2, y2) => {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const len = Math.hypot(dx, dy) || 1;
+            const nx = (-dy / len) * thick * 0.5;
+            const ny = (dx / len) * thick * 0.5;
+            return [
+                { x: x1 + nx, y: y1 + ny },
+                { x: x2 + nx, y: y2 + ny },
+                { x: x2 - nx, y: y2 - ny },
+                { x: x1 - nx, y: y1 - ny },
+            ];
+        };
+        const chevron = (oy) => {
+            const w = size;
+            const h = size * 0.62;
+            g.fillPoints(arm(-w, oy - h, 0, oy), true);
+            g.fillPoints(arm(w, oy - h, 0, oy), true);
+            g.fillCircle(-w, oy - h, thick * 0.5);
+            g.fillCircle(w, oy - h, thick * 0.5);
+            g.fillCircle(0, oy, thick * 0.55);
+        };
+        g.fillStyle(0x7A3FE0, 1);
+        chevron(-size * 0.38);
+        chevron(size * 0.34);
+        wrap.add(g);
+        this.add(wrap);
+        this._scrollHint = wrap;
+        this._scrollHintTween = this.scene.tweens.add({
+            targets: wrap,
+            y: y + size * 0.28,
+            duration: 520,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+        });
+        return wrap;
+    }
+
+    _stopScrollHint () {
+        if (this._scrollHintTween) {
+            this._scrollHintTween.stop();
+            this._scrollHintTween = null;
+        }
+        this._scrollHint = null;
     }
 
     _drawNeededRow (m, parent, cx, cy, w, h, item) {
@@ -668,40 +755,54 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
     }
 
     _drawActionButton (m, cx, cy, maxW, maxH, key, label, iconKey, onClick) {
-        const img = this.scene.add.image(cx, cy, key);
-        const { w, h } = this._fitButton(img, maxW, maxH);
-        this.add(img);
+        const wrap = this.scene.add.container(cx, cy);
+        this.add(wrap);
 
-        const labelText = this._text(cx, cy, label, {
+        const img = this.scene.add.image(0, 0, key);
+        const { w, h } = this._fitButton(img, maxW, maxH);
+        wrap.add(img);
+
+        const labelText = this._text(0, 0, label, {
             fontSize: `${m.fs(TYPE.button)}px`,
             fontStyle: WEIGHT.heavy,
             color: C_WHITE,
         }).setOrigin(0.5, 0.5);
-        this.add(labelText);
+        wrap.add(labelText);
 
         // Keep the label (and icon) inside the pill, clear of the rounded ends.
         const innerMax = w - h * 1.35;
         if (iconKey && this.scene.textures.exists(iconKey)) {
             const iconS = h * 0.38;
-            const icon = this.scene.add.image(cx, cy, iconKey);
+            const icon = this.scene.add.image(0, 0, iconKey);
             this._fitContain(icon, iconS, iconS);
             icon.setTint(0xffffff);
-            this.add(icon);
+            wrap.add(icon);
             const gap = m.W * 0.006;
             this._shrinkToWidth(labelText, innerMax - icon.displayWidth - gap);
             const total = icon.displayWidth + gap + labelText.width;
-            icon.x = cx - total / 2 + icon.displayWidth / 2;
+            icon.x = -total / 2 + icon.displayWidth / 2;
             labelText.x = icon.x + icon.displayWidth / 2 + gap + labelText.width / 2;
         } else {
             this._shrinkToWidth(labelText, innerMax);
         }
 
-        const hit = this.scene.add.rectangle(cx, cy, w, h, 0, 0);
+        const hit = this.scene.add.rectangle(0, 0, w, h, 0, 0);
         hit.setInteractive({ useHandCursor: true });
-        hit.on('pointerover', () => img.setScale(img.scaleX * 1.03, img.scaleY * 1.03));
-        hit.on('pointerout', () => this._fitButton(img, maxW, maxH));
+        hit.on('pointerover', () => this._hoverScale(wrap, 1.03));
+        hit.on('pointerout', () => this._hoverScale(wrap, 1));
         hit.on('pointerup', onClick);
-        this.add(hit);
+        wrap.add(hit);
+    }
+
+    _hoverScale (target, scale) {
+        this.scene.tweens.killTweensOf(target);
+        this.scene.tweens.add({
+            targets: target,
+            scaleX: scale,
+            scaleY: scale,
+            duration: 120,
+            ease: 'Quad.easeOut',
+        });
     }
 
     _shrinkToWidth (text, maxW) {

@@ -104,6 +104,7 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         this._isMoving = false;
         this._facingRight = true;
         this._inputEnabled = true;
+        this._hold = { left: false, right: false };
 
         ensureCharacterWalkAnim(scene, WALK_ANIM_FPS);
 
@@ -244,15 +245,28 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
         }
     }
 
+    /** On-screen arrow buttons. Kept separate from the keyboard so releasing one does not cancel the other. */
+    setMoveHold (direction, held) {
+        if (!this._hold) this._hold = { left: false, right: false };
+        if (direction !== 'left' && direction !== 'right') return;
+        if (held && !this._inputEnabled) return;
+        this._hold[direction] = !!held;
+    }
+
     setInputEnabled (enabled) {
         this._inputEnabled = enabled !== false;
         if (!this._inputEnabled) {
             this._clearKeys?.();
+            if (this._hold) {
+                this._hold.left = false;
+                this._hold.right = false;
+            }
             if (this._isMoving) {
                 this._isMoving = false;
                 this._setWalkPlaying(false);
             }
         }
+        this.emit('inputenabled', this._inputEnabled);
     }
 
     _onUpdate (_time, delta) {
@@ -264,8 +278,8 @@ export default class WalkingCharacter extends Phaser.GameObjects.Container {
             return;
         }
 
-        const movingLeft = this._keys?.left ?? false;
-        const movingRight = this._keys?.right ?? false;
+        const movingLeft = !!(this._keys?.left || this._hold?.left);
+        const movingRight = !!(this._keys?.right || this._hold?.right);
         const moving = movingLeft || movingRight;
 
         if (!moving) {
