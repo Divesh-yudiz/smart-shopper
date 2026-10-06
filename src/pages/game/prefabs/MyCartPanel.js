@@ -28,7 +28,23 @@ function isFruitCartItem(item) {
     return key.includes('_fruits_') || /api_item_(tomato|potato|carrot|onion|capsicum|qualiflower|cauliflower)/i.test(key);
 }
 
+/** Stable Phaser key for a cart-item image URL from aCartItems.sImage. */
+function cartApiImageKey(url) {
+    let hash = 2166136261;
+    const s = String(url);
+    for (let i = 0; i < s.length; i += 1) {
+        hash ^= s.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `cart_api_${(hash >>> 0).toString(36)}`;
+}
+
 function resolveCartSlotTexture(scene, item) {
+    const imageUrl = item?.sImage;
+    if (imageUrl) {
+        const apiKey = cartApiImageKey(imageUrl);
+        if (scene.textures.exists(apiKey)) return apiKey;
+    }
     if (item?.textureKey && scene.textures.exists(item.textureKey)) {
         return item.textureKey;
     }
@@ -74,6 +90,10 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
 
         this._onItemRemoved = onItemRemoved;
         this._onViewCart = onViewCart;
+        this._pendingCartImages = new Map();
+        this._cartImageInflight = new Set();
+        this._cartImageFailed = new Set();
+        this._cartImageGen = 0;
         this.setDepth(300);
         this._panelWidth = panelWidth;
         this._buildPanel();
@@ -487,7 +507,16 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
                 return;
             }
 
+            const apiKey = item.sImage ? cartApiImageKey(item.sImage) : null;
+            const apiFailed = apiKey ? this._cartImageFailed.has(apiKey) : false;
+            if (item.sImage && !apiFailed) this._noteCartImage(item.sImage);
             const texKey = resolveCartSlotTexture(this.scene, item);
+            // Wait for aCartItems.sImage instead of flashing a different shelf texture.
+            if (apiKey && !apiFailed && texKey !== apiKey) {
+                view.productImg.setVisible(false);
+                view.productImg.setAlpha(0);
+                return;
+            }
             if (texKey) {
                 view.productImg.setTexture(texKey);
                 view.productImg.setAlpha(1);
@@ -504,6 +533,73 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
                 view.productImg.setAlpha(0);
             }
         });
+    }
+
+    /** Download product art from aCartItems.sImage and paint it into the slots. */
+    _noteCartImage(url) {
+        if (!url || !this.scene) return;
+        const key = cartApiImageKey(url);
+        if (this.scene.textures.exists(key) || this._cartImageInflight.has(key)) return;
+        this._pendingCartImages.set(key, url);
+        if (this._cartImageKick) return;
+        this._cartImageKick = true;
+        this.scene.time.delayedCall(0, () => {
+            this._cartImageKick = false;
+            this._flushCartImages();
+        });
+    }
+
+    _flushCartImages() {
+        const scene = this.scene;
+        if (!scene || !this.active) return;
+        const jobs = this._pendingCartImages;
+        this._pendingCartImages = new Map();
+        const missing = [...jobs.entries()].filter(([key]) => !scene.textures.exists(key));
+        if (!missing.length) {
+            this._refreshSlotContents();
+            return;
+        }
+
+        const start = () => {
+            if (!this.scene || !this.active) return;
+            const stillMissing = missing.filter(([key]) => !scene.textures.exists(key));
+            if (!stillMissing.length) {
+                this._refreshSlotContents();
+                return;
+            }
+            const gen = ++this._cartImageGen;
+            scene.load.setCORS('anonymous');
+            stillMissing.forEach(([key, url]) => {
+                if (scene.textures.exists(key)) return;
+                this._cartImageInflight.add(key);
+                scene.load.image(key, url);
+            });
+            const onError = (file) => {
+                if (stillMissing.some(([key]) => key === file.key)) {
+                    this._cartImageFailed.add(file.key);
+                }
+            };
+            if (!scene.load.list.size) {
+                stillMissing.forEach(([key]) => this._cartImageInflight.delete(key));
+                this._refreshSlotContents();
+                return;
+            }
+            const finish = () => {
+                scene.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+                stillMissing.forEach(([key]) => this._cartImageInflight.delete(key));
+                if (gen !== this._cartImageGen || !this.scene) return;
+                this._refreshSlotContents();
+            };
+            scene.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+            scene.load.once(Phaser.Loader.Events.COMPLETE, finish);
+            scene.load.start();
+        };
+
+        if (scene.load.isLoading()) {
+            scene.load.once(Phaser.Loader.Events.COMPLETE, start);
+        } else {
+            start();
+        }
     }
 
     _refresh() {
@@ -556,6 +652,8 @@ export default class MyCartPanel extends Phaser.GameObjects.Container {
     }
 
     destroy(fromScene) {
+        this._cartImageGen += 1;
+        this._pendingCartImages?.clear();
         if (this._onScrollUpdate) {
             this.scene.events.off('update', this._onScrollUpdate);
         }

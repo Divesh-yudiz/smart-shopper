@@ -131,6 +131,7 @@ class Level extends Phaser.Scene {
             onViewCart: () => this._showViewCartPopup(),
             onItemRemoved: (product) => this._removeCartItem(product),
         });
+        this._syncCartFromApi();
 
         this.oShoppingListBtn = new ShoppingListButton(
             this,
@@ -314,8 +315,8 @@ class Level extends Phaser.Scene {
             onFindRemaining: () => {},
             onCheckout: () => this.openCheckout(),
             onQtyChange: (item, next, _index, delta) => {
-                if (delta >= 0) return;
-                this._removeCartUnits(item, Math.abs(delta), next);
+                if (delta > 0) this._addCartUnits(item, delta, next);
+                else if (delta < 0) this._removeCartUnits(item, Math.abs(delta), next);
             },
         });
     }
@@ -353,6 +354,63 @@ class Level extends Phaser.Scene {
         }
     }
 
+    async _addCartUnits (item, count, nextQty) {
+        const iItemId = item?.iItemId ?? (item?.sItemKey ? getItemId(item.sItemKey) : null);
+        const revert = () => {
+            const restored = Math.max(0, (nextQty ?? 0) - count);
+            item.qty = restored;
+            if (item._label?.active) setCauseText(item._label, `${restored}`);
+        };
+        if (!iItemId || count <= 0) {
+            revert();
+            return;
+        }
+        const eVariant = cartVariantOf(item);
+        try {
+            let result = null;
+            for (let i = 0; i < count; i++) {
+                result = await addToCart({ iItemId, eVariant });
+            }
+            if (result) {
+                this._applyCartMutationResult(result);
+                this._syncViewCartQty(item, result, iItemId, eVariant, nextQty);
+            }
+            this._syncViewCartStats();
+            this._saveState();
+        } catch (err) {
+            console.error('[Cart add]', err);
+            revert();
+            const msg = String(err?.payload?.message || err?.payload?.data?.sMessage || err?.message || '').toLowerCase();
+            const needsPopup = /eco|coin|budget|afford|price|balance|insufficient/.test(msg);
+            if (needsPopup && this._viewCartOpen) {
+                this.oViewCart?._close(() => this._handleCartAddRejected(err));
+                return;
+            }
+            this._handleCartAddRejected(err);
+        }
+    }
+
+    _syncViewCartQty (item, result, iItemId, eVariant, fallbackQty) {
+        const root = result?.data ?? result ?? {};
+        const data = root.session ?? root;
+        const aCartItems = data?.aCartItems ?? root.aCartItems ?? [];
+        const line = aCartItems.find((entry) => {
+            const sameId = entry?.iItemId === iItemId || entry?.sItemKey === item.sItemKey;
+            return sameId && cartVariantOf(entry) === eVariant;
+        });
+        const qty = Math.max(0, line?.nQuantity ?? fallbackQty ?? item.qty ?? 0);
+        item.qty = qty;
+        if (item._label?.active) setCauseText(item._label, `${qty}`);
+    }
+
+    _syncViewCartStats () {
+        if (!this._viewCartOpen || !this.oViewCart) return;
+        const { done, total } = this.oShoppingList?.getProgress?.() ?? { done: 0, total: 0 };
+        this.oViewCart.setItemsFound(`${done}/${Math.max(total, done)}`);
+        this.oViewCart.setCoinsRemaining(this._budgetRemaining ?? 0);
+        this.oViewCart.setEcoRemaining(this._ecoValue ?? 0);
+    }
+
     async _removeCartUnits (item, count, nextQty) {
         const iItemId = item?.iItemId ?? (item?.sItemKey ? getItemId(item.sItemKey) : null);
         if (!iItemId || count <= 0) return;
@@ -363,6 +421,8 @@ class Level extends Phaser.Scene {
                 result = await removeFromCart({ iItemId, eVariant });
             }
             if (result) this._applyCartMutationResult(result);
+            this._syncViewCartStats();
+            this._saveState();
             if (nextQty <= 0) {
                 this.oMyCart?.setItems(
                     (this.oMyCart?.getItems() ?? []).filter((product) => {
@@ -1066,6 +1126,28 @@ class Level extends Phaser.Scene {
         // Character origin is chest-center; trolley sits ~160px to the right when facing right.
         const clearance = 168;
         this.oCharacter.setRightLimit(list.getBlockingLeft() - clearance);
+    }
+
+    /** Replace the bottom cart slots with product images from GET /cart `aCartItems`. */
+    async _syncCartFromApi () {
+        const missionId = this._gameConfig?.missionId;
+        if (!missionId) return;
+        try {
+            const json = await fetchCart(missionId);
+            if (!this.sys?.isActive()) return;
+            const data = json?.data ?? json ?? {};
+            const session = data.session ?? data;
+            this._applyCartMutationResult({
+                data: {
+                    ...data,
+                    ...session,
+                    aCartItems: data.aCartItems ?? session.aCartItems,
+                },
+            });
+            this._saveState();
+        } catch (err) {
+            console.error('[Level] Cart sync failed:', err);
+        }
     }
 
     /** Reconciles cart / shopping list / eco / coins from a cart add/remove API response. */

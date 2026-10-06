@@ -368,9 +368,9 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
 
     _drawStatRow (m, cx, y, w, h, data) {
         const cards = [
-            { title: 'ITEMS FOUND', titleColor: C_PURPLE, fill: 0xF3E8FF, stroke: 0xD9BCFF, icon: VC.basket, value: data.itemsFound },
-            { title: 'REMAINING COINS', titleColor: '#C47A12', fill: 0xFFF9E6, stroke: 0xFCDA8B, icon: MISSION_DESC_KEYS.coinIcon, value: `${data.coinsRemaining}` },
-            { title: 'REMAINING ECO', titleColor: C_GREEN, fill: 0xEEF9E8, stroke: 0xBCE4A8, icon: CP.leaf, value: `${data.ecoRemaining}` },
+            { title: 'ITEMS FOUND', titleColor: C_PURPLE, fill: 0xF3E8FF, stroke: 0xD9BCFF, icon: VC.basket, value: data.itemsFound, statKey: 'found' },
+            { title: 'REMAINING COINS', titleColor: '#C47A12', fill: 0xFFF9E6, stroke: 0xFCDA8B, icon: MISSION_DESC_KEYS.coinIcon, value: `${data.coinsRemaining}`, statKey: 'coins' },
+            { title: 'REMAINING ECO', titleColor: C_GREEN, fill: 0xEEF9E8, stroke: 0xBCE4A8, icon: CP.leaf, value: `${data.ecoRemaining}`, statKey: 'eco' },
             { title: 'REMAINING TIME', titleColor: C_LINK, fill: 0xE8F4FF, stroke: 0xADD8FF, icon: MISSION_DESC_KEYS.timerIcon, value: data.timerLabel, liveTimer: true },
         ];
         const gap = w * 0.016;
@@ -405,6 +405,18 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
 
         const layout = { icon, title, value, centerX: x, gap };
         this._centerStatContent(layout);
+        if (card.statKey === 'found') {
+            this._foundText = value;
+            this._foundLayout = layout;
+        }
+        if (card.statKey === 'coins') {
+            this._coinsText = value;
+            this._coinsLayout = layout;
+        }
+        if (card.statKey === 'eco') {
+            this._ecoText = value;
+            this._ecoLayout = layout;
+        }
         if (card.liveTimer) {
             this._timerText = value;
             this._timerLayout = layout;
@@ -419,6 +431,24 @@ export default class ViewCartPopup extends Phaser.GameObjects.Container {
         const textX = left + icon.displayWidth + gap;
         title.x = textX;
         value.x = textX;
+    }
+
+    setItemsFound (label) {
+        if (!this._foundText?.active) return;
+        setCauseText(this._foundText, String(label));
+        if (this._foundLayout) this._centerStatContent(this._foundLayout);
+    }
+
+    setCoinsRemaining (amount) {
+        if (!this._coinsText?.active) return;
+        setCauseText(this._coinsText, `${Math.max(0, Math.round(amount))}`);
+        if (this._coinsLayout) this._centerStatContent(this._coinsLayout);
+    }
+
+    setEcoRemaining (amount) {
+        if (!this._ecoText?.active) return;
+        setCauseText(this._ecoText, `${Math.max(0, Math.round(amount))}`);
+        if (this._ecoLayout) this._centerStatContent(this._ecoLayout);
     }
 
     setTimerRemaining (seconds) {

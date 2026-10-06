@@ -1066,7 +1066,7 @@ export function applyCartCollectedToEntries(entries, aCartItems) {
  * Converts the aCartItems array from a cart/add or cart/remove response into the
  * flat, one-entry-per-unit item list MyCartPanel expects — the cart's authoritative
  * source of truth is always this server response, never local bookkeeping.
- * @param {Array<{sItemKey:string, nQuantity:number, nPrice:number, nCoins?:number, nEcoPoints?:number}>} aCartItems
+ * @param {Array<{sItemKey:string, nQuantity:number, nPrice:number, nCoins?:number, nEcoPoints?:number, sImage?:string}>} aCartItems
  */
 export function buildCartItemsFromApi(aCartItems) {
     const items = [];
@@ -1079,6 +1079,10 @@ export function buildCartItemsFromApi(aCartItems) {
         const qty = Math.max(0, entry.nQuantity ?? 0);
         const price = entry.nPrice ?? entry.nCoins ?? 0;
         const ecoImpact = entry.nEcoPoints ?? entry.ecoImpact ?? 0;
+        const sImage = entry.sImage
+            || (isEco ? entry.oEco?.sImage : null)
+            || entry.oNormal?.sImage
+            || null;
         for (let i = 0; i < qty; i++) {
             items.push({
                 key: resolved.key,
@@ -1091,6 +1095,7 @@ export function buildCartItemsFromApi(aCartItems) {
                 isSaleVariant: variant === 'sale',
                 sItemKey: entry.sItemKey,
                 iItemId: entry.iItemId ?? null,
+                sImage,
             });
         }
     }
